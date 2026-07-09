@@ -1,0 +1,9 @@
+-- New Hope Work Desk v0.4.0
+-- Manual SQL user seeding is no longer used.
+--
+-- After running supabase/schema.sql, create all 12 authenticated users and profiles with:
+--
+--   npm run bootstrap-users
+--
+-- The bootstrap script uses the private, Git-ignored account file and creates:
+-- 10 agent accounts + Oscar Landaverde and Jason Toro as managers.
