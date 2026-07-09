@@ -36,6 +36,7 @@ import {
   Sparkles,
   Table2,
   TrendingUp,
+  Trash2,
   UserPlus,
   UsersRound,
   X,
@@ -143,8 +144,9 @@ function accentForAgent(agent: Agent) {
 
 type ModalType = "whatsapp_quote" | "ringcentral_quote" | "workload_turn" | "whatsapp_update" | "manual_quote" | "manager_assign_quote" | "quote_result" | "not_sold_reason" | null;
 type AgentTab = "desk" | "pricing" | "performance";
-type ManagerTab = "overview" | "tasks" | "pricing" | "reports" | "team" | "sources" | "users";
+type ManagerTab = "overview" | "tasks" | "pricing" | "quotes" | "reports" | "team" | "sources" | "users";
 type ReportView = "executive" | "agents" | "timing" | "channels" | "sources" | "followup" | "activity";
+type ManagerQuoteStage = "active" | "pending" | "finalized";
 
 type AdminUserAccount = {
   id: string;
@@ -164,13 +166,6 @@ type TemporaryCredential = {
   displayName: string;
   temporaryPassword: string;
 };
-
-function createSuggestedTemporaryPassword() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  const bytes = new Uint8Array(10);
-  window.crypto.getRandomValues(bytes);
-  return `NH!${Array.from(bytes, (value) => alphabet[value % alphabet.length]).join("")}26`;
-}
 
 type PerformanceMetricKey = "whatsappQuotes" | "ringCentralQuotes" | "workloadTurns" | "whatsappUpdates" | "manualQuotes" | "soldQuotes" | "passedTurns";
 const performanceMetricKeys: PerformanceMetricKey[] = ["whatsappQuotes", "ringCentralQuotes", "workloadTurns", "whatsappUpdates", "manualQuotes", "soldQuotes", "passedTurns"];
@@ -593,20 +588,6 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   }, [refreshLiveData, supabase]);
 
   useEffect(() => {
-    let active = true;
-
-    async function checkDailyAvailabilityReset() {
-      const { data, error } = await supabase.rpc("ensure_daily_availability_reset");
-      if (!active || error) return;
-      if (data === true) await refreshLiveData();
-    }
-
-    void checkDailyAvailabilityReset();
-    const timer = window.setInterval(() => { void checkDailyAvailabilityReset(); }, 60_000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [refreshLiveData, supabase]);
-
-  useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 3200);
     return () => window.clearTimeout(timer);
@@ -816,6 +797,17 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
     await runRpc("manager_reassign_pending_pricing", { p_pending_id: itemId, p_new_profile_id: profileId, p_reason: "Manager reassignment from Pending Pricing" }, `Pricing follow-up reassigned to ${agent?.name || "selected agent"}.`);
   }
 
+  async function managerDeleteQuote(stage: ManagerQuoteStage, quoteId: string, customer: string) {
+    const reason = window.prompt(`Why are you deleting the quote for ${customer}? This reason will be kept in the audit log.`);
+    if (!reason?.trim()) return;
+    if (!window.confirm(`Permanently delete the ${customer} quote from Work Desk and all performance reports? This cannot be undone.`)) return;
+    await runRpc(
+      "manager_delete_quote",
+      { p_quote_stage: stage, p_quote_id: quoteId, p_reason: reason.trim() },
+      `${customer} quote deleted.`
+    );
+  }
+
   async function managerSetRotation(rotation: RotationKind, profileId: string) {
     await runRpc("manager_set_rotation_current", { p_rotation: rotation, p_profile_id: profileId, p_reason: "Manager changed rotation from Overview" }, `${rotationConfig[rotation].shortTitle} rotation changed.`);
   }
@@ -872,7 +864,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
           <div className="space-y-5">
             <section className="flex flex-col gap-4 rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-4"><Avatar agent={currentUser} size="lg" /><div><p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Working as</p><h2 className="mt-1 text-2xl font-black tracking-tight">{currentUser.name}</h2><p className="mt-1 text-sm font-semibold text-slate-500">{myActiveWork.length} active task{myActiveWork.length === 1 ? "" : "s"} · {myPendingPricing.length} awaiting source decision</p></div></div>
-              <div className="flex flex-wrap items-center gap-2"><div className="mr-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-400"><Activity className="h-4 w-4" /> My status</div>{([ ["available", "Available", "bg-emerald-600 text-white"], ["break", "Break / Lunch", "bg-amber-500 text-white"], ["unavailable", "Unavailable", "bg-slate-700 text-white"] ] as const).map(([status, label, activeClass]) => <button key={status} onClick={() => handleAvailability(status)} className={cn("rounded-xl px-3 py-2 text-xs font-black transition", currentUser.availability === status ? activeClass : "bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50")}>{label}</button>)}<p className="w-full pt-1 text-[11px] font-semibold text-slate-400 lg:text-right">Daily start: statuses reset to Unavailable at midnight Eastern. The first eligible agent to click Available starts each queue for the new day.</p></div>
+              <div className="flex flex-wrap items-center gap-2"><div className="mr-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-400"><Activity className="h-4 w-4" /> My status</div>{([ ["available", "Available", "bg-emerald-600 text-white"], ["break", "Break / Lunch", "bg-amber-500 text-white"], ["unavailable", "Unavailable", "bg-slate-700 text-white"] ] as const).map(([status, label, activeClass]) => <button key={status} onClick={() => handleAvailability(status)} className={cn("rounded-xl px-3 py-2 text-xs font-black transition", currentUser.availability === status ? activeClass : "bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50")}>{label}</button>)}<p className="w-full pt-1 text-[11px] font-semibold text-slate-400 lg:text-right">Daily start: the first eligible agent to click Available starts each queue for the day.</p></div>
             </section>
 
             <TabBar tabs={agentTabs} value={agentTab} onChange={setAgentTab} />
@@ -992,6 +984,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
             onOpenAssignQuote={() => setModal("manager_assign_quote")}
             onReassignWork={managerReassignWork}
             onReassignPending={managerReassignPending}
+            onDeleteQuote={managerDeleteQuote}
             onSetRotation={managerSetRotation}
             onToggleRotation={managerToggleRotation}
             onSetQueueOrder={managerSetQueueOrder}
@@ -1086,6 +1079,7 @@ function ManagerView({
   onOpenAssignQuote,
   onReassignWork,
   onReassignPending,
+  onDeleteQuote,
   onSetRotation,
   onToggleRotation,
   onSetQueueOrder,
@@ -1107,11 +1101,13 @@ function ManagerView({
   onOpenAssignQuote: () => void;
   onReassignWork: (itemId: string, profileId: string) => Promise<void>;
   onReassignPending: (itemId: string, profileId: string) => Promise<void>;
+  onDeleteQuote: (stage: ManagerQuoteStage, quoteId: string, customer: string) => Promise<void>;
   onSetRotation: (rotation: RotationKind, profileId: string) => Promise<void>;
   onToggleRotation: (agent: Agent, rotation: RotationKind) => Promise<void>;
   onSetQueueOrder: (rotation: RotationKind, profileIds: string[]) => Promise<void>;
 }) {
   const [reportView, setReportView] = useState<ReportView>("executive");
+  const [quoteSearch, setQuoteSearch] = useState("");
   const [managerNow] = useState(() => Date.now());
   const today = new Date();
   const weekAgo = new Date();
@@ -1135,10 +1131,56 @@ function ManagerView({
     ...(maxWorkload ? [`${maxWorkload[0]} currently has the highest active workload: ${maxWorkload[1]} tasks.`] : []),
   ];
 
+  const quoteRecords = useMemo(() => {
+    const rows = [
+      ...workItems.filter(isQuote).map((item) => ({
+        id: item.id,
+        stage: "active" as const,
+        status: "Active",
+        statusDate: item.createdAt,
+        customer: item.customer,
+        source: item.dealer,
+        agent: item.assignedAgent,
+        workType: item.workType,
+        receivedThrough: item.receivedThrough || "Unknown",
+      })),
+      ...pendingPricing.map((item) => ({
+        id: item.id,
+        stage: "pending" as const,
+        status: "Price Sent",
+        statusDate: item.priceSentAt,
+        customer: item.customer,
+        source: item.dealer,
+        agent: item.assignedAgent,
+        workType: item.workType,
+        receivedThrough: item.receivedThrough || "Unknown",
+      })),
+      ...quoteOutcomes.map((item) => ({
+        id: item.id,
+        stage: "finalized" as const,
+        status: item.decision === "sold" ? "Sold" : "Not Sold",
+        statusDate: item.finalizedAt,
+        customer: item.customer,
+        source: item.dealer,
+        agent: item.assignedAgent,
+        workType: item.workType,
+        receivedThrough: item.receivedThrough || "Unknown",
+      })),
+    ];
+    return rows.sort((a, b) => new Date(b.statusDate).getTime() - new Date(a.statusDate).getTime());
+  }, [pendingPricing, quoteOutcomes, workItems]);
+
+  const visibleQuoteRecords = useMemo(() => {
+    const needle = quoteSearch.trim().toLowerCase();
+    if (!needle) return quoteRecords;
+    return quoteRecords.filter((item) => [item.customer, item.source, item.agent, item.status, item.receivedThrough, workTypeLabels[item.workType]].some((value) => value.toLowerCase().includes(needle)));
+  }, [quoteRecords, quoteSearch]);
+
   const tabs: Array<{ id: ManagerTab; label: string; icon: React.ReactNode; badge?: number }> = [
     { id: "overview", label: "Overview", icon: <ShieldCheck className="h-4 w-4" /> },
     { id: "tasks", label: "Open Tasks", icon: <ClipboardList className="h-4 w-4" />, badge: activeTasks.length },
     { id: "pricing", label: "Pending Pricing", icon: <Clock3 className="h-4 w-4" />, badge: pendingPricing.length },
+    { id: "quotes", label: "Quote Records", icon: <Table2 className="h-4 w-4" />, badge: quoteRecords.length },
     { id: "reports", label: "Reports", icon: <BarChart3 className="h-4 w-4" /> },
     { id: "team", label: "Team Controls", icon: <Settings2 className="h-4 w-4" /> },
     { id: "sources", label: "Sources", icon: <Store className="h-4 w-4" />, badge: sourceList.length },
@@ -1341,6 +1383,35 @@ function ManagerView({
         <section className="overflow-hidden rounded-[28px] border border-blue-200 bg-white shadow-sm">
           <div className="flex flex-col gap-4 border-b border-slate-100 p-6 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-blue-600"><Clock3 className="h-4 w-4" /> Pending Pricing Follow-Up</div><h3 className="mt-1 text-xl font-black">Management follow-up list</h3><p className="mt-1 text-sm text-slate-500">Pull this list at the end of the day and follow up the next business day.</p></div><button onClick={exportPendingPricing} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white"><Download className="h-4 w-4" /> Export Pending CSV</button></div>
           <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-blue-50/60 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Price Sent</th><th className="px-5 py-3">Age</th><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Source</th><th className="px-5 py-3">Decision</th></tr></thead><tbody className="divide-y divide-slate-100">{pendingPricing.map((item) => <tr key={item.id} className={daysSince(item.priceSentAt) >= 2 ? "bg-amber-50/40" : ""}><td className="px-5 py-4"><p className="font-black">{item.customer}</p><p className="mt-1 text-xs text-slate-400">{item.dealer} · {workTypeLabels[item.workType]}</p></td><td className="px-5 py-4 text-xs font-semibold text-slate-600">{formatDateTime(item.priceSentAt)}</td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", daysSince(item.priceSentAt) >= 2 ? "bg-amber-100 text-amber-800" : "bg-blue-50 text-blue-700")}>{daysSince(item.priceSentAt)} day{daysSince(item.priceSentAt) === 1 ? "" : "s"}</span></td><td className="px-5 py-4"><select value={agentList.find((agent) => agent.name === item.assignedAgent)?.id || ""} onChange={(event) => void onReassignPending(item.id, event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black">{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></td><td className="px-5 py-4 text-slate-600">{item.receivedThrough}</td><td className="px-5 py-4"><div className="flex gap-2"><button onClick={() => void finalizePendingPricingSold(item)} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white">Sold</button><button onClick={() => onRequestNotSold(item)} className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-200">Not Sold</button></div></td></tr>)}</tbody></table></div>
+        </section>
+      ) : null}
+
+      {managerTab === "quotes" ? (
+        <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-100 p-6 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]"><Table2 className="h-4 w-4" /> Quote Records</div>
+              <h3 className="mt-1 text-xl font-black">Manage every quote status</h3>
+              <p className="mt-1 text-sm text-slate-500">Delete incorrect or test quotes from Active, Pending Pricing, Sold, or Not Sold. Deleted quotes stop counting in performance and reports.</p>
+            </div>
+            <div className="relative w-full lg:max-w-md">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input value={quoteSearch} onChange={(event) => setQuoteSearch(event.target.value)} placeholder="Search customer, source, agent, status..." className="field" style={{ paddingLeft: "3rem" }} />
+            </div>
+          </div>
+          <div className="border-b border-amber-100 bg-amber-50 px-6 py-3 text-xs font-semibold text-amber-900">Deletion is manager-only, requires a reason, and is permanently recorded in the audit log.</div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-[#f3f6fb] text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Source / Input</th><th className="px-5 py-3">Last Status</th><th className="px-5 py-3">Action</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {visibleQuoteRecords.map((item) => {
+                  const statusClass = item.status === "Sold" ? "bg-emerald-50 text-emerald-700" : item.status === "Not Sold" ? "bg-rose-50 text-rose-700" : item.status === "Price Sent" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700";
+                  return <tr key={`${item.stage}-${item.id}`} className="hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{item.customer}</p><p className="mt-1 text-xs text-slate-400">{item.source}</p></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", statusClass)}>{item.status}</span></td><td className="px-5 py-4 font-bold text-slate-600">{workTypeLabels[item.workType]}</td><td className="px-5 py-4 font-bold text-slate-700">{item.agent}</td><td className="px-5 py-4"><p className="font-semibold text-slate-600">{item.source}</p><p className="mt-1 text-xs text-slate-400">{item.receivedThrough}</p></td><td className="px-5 py-4 text-xs font-semibold text-slate-500">{formatDateTime(item.statusDate)}</td><td className="px-5 py-4"><button onClick={() => void onDeleteQuote(item.stage, item.id, item.customer)} className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-100"><Trash2 className="h-4 w-4" /> Delete</button></td></tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+          {!visibleQuoteRecords.length ? <div className="p-8 text-center text-sm font-semibold text-slate-500">No quote records match your search.</div> : null}
         </section>
       ) : null}
 
@@ -1638,7 +1709,7 @@ function QueueOrderPanel({ agentList, onSave }: { agentList: Agent[]; onSave: (r
           );
         })}
       </div>
-      <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900"><strong>Daily start rule:</strong> all active agents reset to Unavailable at midnight Eastern. The first eligible agent to click Available starts that queue for the new day. Normally the same first agent starts all three queues; a manager-paused agent will not start the queue they are paused from.</div>
+      <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900"><strong>Daily start rule:</strong> the first eligible agent to click Available each business day starts that queue. Normally the same first agent starts all three queues; a manager-paused agent will not start the queue they are paused from.</div>
     </section>
   );
 }
@@ -1648,9 +1719,6 @@ function UserAdminPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resettingId, setResettingId] = useState<string | null>(null);
-  const [resetTarget, setResetTarget] = useState<AdminUserAccount | null>(null);
-  const [resetPasswordValue, setResetPasswordValue] = useState("");
-  const [showResetPassword, setShowResetPassword] = useState(false);
   const [error, setError] = useState("");
   const [credential, setCredential] = useState<TemporaryCredential | null>(null);
 
@@ -1710,32 +1778,20 @@ function UserAdminPanel() {
     }
   }
 
-  function openPasswordReset(user: AdminUserAccount) {
-    setResetTarget(user);
-    setResetPasswordValue("");
-    setShowResetPassword(false);
-    setError("");
-    setCredential(null);
-  }
-
-  async function resetPassword(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!resetTarget) return;
-
-    setResettingId(resetTarget.id);
+  async function resetPassword(user: AdminUserAccount) {
+    if (!window.confirm(`Reset ${user.display_name}'s password and require a new password at next sign-in?`)) return;
+    setResettingId(user.id);
     setError("");
     setCredential(null);
     try {
       const response = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: resetTarget.id, temporaryPassword: resetPasswordValue }),
+        body: JSON.stringify({ userId: user.id }),
       });
       const payload = await response.json() as { username?: string; displayName?: string; temporaryPassword?: string; error?: string };
       if (!response.ok || !payload.username || !payload.displayName || !payload.temporaryPassword) throw new Error(payload.error || "Unable to reset password.");
       setCredential({ username: payload.username, displayName: payload.displayName, temporaryPassword: payload.temporaryPassword });
-      setResetTarget(null);
-      setResetPasswordValue("");
       await loadUsers();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to reset password.");
@@ -1763,34 +1819,6 @@ function UserAdminPanel() {
         </section>
       ) : null}
 
-      <Modal open={Boolean(resetTarget)} title={resetTarget ? `Reset ${resetTarget.display_name}'s password` : "Reset password"} subtitle="Enter the temporary password you want this user to receive. They must replace it after their next sign-in." onClose={() => { if (!resettingId) setResetTarget(null); }}>
-        <form onSubmit={resetPassword} className="space-y-4 p-6">
-          <Field label="Temporary password">
-            <input
-              type={showResetPassword ? "text" : "password"}
-              value={resetPasswordValue}
-              onChange={(event) => setResetPasswordValue(event.target.value)}
-              minLength={8}
-              maxLength={72}
-              autoComplete="new-password"
-              className="field"
-              placeholder="Enter at least 8 characters"
-              required
-              autoFocus
-            />
-          </Field>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600"><input type="checkbox" checked={showResetPassword} onChange={(event) => setShowResetPassword(event.target.checked)} /> Show password</label>
-            <button type="button" onClick={() => { setResetPasswordValue(createSuggestedTemporaryPassword()); setShowResetPassword(true); }} className="rounded-xl border border-[#c9d5e9] bg-white px-3 py-2 text-xs font-black text-[#223f7a] hover:bg-[#f3f6fb]">Generate secure password</button>
-          </div>
-          <div className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-900">This password will work only as the user&apos;s temporary credential. The Work Desk will require a private password change after sign-in.</div>
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" disabled={Boolean(resettingId)} onClick={() => setResetTarget(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 disabled:opacity-50">Cancel</button>
-            <button disabled={Boolean(resettingId) || resetPasswordValue.length < 8} className="inline-flex items-center gap-2 rounded-xl bg-[#223f7a] px-4 py-2.5 text-sm font-black text-white disabled:opacity-50"><KeyRound className="h-4 w-4" />{resettingId ? "Resetting..." : "Set Temporary Password"}</button>
-          </div>
-        </form>
-      </Modal>
-
       {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</div> : null}
 
       <div className="grid gap-5 xl:grid-cols-[.72fr_1.28fr]">
@@ -1806,8 +1834,8 @@ function UserAdminPanel() {
         </section>
 
         <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 p-6"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Accounts</p><h3 className="mt-1 text-xl font-black">Usernames and password resets</h3><p className="mt-1 text-sm text-slate-500">Choose the temporary password during a reset. The user is still forced to create a private password at the next sign-in.</p></div><button onClick={() => { setLoading(true); void loadUsers(); }} className="rounded-xl border border-slate-200 p-2.5 text-[#223f7a] hover:bg-[#f3f6fb]" aria-label="Refresh users"><RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /></button></div>
-          <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#f3f6fb] text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">User</th><th className="px-5 py-3">Username</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Password Status</th><th className="px-5 py-3">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{users.map((user) => <tr key={user.id}><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-[#223f7a] text-xs font-black text-white">{user.initials}</div><div><p className="font-black">{user.display_name}</p><p className="mt-1 text-xs text-slate-400">Created {formatDate(user.created_at)}</p></div></div></td><td className="px-5 py-4"><code className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-black text-[#223f7a]">{user.username}</code></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", user.role === "manager" ? "bg-[#eef3fb] text-[#223f7a]" : "bg-slate-100 text-slate-600")}>{user.role === "manager" ? "Manager" : "Agent"}</span></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", user.must_change_password ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700")}>{user.must_change_password ? "Temporary" : "Private password set"}</span></td><td className="px-5 py-4"><button disabled={resettingId === user.id} onClick={() => openPasswordReset(user)} className="inline-flex items-center gap-2 rounded-xl border border-[#c9d5e9] bg-white px-3 py-2 text-xs font-black text-[#223f7a] hover:bg-[#f3f6fb] disabled:opacity-50"><KeyRound className="h-4 w-4" />{resettingId === user.id ? "Resetting..." : "Reset Password"}</button></td></tr>)}</tbody></table></div>
+          <div className="flex items-center justify-between border-b border-slate-100 p-6"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Accounts</p><h3 className="mt-1 text-xl font-black">Usernames and password resets</h3><p className="mt-1 text-sm text-slate-500">Password resets create a new temporary password and force a private password change at the next sign-in.</p></div><button onClick={() => { setLoading(true); void loadUsers(); }} className="rounded-xl border border-slate-200 p-2.5 text-[#223f7a] hover:bg-[#f3f6fb]" aria-label="Refresh users"><RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /></button></div>
+          <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#f3f6fb] text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">User</th><th className="px-5 py-3">Username</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Password Status</th><th className="px-5 py-3">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{users.map((user) => <tr key={user.id}><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-[#223f7a] text-xs font-black text-white">{user.initials}</div><div><p className="font-black">{user.display_name}</p><p className="mt-1 text-xs text-slate-400">Created {formatDate(user.created_at)}</p></div></div></td><td className="px-5 py-4"><code className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-black text-[#223f7a]">{user.username}</code></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", user.role === "manager" ? "bg-[#eef3fb] text-[#223f7a]" : "bg-slate-100 text-slate-600")}>{user.role === "manager" ? "Manager" : "Agent"}</span></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", user.must_change_password ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700")}>{user.must_change_password ? "Temporary" : "Private password set"}</span></td><td className="px-5 py-4"><button disabled={resettingId === user.id} onClick={() => void resetPassword(user)} className="inline-flex items-center gap-2 rounded-xl border border-[#c9d5e9] bg-white px-3 py-2 text-xs font-black text-[#223f7a] hover:bg-[#f3f6fb] disabled:opacity-50"><KeyRound className="h-4 w-4" />{resettingId === user.id ? "Resetting..." : "Reset Password"}</button></td></tr>)}</tbody></table></div>
           {loading && !users.length ? <div className="p-6 text-sm font-semibold text-slate-500">Loading users...</div> : null}
         </section>
       </div>
