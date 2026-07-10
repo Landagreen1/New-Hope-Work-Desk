@@ -62,6 +62,8 @@ import type {
   NotSoldReason,
   QuoteOutcome,
   QuoteNote,
+  QuoteActivity,
+  QuoteTakeEvent,
   RotationKind,
   SessionProfile,
   WorkItem,
@@ -74,6 +76,7 @@ const workTypeLabels: Record<WorkType, string> = {
   activation: "Activation",
   change: "Change",
   whatsapp_update: "WhatsApp Update",
+  payment: "Payment",
 };
 
 const methodStyles: Record<AssignmentMethod, { label: string; className: string }> = {
@@ -84,6 +87,7 @@ const methodStyles: Record<AssignmentMethod, { label: string; className: string 
   update_log: { label: "Update · No Turn", className: "bg-amber-50 text-amber-800 ring-amber-200" },
   manager_manual: { label: "Manager Assigned", className: "bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200" },
   manual_quote: { label: "Manual Quote · No Turn", className: "bg-slate-100 text-slate-700 ring-slate-200" },
+  payment_log: { label: "Payment · No Turn", className: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
 };
 
 const rotationConfig: Record<RotationKind, {
@@ -143,7 +147,7 @@ function accentForAgent(agent: Agent) {
   return agentAccentCycle[(agent.rotationPosition - 1) % agentAccentCycle.length];
 }
 
-type ModalType = "whatsapp_quote" | "ringcentral_quote" | "workload_turn" | "whatsapp_update" | "manual_quote" | "manager_assign_quote" | "quote_result" | "not_sold_reason" | null;
+type ModalType = "whatsapp_quote" | "ringcentral_quote" | "workload_turn" | "payment" | "manual_quote" | "manager_assign_quote" | "quote_result" | "not_sold_reason" | "take_quote" | "quote_log" | null;
 type AgentTab = "desk" | "pricing" | "quotes" | "performance";
 type ManagerTab = "overview" | "tasks" | "pricing" | "quotes" | "reports" | "team" | "sources" | "users";
 type ReportView = "executive" | "agents" | "timing" | "channels" | "sources" | "followup" | "activity";
@@ -160,6 +164,7 @@ type QuoteRecord = {
   agent: string;
   workType: "new_quote" | "requote";
   receivedThrough: string;
+  takeEvent?: QuoteTakeEvent;
 };
 
 type AdminUserAccount = {
@@ -205,7 +210,8 @@ function isQuote(item: WorkItem) {
   return item.workType === "new_quote" || item.workType === "requote";
 }
 
-function buildQuoteRecords(workItems: WorkItem[], pendingPricing: PendingPricingItem[], quoteOutcomes: QuoteOutcome[]): QuoteRecord[] {
+function buildQuoteRecords(workItems: WorkItem[], pendingPricing: PendingPricingItem[], quoteOutcomes: QuoteOutcome[], quoteTakeEvents: QuoteTakeEvent[] = []): QuoteRecord[] {
+  const takeBySource = new Map(quoteTakeEvents.map((event) => [event.sourceWorkItemId, event]));
   const rows: QuoteRecord[] = [
     ...workItems.filter(isQuote).map((item) => ({
       id: item.id,
@@ -219,6 +225,7 @@ function buildQuoteRecords(workItems: WorkItem[], pendingPricing: PendingPricing
       agent: item.assignedAgent,
       workType: item.workType as "new_quote" | "requote",
       receivedThrough: item.receivedThrough || "Unknown",
+      takeEvent: takeBySource.get(item.id),
     })),
     ...pendingPricing.map((item) => ({
       id: item.id,
@@ -232,6 +239,7 @@ function buildQuoteRecords(workItems: WorkItem[], pendingPricing: PendingPricing
       agent: item.assignedAgent,
       workType: item.workType,
       receivedThrough: item.receivedThrough || "Unknown",
+      takeEvent: takeBySource.get(item.sourceWorkItemId),
     })),
     ...quoteOutcomes.map((item) => ({
       id: item.id,
@@ -245,6 +253,7 @@ function buildQuoteRecords(workItems: WorkItem[], pendingPricing: PendingPricing
       agent: item.assignedAgent,
       workType: item.workType,
       receivedThrough: item.receivedThrough || "Unknown",
+      takeEvent: takeBySource.get(item.sourceWorkItemId),
     })),
   ];
   return rows.sort((a, b) => new Date(b.statusDate).getTime() - new Date(a.statusDate).getTime());
@@ -295,6 +304,41 @@ function upcomingAgents(agentList: Agent[], currentId: string, rotation: Rotatio
   }
   return output;
 }
+
+function eligibleQueueFromCurrent(agentList: Agent[], currentId: string, rotation: RotationKind) {
+  const eligible = orderedAgents(agentList, rotation).filter((agent) => agent.availability === "available" && rotationEligibility(agent, rotation));
+  const currentIndex = eligible.findIndex((agent) => agent.id === currentId);
+  if (currentIndex < 0) return [];
+  return [...eligible.slice(currentIndex), ...eligible.slice(0, currentIndex)];
+}
+
+function formatElapsedSeconds(seconds: number) {
+  const safe = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(safe / 60);
+  const remaining = safe % 60;
+  return `${minutes}m ${String(remaining).padStart(2, "0")}s`;
+}
+
+function localDateTimeInputValue(date = new Date()) {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+const quoteActivityLabels: Record<string, string> = {
+  created: "Quote created",
+  assigned: "Quote assigned",
+  accepted: "Assignment accepted",
+  reassigned: "Reassigned",
+  price_sent: "Price sent",
+  sold: "Marked Sold",
+  not_sold: "Marked Not Sold",
+  completed: "Work completed",
+  cancelled: "Work cancelled",
+  taken: "Turn taken",
+  activation: "Activation logged",
+  change: "Change logged",
+  payment: "Payment logged",
+};
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
@@ -531,13 +575,188 @@ function PendingNotesPanel({ notes, draft, onDraftChange, onAdd }: { notes: Quot
     <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
       <div className="flex items-center justify-between"><p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Follow-up notes</p><span className="text-[10px] font-bold text-slate-400">{notes.length} note{notes.length === 1 ? "" : "s"}</span></div>
       <div className="mt-3 max-h-40 space-y-2 overflow-auto">
-        {notes.length ? notes.map((note) => <div key={note.id} className="rounded-xl bg-slate-50 px-3 py-2"><p className="text-sm font-semibold text-slate-700">{note.note}</p><p className="mt-1 text-[10px] font-bold text-slate-400">{note.authorName} · {formatDateTime(note.createdAt)}</p></div>) : <p className="text-xs font-semibold text-slate-400">No follow-up notes yet.</p>}
+        {notes.length ? notes.map((note) => <div key={note.id} className="rounded-xl bg-slate-50 px-3 py-2"><p className="text-sm font-semibold text-slate-700">{note.note}</p><p className="mt-1 text-[10px] font-bold text-slate-400">@{note.authorUsername} · {note.authorName} · {formatDateTime(note.createdAt)}</p></div>) : <p className="text-xs font-semibold text-slate-400">No follow-up notes yet.</p>}
       </div>
       <div className="mt-3 flex gap-2">
         <input value={draft} onChange={(event) => onDraftChange(event.target.value)} placeholder="Log follow-up or changes made" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm" />
         <button type="button" onClick={onAdd} disabled={!draft.trim()} className="rounded-xl bg-[#223f7a] px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">Add Note</button>
       </div>
     </div>
+  );
+}
+
+function QuoteLogPanel({
+  quote,
+  activities,
+  notes,
+  draft,
+  onDraftChange,
+  onAddNote,
+}: {
+  quote: QuoteRecord | null;
+  activities: QuoteActivity[];
+  notes: QuoteNote[];
+  draft: string;
+  onDraftChange: (value: string) => void;
+  onAddNote: () => void;
+}) {
+  if (!quote) return <div className="p-6 text-sm font-semibold text-slate-500">Quote not found.</div>;
+
+  const timeline = [
+    ...activities.map((activity) => ({ kind: "activity" as const, id: activity.id, createdAt: activity.createdAt, activity })),
+    ...notes.map((note) => ({ kind: "note" as const, id: note.id, createdAt: note.createdAt, note })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  return (
+    <div className="space-y-4 p-6">
+      <div className="rounded-2xl bg-[#f3f6fb] p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><p className="font-black text-slate-950">{quote.customer}</p><p className="mt-1 text-sm font-semibold text-slate-500">{quote.source} · {quote.agent}</p></div>
+          <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#223f7a] ring-1 ring-[#c9d5e9]">{quote.status}</span>
+        </div>
+        {quote.takeEvent ? (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs font-semibold text-amber-900">
+            <p className="font-black">Taken by @{quote.takeEvent.takerUsername} after {formatElapsedSeconds(quote.takeEvent.elapsedSeconds)}</p>
+            <p className="mt-1">Skipped: {quote.takeEvent.skippedAgents.length ? quote.takeEvent.skippedAgents.map((agent) => `@${agent.username}`).join(", ") : "None"}</p>
+            <p className="mt-1 text-amber-700">Received {formatDateTime(quote.takeEvent.receivedAt)} · Taken {formatDateTime(quote.takeEvent.takenAt)}</p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Add shared note</p>
+        <div className="mt-3 flex gap-2">
+          <input value={draft} onChange={(event) => onDraftChange(event.target.value)} placeholder="Add information for the team" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+          <button type="button" onClick={onAddNote} disabled={!draft.trim()} className="rounded-xl bg-[#223f7a] px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">Add Note</button>
+        </div>
+      </div>
+
+      <div className="max-h-[52vh] space-y-3 overflow-auto pr-1">
+        {timeline.length ? timeline.map((entry) => {
+          if (entry.kind === "note") {
+            return (
+              <div key={`note-${entry.id}`} className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+                <div className="flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-[0.12em] text-blue-700">Note</p><p className="text-[10px] font-bold text-slate-400">{formatDateTime(entry.note.createdAt)}</p></div>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-700">{entry.note.note}</p>
+                <p className="mt-2 text-xs font-black text-[#223f7a]">@{entry.note.authorUsername} · {entry.note.authorName}</p>
+              </div>
+            );
+          }
+
+          const detailReason = typeof entry.activity.details?.reason === "string" ? entry.activity.details.reason : undefined;
+          const detailChange = typeof entry.activity.details?.change_type === "string" ? entry.activity.details.change_type : undefined;
+          const detailNote = typeof entry.activity.details?.note === "string" ? entry.activity.details.note : undefined;
+          return (
+            <div key={`activity-${entry.id}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-3"><p className="font-black text-slate-900">{quoteActivityLabels[entry.activity.eventType] || entry.activity.eventType}</p><p className="text-[10px] font-bold text-slate-400">{formatDateTime(entry.activity.createdAt)}</p></div>
+              <p className="mt-1 text-xs font-black text-slate-500">@{entry.activity.actorUsername} · {entry.activity.actorName}</p>
+              {entry.activity.assignedAgent ? <p className="mt-2 text-xs font-semibold text-slate-500">Assigned agent: {entry.activity.assignedAgent}</p> : null}
+              {detailReason ? <p className="mt-2 text-sm font-semibold text-slate-700">Reason: {detailReason}</p> : null}
+              {detailChange ? <p className="mt-2 text-sm font-semibold text-slate-700">Change type: {detailChange}</p> : null}
+              {detailNote ? <p className="mt-2 text-sm font-semibold text-slate-700">{detailNote}</p> : null}
+            </div>
+          );
+        }) : <p className="rounded-2xl bg-slate-50 p-6 text-center text-sm font-semibold text-slate-400">No activity has been recorded yet.</p>}
+      </div>
+    </div>
+  );
+}
+
+function TakeQuoteForm({
+  rotation,
+  currentId,
+  currentUserId,
+  agentList,
+  sourceList,
+  onSubmit,
+}: {
+  rotation: "whatsapp" | "ringcentral";
+  currentId: string | null;
+  currentUserId: string;
+  agentList: Agent[];
+  sourceList: SourceOption[];
+  onSubmit: (formData: FormData) => Promise<void>;
+}) {
+  const [receivedLocal, setReceivedLocal] = useState(localDateTimeInputValue());
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const queue = currentId ? eligibleQueueFromCurrent(agentList, currentId, rotation) : [];
+  const myIndex = queue.findIndex((agent) => agent.id === currentUserId);
+  const receivedStamp = receivedLocal ? new Date(receivedLocal).getTime() : Number.NaN;
+  const elapsedSeconds = Number.isFinite(receivedStamp) ? Math.max(0, Math.floor((now - receivedStamp) / 1000)) : 0;
+  const allowedIndex = Math.floor(elapsedSeconds / 180);
+  const canTake = myIndex > 0 && myIndex <= allowedIndex;
+  const skippedAgents = myIndex > 0 ? queue.slice(0, myIndex) : [];
+  const waitSeconds = myIndex > 0 ? Math.max(0, myIndex * 180 - elapsedSeconds) : 0;
+
+  return (
+    <form action={onSubmit} className="space-y-4 p-6">
+      <input type="hidden" name="rotation" value={rotation} />
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+        Each available eligible agent has a 3-minute window. Unavailable or paused agents do not consume a window. The database rechecks the order and timing before allowing the Take.
+      </div>
+      <Field label="Time quote came in">
+        <input name="receivedAt" type="datetime-local" required value={receivedLocal} onChange={(event) => setReceivedLocal(event.target.value)} className="field" />
+      </Field>
+      <div className={cn("rounded-2xl border p-4", canTake ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50")}>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Elapsed</p><p className="mt-1 text-2xl font-black text-slate-950">{formatElapsedSeconds(elapsedSeconds)}</p></div><span className={cn("rounded-full px-3 py-1.5 text-xs font-black", canTake ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600")}>{canTake ? "YOU MAY TAKE" : myIndex === 0 ? "USE YOUR NORMAL TURN" : myIndex < 0 ? "NOT ELIGIBLE" : `WAIT ${formatElapsedSeconds(waitSeconds)}`}</span></div>
+        <p className="mt-3 text-xs font-semibold text-slate-600">Current eligible order: {queue.length ? queue.map((agent) => agent.name).join(" → ") : "No live queue"}</p>
+        {skippedAgents.length ? <p className="mt-2 text-xs font-black text-amber-800">This Take will record as skipped: {skippedAgents.map((agent) => agent.name).join(", ")}</p> : null}
+      </div>
+      <Field label="Customer name"><input name="customer" required className="field" /></Field>
+      <Field label="Source"><SourceCombobox sources={sourceList} /></Field>
+      {rotation === "ringcentral" ? <Field label="Quote type"><select name="quoteType" className="field"><option value="new_quote">New Quote</option><option value="requote">Requote</option></select></Field> : <input type="hidden" name="quoteType" value="new_quote" />}
+      <Field label="Notes (optional)"><textarea name="note" rows={3} className="field" placeholder="Important information about this quote" /></Field>
+      <button disabled={!canTake} className="w-full rounded-xl bg-amber-600 px-4 py-3 font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">Take Quote</button>
+    </form>
+  );
+}
+
+function WorkloadTurnForm({
+  quotes,
+  agents,
+  sources,
+  onSubmit,
+}: {
+  quotes: QuoteRecord[];
+  agents: Agent[];
+  sources: SourceOption[];
+  onSubmit: (formData: FormData) => Promise<void>;
+}) {
+  const [mode, setMode] = useState<"linked" | "new">("linked");
+
+  return (
+    <form action={onSubmit} className="space-y-4 p-6">
+      <input type="hidden" name="workloadMode" value={mode} />
+      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5">
+        <button type="button" onClick={() => setMode("linked")} className={cn("rounded-xl px-3 py-2.5 text-xs font-black", mode === "linked" ? "bg-white text-[#223f7a] shadow-sm" : "text-slate-500")}>Existing Quote</button>
+        <button type="button" onClick={() => setMode("new")} className={cn("rounded-xl px-3 py-2.5 text-xs font-black", mode === "new" ? "bg-white text-[#223f7a] shadow-sm" : "text-slate-500")}>Old / Not in System</button>
+      </div>
+      {mode === "linked" ? (
+        <>
+          <div className="rounded-2xl bg-violet-50 p-4 text-sm font-semibold text-violet-800">Select the existing quote. Customer, source, and original owner are copied automatically.</div>
+          <Field label="Existing quote"><QuoteCombobox quotes={quotes} /></Field>
+        </>
+      ) : (
+        <>
+          <div className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-900">Use this for older business that is not in Work Desk. An Activation will also create a Sold quote record automatically.</div>
+          <Field label="Customer name"><input name="customer" required className="field" /></Field>
+          <Field label="Source"><SourceCombobox sources={sources} allowEmpty /></Field>
+          <Field label="Original owner (optional)"><select name="owner" className="field"><option value="">Unknown / Current agent</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></Field>
+        </>
+      )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Work type"><select name="workType" className="field"><option value="activation">Activation</option><option value="change">Change</option></select></Field>
+        <Field label="Change type (optional)"><select name="changeType" className="field"><option value="">Not applicable</option><option>Add Vehicle</option><option>Remove Vehicle</option><option>Add Driver</option><option>Remove Driver</option><option>Change Coverage</option><option>Other Policy Change</option></select></Field>
+      </div>
+      <Field label="Notes (optional)"><textarea name="note" rows={3} className="field" placeholder="What was requested or changed?" /></Field>
+      <button className="w-full rounded-xl bg-violet-600 px-4 py-3 font-black text-white">Take Additional Workload</button>
+    </form>
   );
 }
 
@@ -553,7 +772,7 @@ function TabBar<T extends string>({ tabs, value, onChange }: { tabs: Array<{ id:
   );
 }
 
-function RotationCard({ variant, current, upcoming, isMyTurn, onAction, onPass }: { variant: RotationKind; current: Agent | null; upcoming: Agent[]; isMyTurn: boolean; onAction: () => void; onPass: () => void }) {
+function RotationCard({ variant, current, upcoming, isMyTurn, canTake = false, onAction, onPass, onTake }: { variant: RotationKind; current: Agent | null; upcoming: Agent[]; isMyTurn: boolean; canTake?: boolean; onAction: () => void; onPass: () => void; onTake?: () => void }) {
   const config = rotationConfig[variant];
   return (
     <section className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -580,8 +799,9 @@ function RotationCard({ variant, current, upcoming, isMyTurn, onAction, onPass }
           <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">The first eligible agent to click Available starts this queue for the day.</p>
         </div>
       )}
-      <div className="mt-5 flex gap-2">
-        <button onClick={onAction} disabled={!isMyTurn} className={cn("flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-3 text-xs font-black transition", isMyTurn ? `${config.button} text-white` : "cursor-not-allowed bg-slate-100 text-slate-400")}>{variant === "workload" ? <BriefcaseBusiness className="h-4 w-4" /> : <Zap className="h-4 w-4" />}{config.action}</button>
+      <div className="mt-5 flex flex-wrap gap-2">
+        <button onClick={onAction} disabled={!isMyTurn} className={cn("flex min-w-[150px] flex-1 items-center justify-center gap-2 rounded-xl px-3 py-3 text-xs font-black transition", isMyTurn ? `${config.button} text-white` : "cursor-not-allowed bg-slate-100 text-slate-400")}>{variant === "workload" ? <BriefcaseBusiness className="h-4 w-4" /> : <Zap className="h-4 w-4" />}{config.action}</button>
+        {canTake && onTake ? <button onClick={onTake} className="rounded-xl bg-amber-500 px-4 py-3 text-xs font-black text-white transition hover:bg-amber-600">Take</button> : null}
         {isMyTurn ? <button onClick={onPass} className="rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-600 hover:bg-slate-50">Pass</button> : null}
       </div>
     </section>
@@ -623,6 +843,8 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   const [pendingPricing, setPendingPricing] = useState<PendingPricingItem[]>(initialData.pendingPricing);
   const [quoteOutcomes, setQuoteOutcomes] = useState<QuoteOutcome[]>(initialData.quoteOutcomes);
   const [quoteNotes, setQuoteNotes] = useState<QuoteNote[]>(initialData.quoteNotes);
+  const [quoteActivities, setQuoteActivities] = useState<QuoteActivity[]>(initialData.quoteActivities);
+  const [quoteTakeEvents, setQuoteTakeEvents] = useState<QuoteTakeEvent[]>(initialData.quoteTakeEvents);
   const [notifications, setNotifications] = useState<AlertNotification[]>(initialData.notifications);
   const [performance, setPerformance] = useState<PerformanceRow[]>(initialData.performance);
   const [passEvents, setPassEvents] = useState<PassEvent[]>(initialData.passEvents);
@@ -634,6 +856,8 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   const [modal, setModal] = useState<ModalType>(null);
   const [quoteResultItemId, setQuoteResultItemId] = useState<string | null>(null);
   const [notSoldTarget, setNotSoldTarget] = useState<NotSoldTarget>(null);
+  const [takeRotation, setTakeRotation] = useState<"whatsapp" | "ringcentral" | null>(null);
+  const [quoteLogSourceId, setQuoteLogSourceId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => typeof window !== "undefined" && "Notification" in window && window.localStorage.getItem("nhwd-alerts-enabled") === "true" && Notification.permission === "granted");
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
@@ -654,7 +878,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   const quoteResultItem = workItems.find((item) => item.id === quoteResultItemId) ?? null;
   const unreadNotifications = notifications.filter((item) => !item.readAt);
 
-  const allQuoteRecords = useMemo(() => buildQuoteRecords(workItems, pendingPricing, quoteOutcomes), [pendingPricing, quoteOutcomes, workItems]);
+  const allQuoteRecords = useMemo(() => buildQuoteRecords(workItems, pendingPricing, quoteOutcomes, quoteTakeEvents), [pendingPricing, quoteOutcomes, quoteTakeEvents, workItems]);
   const visibleAgentQuotes = useMemo(() => {
     const needle = quoteSearch.trim().toLowerCase();
     if (!needle) return allQuoteRecords;
@@ -665,6 +889,12 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
     for (const note of quoteNotes) rows.set(note.sourceWorkItemId, [...(rows.get(note.sourceWorkItemId) || []), note]);
     return rows;
   }, [quoteNotes]);
+  const quoteActivitiesBySource = useMemo(() => {
+    const rows = new Map<string, QuoteActivity[]>();
+    for (const activity of quoteActivities) rows.set(activity.sourceWorkItemId, [...(rows.get(activity.sourceWorkItemId) || []), activity]);
+    return rows;
+  }, [quoteActivities]);
+  const quoteLogRecord = quoteLogSourceId ? allQuoteRecords.find((quote) => quote.sourceWorkItemId === quoteLogSourceId) ?? null : null;
 
   const emptyPerformance: PerformanceRow = { agentId: currentUserId, whatsappQuotes: 0, ringCentralQuotes: 0, workloadTurns: 0, whatsappUpdates: 0, manualQuotes: 0, soldQuotes: 0, ownedActivations: 0, ownedChanges: 0, requotes: 0, passedTurns: 0 };
   const myPerformance = performance.find((row) => row.agentId === currentUserId) ?? emptyPerformance;
@@ -707,6 +937,8 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
     setPendingPricing(data.pendingPricing);
     setQuoteOutcomes(data.quoteOutcomes);
     setQuoteNotes(data.quoteNotes);
+    setQuoteActivities(data.quoteActivities);
+    setQuoteTakeEvents(data.quoteTakeEvents);
     setNotifications(data.notifications);
     setPerformance(data.performance);
     setPassEvents(data.passEvents);
@@ -734,6 +966,8 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
       .on("postgres_changes", { event: "*", schema: "public", table: "pending_pricing_quotes" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "quote_outcomes" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "quote_notes" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "work_item_events" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "quote_take_events" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "user_notifications" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "turn_events" }, scheduleRefresh)
       .subscribe();
@@ -862,7 +1096,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   async function addQuoteNote(sourceWorkItemId: string) {
     const draft = (noteDrafts[sourceWorkItemId] || "").trim();
     if (!draft) return;
-    const success = await runRpc("add_quote_note", { p_source_work_item_id: sourceWorkItemId, p_note: draft }, "Follow-up note added.");
+    const success = await runRpc("add_quote_note", { p_source_work_item_id: sourceWorkItemId, p_note: draft }, "Quote note added.");
     if (success) setNoteDrafts((current) => ({ ...current, [sourceWorkItemId]: "" }));
   }
 
@@ -892,10 +1126,49 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
     }
   }
 
+  function openTake(rotation: "whatsapp" | "ringcentral") {
+    setTakeRotation(rotation);
+    setModal("take_quote");
+  }
+
+  function openQuoteLog(sourceWorkItemId: string) {
+    setQuoteLogSourceId(sourceWorkItemId);
+    setModal("quote_log");
+  }
+
+  async function submitTakeQuote(formData: FormData) {
+    const rotation = String(formData.get("rotation")) as "whatsapp" | "ringcentral";
+    const receivedAtLocal = String(formData.get("receivedAt") || "");
+    const customer = String(formData.get("customer") || "");
+    const dealerId = String(formData.get("dealer") || "");
+    const workType = String(formData.get("quoteType") || "new_quote") as "new_quote" | "requote";
+    const note = String(formData.get("note") || "").trim();
+    const receivedDate = new Date(receivedAtLocal);
+    if (!receivedAtLocal || Number.isNaN(receivedDate.getTime())) return showToast("Enter the time the quote came in.");
+
+    const success = await runRpc(
+      "take_quote_turn",
+      {
+        p_rotation: rotation,
+        p_received_at: receivedDate.toISOString(),
+        p_customer_name: customer,
+        p_dealer_id: dealerId,
+        p_work_type: workType,
+        p_note: note || null,
+      },
+      "Quote taken. Skipped agents and elapsed time were recorded."
+    );
+    if (success) {
+      setModal(null);
+      setTakeRotation(null);
+    }
+  }
+
   async function submitWhatsappQuote(formData: FormData) {
     const customer = String(formData.get("customer"));
     const dealerId = String(formData.get("dealer"));
-    const success = await runRpc("claim_whatsapp_quote", { p_customer_name: customer, p_dealer_id: dealerId }, "New WhatsApp quote logged. The rotation advanced.");
+    const note = String(formData.get("note") || "").trim();
+    const success = await runRpc("claim_whatsapp_quote", { p_customer_name: customer, p_dealer_id: dealerId, p_note: note || null }, "New WhatsApp quote logged. The rotation advanced.");
     if (success) setModal(null);
   }
 
@@ -903,25 +1176,51 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
     const customer = String(formData.get("customer"));
     const dealerId = String(formData.get("dealer"));
     const workType = String(formData.get("quoteType")) as "new_quote" | "requote";
-    const success = await runRpc("claim_ringcentral_quote", { p_customer_name: customer, p_dealer_id: dealerId, p_work_type: workType }, `${workTypeLabels[workType]} logged. The RingCentral rotation advanced.`);
+    const note = String(formData.get("note") || "").trim();
+    const success = await runRpc("claim_ringcentral_quote", { p_customer_name: customer, p_dealer_id: dealerId, p_work_type: workType, p_note: note || null }, `${workTypeLabels[workType]} logged. The RingCentral rotation advanced.`);
     if (success) setModal(null);
   }
 
   async function submitWorkloadTurn(formData: FormData) {
-    const relatedQuoteId = String(formData.get("relatedQuote") || "");
+    const mode = String(formData.get("workloadMode") || "linked") as "linked" | "new";
     const workType = String(formData.get("workType")) as "activation" | "change";
-    const changeType = String(formData.get("changeType") || "");
-    if (!relatedQuoteId) return showToast("Select the existing quote this workload belongs to.");
-    const success = await runRpc("claim_linked_workload_turn", { p_related_quote_source_work_item_id: relatedQuoteId, p_work_type: workType, p_change_type: changeType || null }, `${workTypeLabels[workType]} linked to the existing quote. The Additional Workload rotation advanced.`);
+    const changeType = String(formData.get("changeType") || "").trim();
+    const note = String(formData.get("note") || "").trim();
+
+    let success = false;
+    if (mode === "linked") {
+      const relatedQuoteId = String(formData.get("relatedQuote") || "");
+      if (!relatedQuoteId) return showToast("Select the existing quote this workload belongs to.");
+      success = await runRpc(
+        "claim_linked_workload_turn",
+        { p_related_quote_source_work_item_id: relatedQuoteId, p_work_type: workType, p_change_type: changeType || null, p_note: note || null },
+        workType === "activation" ? "Activation taken. The linked quote was marked Sold and the workload rotation advanced." : "Change linked to the existing quote. The workload rotation advanced."
+      );
+    } else {
+      const customer = String(formData.get("customer") || "");
+      const dealerId = String(formData.get("dealer") || "");
+      const ownerId = String(formData.get("owner") || "");
+      success = await runRpc(
+        "claim_unlinked_workload_turn",
+        {
+          p_customer_name: customer,
+          p_dealer_id: dealerId,
+          p_work_type: workType,
+          p_original_owner_profile_id: ownerId || null,
+          p_change_type: changeType || null,
+          p_note: note || null,
+        },
+        workType === "activation" ? "Legacy activation taken and recorded as Sold. The workload rotation advanced." : "Legacy change taken. The workload rotation advanced."
+      );
+    }
     if (success) setModal(null);
   }
 
-  async function submitWhatsappUpdate(formData: FormData) {
-    const customer = String(formData.get("customer"));
-    const dealerId = String(formData.get("dealer"));
-    const ownerId = String(formData.get("owner") || "");
-    const note = String(formData.get("note") || "");
-    const success = await runRpc("log_whatsapp_update", { p_customer_name: customer, p_dealer_id: dealerId, p_original_owner_profile_id: ownerId || null, p_note: note }, "WhatsApp update logged. No rotation moved.");
+  async function submitPayment(formData: FormData) {
+    const customer = String(formData.get("customer") || "");
+    const dealerId = String(formData.get("dealer") || "");
+    const note = String(formData.get("note") || "").trim();
+    const success = await runRpc("log_payment", { p_customer_name: customer, p_dealer_id: dealerId || null, p_note: note }, "Payment recorded. No rotation moved.");
     if (success) setModal(null);
   }
 
@@ -930,7 +1229,8 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
     const dealerId = String(formData.get("dealer") || "");
     const workType = String(formData.get("quoteType")) as "new_quote" | "requote";
     const inputMethod = String(formData.get("inputMethod"));
-    const success = await runRpc("log_manual_quote", { p_customer_name: customer, p_dealer_id: dealerId || null, p_work_type: workType, p_received_through: inputMethod }, "Manual quote recorded for reporting. No rotation moved.");
+    const note = String(formData.get("note") || "").trim();
+    const success = await runRpc("log_manual_quote", { p_customer_name: customer, p_dealer_id: dealerId || null, p_work_type: workType, p_received_through: inputMethod, p_note: note || null }, "Manual quote recorded for reporting. No rotation moved.");
     if (success) setModal(null);
   }
 
@@ -958,12 +1258,16 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
 
   async function managerReassignWork(itemId: string, profileId: string) {
     const agent = agentList.find((candidate) => candidate.id === profileId);
-    await runRpc("manager_reassign_work_item", { p_work_item_id: itemId, p_new_profile_id: profileId, p_reason: "Manager reassignment from Open Tasks" }, `Task reassigned to ${agent?.name || "selected agent"}.`);
+    const reason = window.prompt(`Why are you assigning this work to ${agent?.name || "the selected agent"}?`);
+    if (!reason?.trim()) return showToast("A manager assignment note is required.");
+    await runRpc("manager_reassign_work_item", { p_work_item_id: itemId, p_new_profile_id: profileId, p_reason: reason.trim() }, `Task reassigned to ${agent?.name || "selected agent"}.`);
   }
 
   async function managerReassignPending(itemId: string, profileId: string) {
     const agent = agentList.find((candidate) => candidate.id === profileId);
-    await runRpc("manager_reassign_pending_pricing", { p_pending_id: itemId, p_new_profile_id: profileId, p_reason: "Manager reassignment from Pending Pricing" }, `Pricing follow-up reassigned to ${agent?.name || "selected agent"}.`);
+    const reason = window.prompt(`Why are you assigning this pricing follow-up to ${agent?.name || "the selected agent"}?`);
+    if (!reason?.trim()) return showToast("A manager assignment note is required.");
+    await runRpc("manager_reassign_pending_pricing", { p_pending_id: itemId, p_new_profile_id: profileId, p_reason: reason.trim() }, `Pricing follow-up reassigned to ${agent?.name || "selected agent"}.`);
   }
 
   async function managerDeleteQuote(stage: ManagerQuoteStage, quoteId: string, customer: string) {
@@ -1042,8 +1346,8 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
             {agentTab === "desk" ? (
               <div className="space-y-6">
                 <section className="grid gap-5 xl:grid-cols-3">
-                  <RotationCard variant="whatsapp" current={whatsappCurrent} upcoming={whatsappCurrentId ? upcomingAgents(agentList, whatsappCurrentId, "whatsapp") : []} isMyTurn={whatsappCurrentId !== null && currentUserId === whatsappCurrentId} onAction={() => setModal("whatsapp_quote")} onPass={() => handlePass("whatsapp")} />
-                  <RotationCard variant="ringcentral" current={ringCentralCurrent} upcoming={ringCentralCurrentId ? upcomingAgents(agentList, ringCentralCurrentId, "ringcentral") : []} isMyTurn={ringCentralCurrentId !== null && currentUserId === ringCentralCurrentId} onAction={() => setModal("ringcentral_quote")} onPass={() => handlePass("ringcentral")} />
+                  <RotationCard variant="whatsapp" current={whatsappCurrent} upcoming={whatsappCurrentId ? upcomingAgents(agentList, whatsappCurrentId, "whatsapp") : []} isMyTurn={whatsappCurrentId !== null && currentUserId === whatsappCurrentId} canTake={whatsappCurrentId !== null && currentUserId !== whatsappCurrentId && currentUser.availability === "available" && currentUser.whatsappActive} onAction={() => setModal("whatsapp_quote")} onPass={() => handlePass("whatsapp")} onTake={() => openTake("whatsapp")} />
+                  <RotationCard variant="ringcentral" current={ringCentralCurrent} upcoming={ringCentralCurrentId ? upcomingAgents(agentList, ringCentralCurrentId, "ringcentral") : []} isMyTurn={ringCentralCurrentId !== null && currentUserId === ringCentralCurrentId} canTake={ringCentralCurrentId !== null && currentUserId !== ringCentralCurrentId && currentUser.availability === "available" && currentUser.ringCentralActive} onAction={() => setModal("ringcentral_quote")} onPass={() => handlePass("ringcentral")} onTake={() => openTake("ringcentral")} />
                   <RotationCard variant="workload" current={workloadCurrent} upcoming={workloadCurrentId ? upcomingAgents(agentList, workloadCurrentId, "workload") : []} isMyTurn={workloadCurrentId !== null && currentUserId === workloadCurrentId} onAction={() => setModal("workload_turn")} onPass={() => handlePass("workload")} />
                 </section>
 
@@ -1070,7 +1374,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
                                   <p className="mt-2 text-xs font-semibold text-slate-400">Assigned {formatDateTime(item.assignedAt)}</p>
                                   {item.acceptedAt ? <p className="mt-1 text-xs font-semibold text-emerald-700">Accepted {formatDateTime(item.acceptedAt)}</p> : <p className="mt-1 text-xs font-black text-amber-700">Awaiting your acceptance</p>}
                                 </div>
-                                {item.acceptedAt ? <button onClick={() => completeWorkItem(item)} className="rounded-xl bg-[#223f7a] px-3 py-2 text-xs font-black text-white transition hover:bg-[#17305f]">{isQuote(item) ? "Quote Status" : "Complete"}</button> : <button onClick={() => void acceptAssignedItem(item)} className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-black text-white transition hover:bg-amber-600">Accept</button>}
+                                <div className="flex flex-col gap-2">{isQuote(item) ? <button onClick={() => openQuoteLog(item.id)} className="rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-3 py-2 text-xs font-black text-[#223f7a]">Log</button> : null}{item.acceptedAt ? <button onClick={() => completeWorkItem(item)} className="rounded-xl bg-[#223f7a] px-3 py-2 text-xs font-black text-white transition hover:bg-[#17305f]">{isQuote(item) ? "Quote Status" : "Complete"}</button> : <button onClick={() => void acceptAssignedItem(item)} className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-black text-white transition hover:bg-amber-600">Accept</button>}</div>
                               </div>
                             </div>
                           ))}
@@ -1083,7 +1387,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
                     <div className="rounded-[28px] border border-[#c9d5e9] bg-[#f3f6fb] p-6 shadow-sm">
                       <div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]">Quick Actions</p><h3 className="mt-1 text-xl font-black">Log no-turn work</h3></div><Sparkles className="h-5 w-5 text-[#4d6aa8]" /></div>
                       <div className="mt-5 grid gap-3">
-                        <button onClick={() => setModal("whatsapp_update")} className="group rounded-2xl border border-white bg-white p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[#eef3fb] text-[#223f7a]"><RefreshCw className="h-5 w-5" /></div><div><p className="font-black text-slate-900">Log WhatsApp Update</p><p className="mt-1 text-xs font-semibold text-slate-500">Activity only. No turn moves.</p></div></div></button>
+                        <button onClick={() => setModal("payment")} className="group rounded-2xl border border-white bg-white p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><CircleDollarSign className="h-5 w-5" /></div><div><p className="font-black text-slate-900">Payments</p><p className="mt-1 text-xs font-semibold text-slate-500">Log payment activity. No quote link or turn required.</p></div></div></button>
                         <button onClick={() => setModal("manual_quote")} className="group rounded-2xl border border-white bg-white p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[#eef3fb] text-[#223f7a]"><FilePlus2 className="h-5 w-5" /></div><div><p className="font-black text-slate-900">Submit Manual Quote</p><p className="mt-1 text-xs font-semibold text-slate-500">Outside normal channels. Reporting only.</p></div></div></button>
                       </div>
                     </div>
@@ -1118,7 +1422,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
                           <div key={item.id} className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
                             <div className="flex items-start justify-between gap-3"><div><p className="font-black text-slate-900">{item.customer}</p><p className="mt-1 text-sm font-semibold text-slate-500">{workTypeLabels[item.workType]} · {item.dealer}</p><p className="mt-2 text-xs font-bold text-blue-700">Price sent {formatDateTime(item.priceSentAt)} · {daysSince(item.priceSentAt)} day{daysSince(item.priceSentAt) === 1 ? "" : "s"} waiting</p></div><MethodBadge method={item.assignmentMethod} /></div>
                             <PendingNotesPanel notes={notes} draft={noteDrafts[item.sourceWorkItemId] || ""} onDraftChange={(value) => setNoteDrafts((current) => ({ ...current, [item.sourceWorkItemId]: value }))} onAdd={() => void addQuoteNote(item.sourceWorkItemId)} />
-                            <div className="mt-4 flex gap-2"><button onClick={() => void finalizePendingPricingSold(item)} className="flex-1 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white">Sold</button><button onClick={() => requestNotSold({ kind: "pending", item })} className="flex-1 rounded-xl bg-rose-50 px-3 py-2.5 text-xs font-black text-rose-700 ring-1 ring-rose-200">Not Sold</button></div>
+                            <div className="mt-4 grid grid-cols-3 gap-2"><button onClick={() => openQuoteLog(item.sourceWorkItemId)} className="rounded-xl border border-[#c9d5e9] bg-white px-3 py-2.5 text-xs font-black text-[#223f7a]">Log</button><button onClick={() => void finalizePendingPricingSold(item)} className="rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white">Sold</button><button onClick={() => requestNotSold({ kind: "pending", item })} className="rounded-xl bg-rose-50 px-3 py-2.5 text-xs font-black text-rose-700 ring-1 ring-rose-200">Not Sold</button></div>
                           </div>
                         );
                       })}
@@ -1136,12 +1440,12 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Source / Input</th><th className="px-5 py-3">Updated</th></tr></thead>
+                    <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Source / Input</th><th className="px-5 py-3">Updated</th><th className="px-5 py-3">Log</th></tr></thead>
                     <tbody className="divide-y divide-slate-100">
                       {visibleAgentQuotes.map((quote) => {
                         const statusClass = quote.status === "Sold" ? "bg-emerald-50 text-emerald-700" : quote.status === "Not Sold" ? "bg-rose-50 text-rose-700" : quote.status === "Price Sent" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700";
                         const latestNote = (quoteNotesBySource.get(quote.sourceWorkItemId) || [])[0];
-                        return <tr key={`${quote.stage}-${quote.id}`} className="hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{quote.customer}</p><p className="mt-1 text-xs text-slate-400">{quote.source}</p>{latestNote ? <p className="mt-2 max-w-md truncate text-xs font-semibold text-slate-500">Latest note: {latestNote.note}</p> : null}</td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", statusClass)}>{quote.status}</span></td><td className="px-5 py-4 font-bold text-slate-600">{workTypeLabels[quote.workType]}</td><td className="px-5 py-4 font-bold text-slate-700">{quote.agent}</td><td className="px-5 py-4"><p className="font-semibold text-slate-600">{quote.source}</p><p className="mt-1 text-xs text-slate-400">{quote.receivedThrough}</p></td><td className="px-5 py-4 text-xs font-semibold text-slate-500">{formatDateTime(quote.statusDate)}</td></tr>;
+                        return <tr key={`${quote.stage}-${quote.id}`} className="hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{quote.customer}</p><p className="mt-1 text-xs text-slate-400">{quote.source}</p>{quote.takeEvent ? <p className="mt-2 text-[11px] font-black text-amber-700">Taken by @{quote.takeEvent.takerUsername} after {formatElapsedSeconds(quote.takeEvent.elapsedSeconds)}</p> : null}{latestNote ? <p className="mt-2 max-w-md truncate text-xs font-semibold text-slate-500">Latest note: {latestNote.note}</p> : null}</td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", statusClass)}>{quote.status}</span></td><td className="px-5 py-4 font-bold text-slate-600">{workTypeLabels[quote.workType]}</td><td className="px-5 py-4 font-bold text-slate-700">{quote.agent}</td><td className="px-5 py-4"><p className="font-semibold text-slate-600">{quote.source}</p><p className="mt-1 text-xs text-slate-400">{quote.receivedThrough}</p></td><td className="px-5 py-4 text-xs font-semibold text-slate-500">{formatDateTime(quote.statusDate)}</td><td className="px-5 py-4"><button onClick={() => openQuoteLog(quote.sourceWorkItemId)} className="rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-3 py-2 text-xs font-black text-[#223f7a]">Log</button></td></tr>;
                       })}
                     </tbody>
                   </table>
@@ -1158,7 +1462,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
                       whatsappQuotes: ["WhatsApp Quotes", <MessageCircleMore className="h-5 w-5 text-emerald-700" key="i" />, "bg-emerald-50"],
                       ringCentralQuotes: ["RC Quotes", <PhoneCall className="h-5 w-5 text-blue-700" key="i" />, "bg-blue-50"],
                       workloadTurns: ["Workload", <Layers3 className="h-5 w-5 text-violet-700" key="i" />, "bg-violet-50"],
-                      whatsappUpdates: ["WA Updates", <RefreshCw className="h-5 w-5 text-amber-700" key="i" />, "bg-amber-50"],
+                      whatsappUpdates: ["Payments", <CircleDollarSign className="h-5 w-5 text-emerald-700" key="i" />, "bg-emerald-50"],
                       manualQuotes: ["Manual Quotes", <FilePlus2 className="h-5 w-5 text-slate-700" key="i" />, "bg-slate-100"],
                       soldQuotes: ["Sold Quotes", <CircleDollarSign className="h-5 w-5 text-emerald-700" key="i" />, "bg-emerald-50"],
                       passedTurns: ["Turns Passed", <SkipForward className="h-5 w-5 text-rose-700" key="i" />, "bg-rose-50"],
@@ -1184,6 +1488,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
             pendingPricing={pendingPricing}
             quoteOutcomes={quoteOutcomes}
             quoteNotes={quoteNotes}
+            quoteTakeEvents={quoteTakeEvents}
             performance={performance}
             passEvents={passEvents}
             whatsappCurrentId={whatsappCurrentId}
@@ -1197,6 +1502,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
             onReassignWork={managerReassignWork}
             onReassignPending={managerReassignPending}
             onDeleteQuote={managerDeleteQuote}
+            onOpenQuoteLog={openQuoteLog}
             onAddQuoteNote={addQuoteNote}
             noteDrafts={noteDrafts}
             setNoteDrafts={setNoteDrafts}
@@ -1208,28 +1514,64 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
       </main>
 
       <Modal open={modal === "whatsapp_quote"} title="Take WhatsApp New Quote" subtitle="This advances only the WhatsApp rotation." onClose={() => setModal(null)}>
-        <form action={submitWhatsappQuote} className="space-y-4 p-6"><Field label="Customer name"><input name="customer" required className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-400" /></Field><Field label="Source"><SourceCombobox sources={sourceList} /></Field><button className="w-full rounded-xl bg-emerald-600 px-4 py-3 font-black text-white">Confirm New Quote</button></form>
-      </Modal>
-
-      <Modal open={modal === "ringcentral_quote"} title="Take RingCentral Quote" subtitle="New quotes and requotes advance only the RingCentral rotation." onClose={() => setModal(null)}>
-        <form action={submitRingCentralQuote} className="space-y-4 p-6"><Field label="Customer name"><input name="customer" required className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-400" /></Field><Field label="Source"><SourceCombobox sources={sourceList} /></Field><Field label="Quote type"><select name="quoteType" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option value="new_quote">New Quote</option><option value="requote">Requote</option></select></Field><button className="w-full rounded-xl bg-blue-600 px-4 py-3 font-black text-white">Confirm RingCentral Turn</button></form>
-      </Modal>
-
-      <Modal open={modal === "workload_turn"} title="Take Additional Workload" subtitle="Link the activation or change to an existing quote. This prevents duplicate quote records." onClose={() => setModal(null)}>
-        <form action={submitWorkloadTurn} className="space-y-4 p-6">
-          <div className="rounded-2xl bg-violet-50 p-4 text-sm font-semibold text-violet-800">Search the shared quote database and select the quote this work belongs to. Customer, source, and original owner are copied automatically.</div>
-          <Field label="Existing quote"><QuoteCombobox quotes={allQuoteRecords} /></Field>
-          <div className="grid gap-4 sm:grid-cols-2"><Field label="Work type"><select name="workType" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option value="activation">Activation</option><option value="change">Change</option></select></Field><Field label="Change type (optional)"><select name="changeType" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option value="">Not applicable</option><option>Add Vehicle</option><option>Remove Vehicle</option><option>Add Driver</option><option>Remove Driver</option><option>Change Coverage</option><option>Other Policy Change</option></select></Field></div>
-          <button className="w-full rounded-xl bg-violet-600 px-4 py-3 font-black text-white">Confirm Linked Workload Turn</button>
+        <form action={submitWhatsappQuote} className="space-y-4 p-6">
+          <Field label="Customer name"><input name="customer" required className="field" /></Field>
+          <Field label="Source"><SourceCombobox sources={sourceList} /></Field>
+          <Field label="Notes (optional)"><textarea name="note" rows={3} className="field" placeholder="Important information for this quote" /></Field>
+          <button className="w-full rounded-xl bg-emerald-600 px-4 py-3 font-black text-white">Confirm New Quote</button>
         </form>
       </Modal>
 
-      <Modal open={modal === "whatsapp_update"} title="Log WhatsApp Quote Update" subtitle="Recorded in activity only. No rotation changes." onClose={() => setModal(null)}>
-        <form action={submitWhatsappUpdate} className="space-y-4 p-6"><Field label="Customer name"><input name="customer" required className="w-full rounded-xl border border-slate-200 px-4 py-3" /></Field><Field label="Source"><SourceCombobox sources={sourceList} /></Field><Field label="Original owner"><select name="owner" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option value="">Unknown</option>{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></Field><Field label="What was updated?"><textarea name="note" required rows={3} className="w-full rounded-xl border border-slate-200 px-4 py-3" /></Field><button className="w-full rounded-xl bg-amber-500 px-4 py-3 font-black text-white">Log Update</button></form>
+      <Modal open={modal === "ringcentral_quote"} title="Take RingCentral Quote" subtitle="New quotes and requotes advance only the RingCentral rotation." onClose={() => setModal(null)}>
+        <form action={submitRingCentralQuote} className="space-y-4 p-6">
+          <Field label="Customer name"><input name="customer" required className="field" /></Field>
+          <Field label="Source"><SourceCombobox sources={sourceList} /></Field>
+          <Field label="Quote type"><select name="quoteType" className="field"><option value="new_quote">New Quote</option><option value="requote">Requote</option></select></Field>
+          <Field label="Notes (optional)"><textarea name="note" rows={3} className="field" placeholder="Important information for this quote" /></Field>
+          <button className="w-full rounded-xl bg-blue-600 px-4 py-3 font-black text-white">Confirm RingCentral Turn</button>
+        </form>
       </Modal>
 
-      <Modal open={modal === "manual_quote"} title="Submit Manual Quote" subtitle="For quotes outside the three normal rotations. Recorded for reporting and does not consume a turn." onClose={() => setModal(null)}>
-        <form action={submitManualQuote} className="space-y-4 p-6"><div className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">No rotation will move when this quote is submitted.</div><Field label="Customer name"><input name="customer" required className="w-full rounded-xl border border-slate-200 px-4 py-3" /></Field><Field label="Source"><SourceCombobox sources={sourceList} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Quote type"><select name="quoteType" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option value="new_quote">New Quote</option><option value="requote">Requote</option></select></Field><Field label="Input method"><select name="inputMethod" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option>Phone call</option><option>Walk-in / Client in office</option><option>Referral</option><option>Email</option><option>Website</option><option>Other</option></select></Field></div><button className="w-full rounded-xl bg-slate-950 px-4 py-3 font-black text-white">Submit Manual Quote</button></form>
+      <Modal open={modal === "take_quote" && takeRotation !== null} title="Take Quote" subtitle="Take an overdue quote after the 3-minute windows of eligible agents have passed." onClose={() => { setModal(null); setTakeRotation(null); }}>
+        {takeRotation ? <TakeQuoteForm rotation={takeRotation} currentId={takeRotation === "whatsapp" ? whatsappCurrentId : ringCentralCurrentId} currentUserId={currentUserId} agentList={agentList} sourceList={sourceList} onSubmit={submitTakeQuote} /> : null}
+      </Modal>
+
+      <Modal open={modal === "workload_turn"} title="Take Additional Workload" subtitle="Use an existing quote when possible, or enter older business that is not in Work Desk." onClose={() => setModal(null)}>
+        <WorkloadTurnForm quotes={allQuoteRecords} agents={agentList} sources={sourceList} onSubmit={submitWorkloadTurn} />
+      </Modal>
+
+      <Modal open={modal === "payment"} title="Log Payment" subtitle="Payment activity does not require an existing quote and does not move a rotation." onClose={() => setModal(null)}>
+        <form action={submitPayment} className="space-y-4 p-6">
+          <Field label="Customer or account name"><input name="customer" required className="field" /></Field>
+          <Field label="Source (optional)"><SourceCombobox sources={sourceList} required={false} allowEmpty /></Field>
+          <Field label="Payment notes"><textarea name="note" required rows={4} className="field" placeholder="Payment received, amount, method, or other useful details" /></Field>
+          <button className="w-full rounded-xl bg-emerald-600 px-4 py-3 font-black text-white">Record Payment</button>
+        </form>
+      </Modal>
+
+      <Modal open={modal === "manual_quote"} title="Submit Manual Quote" subtitle="For quotes outside the normal rotations. Recorded for reporting and does not consume a turn." onClose={() => setModal(null)}>
+        <form action={submitManualQuote} className="space-y-4 p-6">
+          <div className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">No rotation will move when this quote is submitted.</div>
+          <Field label="Customer name"><input name="customer" required className="field" /></Field>
+          <Field label="Source"><SourceCombobox sources={sourceList} /></Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Quote type"><select name="quoteType" className="field"><option value="new_quote">New Quote</option><option value="requote">Requote</option></select></Field>
+            <Field label="Input method"><select name="inputMethod" className="field"><option>Phone call</option><option>Walk-in / Client in office</option><option>Referral</option><option>Email</option><option>Website</option><option>Other</option></select></Field>
+          </div>
+          <Field label="Notes (optional)"><textarea name="note" rows={3} className="field" placeholder="Important information for this quote" /></Field>
+          <button className="w-full rounded-xl bg-slate-950 px-4 py-3 font-black text-white">Submit Manual Quote</button>
+        </form>
+      </Modal>
+
+      <Modal open={modal === "quote_log"} title="Quote Log" subtitle="Shared activity and notes visible to every agent." onClose={() => { setModal(null); setQuoteLogSourceId(null); }}>
+        <QuoteLogPanel
+          quote={quoteLogRecord}
+          activities={quoteLogSourceId ? quoteActivitiesBySource.get(quoteLogSourceId) || [] : []}
+          notes={quoteLogSourceId ? quoteNotesBySource.get(quoteLogSourceId) || [] : []}
+          draft={quoteLogSourceId ? noteDrafts[quoteLogSourceId] || "" : ""}
+          onDraftChange={(value) => { if (quoteLogSourceId) setNoteDrafts((current) => ({ ...current, [quoteLogSourceId]: value })); }}
+          onAddNote={() => { if (quoteLogSourceId) void addQuoteNote(quoteLogSourceId); }}
+        />
       </Modal>
 
       <Modal open={modal === "manager_assign_quote"} title="Create & Assign Quote" subtitle="Create a quote for any agent. No rotation moves." onClose={() => setModal(null)}>
@@ -1242,7 +1584,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
             <Field label="Input method"><select name="inputMethod" className="field"><option>WhatsApp</option><option>RingCentral</option><option>Phone call</option><option>Walk-in / Client in office</option><option>Email</option><option>Referral</option><option>Website</option><option>Other</option></select></Field>
           </div>
           <Field label="Assign to agent"><select name="assignedAgent" required className="field">{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name} · {agent.availability === "available" ? "Available" : agent.availability === "break" ? "Lunch" : "Unavailable"}</option>)}</select></Field>
-          <Field label="Manager note (optional)"><textarea name="note" rows={3} className="field" placeholder="Anything the agent should know about this quote" /></Field>
+          <Field label="Assignment note"><textarea name="note" required rows={3} className="field" placeholder="Explain why this quote is being assigned and anything the agent should know" /></Field>
           <button className="w-full rounded-xl bg-[#223f7a] px-4 py-3 font-black text-white hover:bg-[#17305f]">Create & Assign Quote</button>
         </form>
       </Modal>
@@ -1275,7 +1617,7 @@ function TeamPerformanceTable({ agentList, performance, currentUserId, efficienc
   return (
     <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 p-6"><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Live Team Comparison</p><h3 className="mt-1 text-xl font-black">Activity and availability by agent</h3><p className="mt-1 text-sm text-slate-500">See who is available and whether an unavailable teammate still has active work that may need coverage. Completion Efficiency counts only quotes with a final Sold or Not Sold decision as completed.</p></div>
-      <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#f3f6fb] text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Open Tasks</th><th className="px-5 py-3">WA Quotes</th><th className="px-5 py-3">RC Quotes</th><th className="px-5 py-3">Workload</th><th className="px-5 py-3">WA Updates</th><th className="px-5 py-3">Manual</th><th className="px-5 py-3">Sold</th><th className="px-5 py-3">Efficiency</th><th className="px-5 py-3">Turns Passed</th></tr></thead><tbody className="divide-y divide-slate-100">{agentList.map((agent) => { const row = performance.find((item) => item.agentId === agent.id) ?? { agentId: agent.id, whatsappQuotes: 0, ringCentralQuotes: 0, workloadTurns: 0, whatsappUpdates: 0, manualQuotes: 0, soldQuotes: 0, ownedActivations: 0, ownedChanges: 0, requotes: 0, passedTurns: 0 }; const efficiency = efficiencyByAgent.get(agent.name)?.efficiency ?? 0; const statusLabel = agent.availability === "available" ? "Available" : agent.availability === "break" ? "Break / Lunch" : "Unavailable"; const statusStyle = agent.availability === "available" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : agent.availability === "break" ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-slate-100 text-slate-600 ring-slate-200"; const needsCoverage = agent.availability !== "available" && agent.activeCount > 0; return <tr key={agent.id} className={cn(agent.id === currentUserId ? "bg-[#f3f6fb]" : needsCoverage ? "bg-amber-50/40" : "hover:bg-slate-50")}><td className="px-5 py-4"><div className="flex items-center gap-3"><Avatar agent={agent} size="sm" /><p className="font-black">{agent.name}</p></div></td><td className="px-5 py-4"><span className={cn("inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-black ring-1", statusStyle)}><StatusDot status={agent.availability} />{statusLabel}</span></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", needsCoverage ? "bg-amber-100 text-amber-800" : agent.activeCount ? "bg-[#eef3fb] text-[#223f7a]" : "bg-slate-100 text-slate-500")}>{agent.activeCount}{needsCoverage ? " · needs coverage" : ""}</span></td><td className="px-5 py-4 font-black">{row.whatsappQuotes}</td><td className="px-5 py-4 font-black">{row.ringCentralQuotes}</td><td className="px-5 py-4 font-black">{row.workloadTurns}</td><td className="px-5 py-4 font-black">{row.whatsappUpdates}</td><td className="px-5 py-4 font-black">{row.manualQuotes}</td><td className="px-5 py-4 font-black text-emerald-700">{row.soldQuotes}</td><td className="px-5 py-4"><span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">{efficiency.toFixed(1)}%</span></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", row.passedTurns ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-500")}>{row.passedTurns}</span></td></tr>; })}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#f3f6fb] text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Open Tasks</th><th className="px-5 py-3">WA Quotes</th><th className="px-5 py-3">RC Quotes</th><th className="px-5 py-3">Workload</th><th className="px-5 py-3">Payments</th><th className="px-5 py-3">Manual</th><th className="px-5 py-3">Sold</th><th className="px-5 py-3">Efficiency</th><th className="px-5 py-3">Turns Passed</th></tr></thead><tbody className="divide-y divide-slate-100">{agentList.map((agent) => { const row = performance.find((item) => item.agentId === agent.id) ?? { agentId: agent.id, whatsappQuotes: 0, ringCentralQuotes: 0, workloadTurns: 0, whatsappUpdates: 0, manualQuotes: 0, soldQuotes: 0, ownedActivations: 0, ownedChanges: 0, requotes: 0, passedTurns: 0 }; const efficiency = efficiencyByAgent.get(agent.name)?.efficiency ?? 0; const statusLabel = agent.availability === "available" ? "Available" : agent.availability === "break" ? "Break / Lunch" : "Unavailable"; const statusStyle = agent.availability === "available" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : agent.availability === "break" ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-slate-100 text-slate-600 ring-slate-200"; const needsCoverage = agent.availability !== "available" && agent.activeCount > 0; return <tr key={agent.id} className={cn(agent.id === currentUserId ? "bg-[#f3f6fb]" : needsCoverage ? "bg-amber-50/40" : "hover:bg-slate-50")}><td className="px-5 py-4"><div className="flex items-center gap-3"><Avatar agent={agent} size="sm" /><p className="font-black">{agent.name}</p></div></td><td className="px-5 py-4"><span className={cn("inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-black ring-1", statusStyle)}><StatusDot status={agent.availability} />{statusLabel}</span></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", needsCoverage ? "bg-amber-100 text-amber-800" : agent.activeCount ? "bg-[#eef3fb] text-[#223f7a]" : "bg-slate-100 text-slate-500")}>{agent.activeCount}{needsCoverage ? " · needs coverage" : ""}</span></td><td className="px-5 py-4 font-black">{row.whatsappQuotes}</td><td className="px-5 py-4 font-black">{row.ringCentralQuotes}</td><td className="px-5 py-4 font-black">{row.workloadTurns}</td><td className="px-5 py-4 font-black">{row.whatsappUpdates}</td><td className="px-5 py-4 font-black">{row.manualQuotes}</td><td className="px-5 py-4 font-black text-emerald-700">{row.soldQuotes}</td><td className="px-5 py-4"><span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">{efficiency.toFixed(1)}%</span></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", row.passedTurns ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-500")}>{row.passedTurns}</span></td></tr>; })}</tbody></table></div>
     </section>
   );
 }
@@ -1288,6 +1630,7 @@ function ManagerView({
   pendingPricing,
   quoteOutcomes,
   quoteNotes,
+  quoteTakeEvents,
   performance,
   passEvents,
   whatsappCurrentId,
@@ -1301,6 +1644,7 @@ function ManagerView({
   onReassignWork,
   onReassignPending,
   onDeleteQuote,
+  onOpenQuoteLog,
   onAddQuoteNote,
   noteDrafts,
   setNoteDrafts,
@@ -1314,6 +1658,7 @@ function ManagerView({
   pendingPricing: PendingPricingItem[];
   quoteOutcomes: QuoteOutcome[];
   quoteNotes: QuoteNote[];
+  quoteTakeEvents: QuoteTakeEvent[];
   performance: PerformanceRow[];
   passEvents: PassEvent[];
   whatsappCurrentId: string | null;
@@ -1327,6 +1672,7 @@ function ManagerView({
   onReassignWork: (itemId: string, profileId: string) => Promise<void>;
   onReassignPending: (itemId: string, profileId: string) => Promise<void>;
   onDeleteQuote: (stage: ManagerQuoteStage, quoteId: string, customer: string) => Promise<void>;
+  onOpenQuoteLog: (sourceWorkItemId: string) => void;
   onAddQuoteNote: (sourceWorkItemId: string) => Promise<void>;
   noteDrafts: Record<string, string>;
   setNoteDrafts: React.Dispatch<React.SetStateAction<Record<string, string>>>;
@@ -1359,7 +1705,7 @@ function ManagerView({
     ...(maxWorkload ? [`${maxWorkload[0]} currently has the highest active workload: ${maxWorkload[1]} tasks.`] : []),
   ];
 
-  const quoteRecords = useMemo(() => buildQuoteRecords(workItems, pendingPricing, quoteOutcomes), [pendingPricing, quoteOutcomes, workItems]);
+  const quoteRecords = useMemo(() => buildQuoteRecords(workItems, pendingPricing, quoteOutcomes, quoteTakeEvents), [pendingPricing, quoteOutcomes, quoteTakeEvents, workItems]);
 
   const visibleQuoteRecords = useMemo(() => {
     const needle = quoteSearch.trim().toLowerCase();
@@ -1372,7 +1718,6 @@ function ManagerView({
     for (const note of quoteNotes) rows.set(note.sourceWorkItemId, [...(rows.get(note.sourceWorkItemId) || []), note]);
     return rows;
   }, [quoteNotes]);
-
   const tabs: Array<{ id: ManagerTab; label: string; icon: React.ReactNode; badge?: number }> = [
     { id: "overview", label: "Overview", icon: <ShieldCheck className="h-4 w-4" /> },
     { id: "tasks", label: "Open Tasks", icon: <ClipboardList className="h-4 w-4" />, badge: activeTasks.length },
@@ -1589,7 +1934,7 @@ function ManagerView({
               return (
                 <div key={item.id} className={cn("rounded-2xl border p-4", daysSince(item.priceSentAt) >= 2 ? "border-amber-200 bg-amber-50/40" : "border-blue-100 bg-blue-50/30")}>
                   <div className="flex items-start justify-between gap-4"><div><p className="font-black text-slate-900">{item.customer}</p><p className="mt-1 text-sm font-semibold text-slate-500">{item.dealer} · {workTypeLabels[item.workType]}</p><p className="mt-2 text-xs font-bold text-blue-700">Price sent {formatDateTime(item.priceSentAt)} · {daysSince(item.priceSentAt)} day{daysSince(item.priceSentAt) === 1 ? "" : "s"} waiting</p></div><span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-600 ring-1 ring-slate-200">{item.receivedThrough || "Unknown"}</span></div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]"><select value={agentList.find((agent) => agent.name === item.assignedAgent)?.id || ""} onChange={(event) => void onReassignPending(item.id, event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black">{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select><div className="flex gap-2"><button onClick={() => void finalizePendingPricingSold(item)} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white">Sold</button><button onClick={() => onRequestNotSold(item)} className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-200">Not Sold</button></div></div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]"><select value={agentList.find((agent) => agent.name === item.assignedAgent)?.id || ""} onChange={(event) => void onReassignPending(item.id, event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black">{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select><div className="flex gap-2"><button onClick={() => onOpenQuoteLog(item.sourceWorkItemId)} className="rounded-lg border border-[#c9d5e9] bg-white px-3 py-2 text-xs font-black text-[#223f7a]">Log</button><button onClick={() => void finalizePendingPricingSold(item)} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white">Sold</button><button onClick={() => onRequestNotSold(item)} className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-200">Not Sold</button></div></div>
                   <PendingNotesPanel notes={notes} draft={noteDrafts[item.sourceWorkItemId] || ""} onDraftChange={(value) => setNoteDrafts((current) => ({ ...current, [item.sourceWorkItemId]: value }))} onAdd={() => void onAddQuoteNote(item.sourceWorkItemId)} />
                 </div>
               );
@@ -1619,7 +1964,7 @@ function ManagerView({
               <tbody className="divide-y divide-slate-100">
                 {visibleQuoteRecords.map((item) => {
                   const statusClass = item.status === "Sold" ? "bg-emerald-50 text-emerald-700" : item.status === "Not Sold" ? "bg-rose-50 text-rose-700" : item.status === "Price Sent" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700";
-                  return <tr key={`${item.stage}-${item.id}`} className="hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{item.customer}</p><p className="mt-1 text-xs text-slate-400">{item.source}</p></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", statusClass)}>{item.status}</span></td><td className="px-5 py-4 font-bold text-slate-600">{workTypeLabels[item.workType]}</td><td className="px-5 py-4 font-bold text-slate-700">{item.agent}</td><td className="px-5 py-4"><p className="font-semibold text-slate-600">{item.source}</p><p className="mt-1 text-xs text-slate-400">{item.receivedThrough}</p></td><td className="px-5 py-4 text-xs font-semibold text-slate-500">{formatDateTime(item.statusDate)}</td><td className="px-5 py-4"><button onClick={() => void onDeleteQuote(item.stage, item.id, item.customer)} className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-100"><Trash2 className="h-4 w-4" /> Delete</button></td></tr>;
+                  return <tr key={`${item.stage}-${item.id}`} className="hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{item.customer}</p><p className="mt-1 text-xs text-slate-400">{item.source}</p></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", statusClass)}>{item.status}</span></td><td className="px-5 py-4 font-bold text-slate-600">{workTypeLabels[item.workType]}</td><td className="px-5 py-4 font-bold text-slate-700">{item.agent}</td><td className="px-5 py-4"><p className="font-semibold text-slate-600">{item.source}</p><p className="mt-1 text-xs text-slate-400">{item.receivedThrough}</p></td><td className="px-5 py-4 text-xs font-semibold text-slate-500">{formatDateTime(item.statusDate)}</td><td className="px-5 py-4"><div className="flex gap-2"><button onClick={() => onOpenQuoteLog(item.sourceWorkItemId)} className="rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-3 py-2 text-xs font-black text-[#223f7a]">Log</button><button onClick={() => void onDeleteQuote(item.stage, item.id, item.customer)} className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-100"><Trash2 className="h-4 w-4" /> Delete</button></div></td></tr>;
                 })}
               </tbody>
             </table>
@@ -1635,7 +1980,7 @@ function ManagerView({
             <div className="mt-5 flex flex-wrap gap-2"><button onClick={() => setPreset("today")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">Today</button><button onClick={() => setPreset("yesterday")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">Yesterday</button><button onClick={() => setPreset("week")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">Last 7 Days</button><button onClick={() => setPreset("month")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">This Month</button><span className="ml-auto text-xs font-bold text-slate-400">Showing {formatDate(`${reportStart}T12:00:00`)} – {formatDate(`${reportEnd}T12:00:00`)}</span></div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"><SummaryCard label="Quotes" value={reportData.quotes.length} note="All input methods" icon={<ClipboardList className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /><SummaryCard label="Finalized" value={reportData.finalized} note="Sold + Not Sold" icon={<CheckCircle2 className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Efficiency" value={`${reportData.efficiency.toFixed(1)}%`} note="Finalized ÷ all quotes" icon={<Gauge className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Sold" value={reportData.sold} note="Final decisions" icon={<CircleDollarSign className="h-5 w-5 text-emerald-700" />} tone="bg-emerald-50" /><SummaryCard label="Not Sold" value={reportData.notSold} note="Final decisions" icon={<XCircle className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Conversion" value={`${reportData.conversion.toFixed(1)}%`} note="Sold ÷ finalized" icon={<TrendingUp className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /><SummaryCard label="Pending Now" value={pendingPricing.length} note="Current follow-up list" icon={<Clock3 className="h-5 w-5 text-amber-700" />} tone="bg-amber-50" /><SummaryCard label="Turns Passed" value={reportData.totalPasses} note="Selected date range" icon={<SkipForward className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Service Activity" value={reportData.service.length} note="Updates + service work" icon={<BriefcaseBusiness className="h-5 w-5 text-violet-700" />} tone="bg-violet-50" /></div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"><SummaryCard label="Quotes" value={reportData.quotes.length} note="All input methods" icon={<ClipboardList className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /><SummaryCard label="Finalized" value={reportData.finalized} note="Sold + Not Sold" icon={<CheckCircle2 className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Efficiency" value={`${reportData.efficiency.toFixed(1)}%`} note="Finalized ÷ all quotes" icon={<Gauge className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Sold" value={reportData.sold} note="Final decisions" icon={<CircleDollarSign className="h-5 w-5 text-emerald-700" />} tone="bg-emerald-50" /><SummaryCard label="Not Sold" value={reportData.notSold} note="Final decisions" icon={<XCircle className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Conversion" value={`${reportData.conversion.toFixed(1)}%`} note="Sold ÷ finalized" icon={<TrendingUp className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /><SummaryCard label="Pending Now" value={pendingPricing.length} note="Current follow-up list" icon={<Clock3 className="h-5 w-5 text-amber-700" />} tone="bg-amber-50" /><SummaryCard label="Turns Passed" value={reportData.totalPasses} note="Selected date range" icon={<SkipForward className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Service Activity" value={reportData.service.length} note="Payments + service work" icon={<BriefcaseBusiness className="h-5 w-5 text-violet-700" />} tone="bg-violet-50" /></div>
 
           <div className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">{([ ["executive", "Executive", <Gauge className="h-4 w-4" key="i" />], ["agents", "Agents", <UsersRound className="h-4 w-4" key="i" />], ["timing", "Quote Timing", <Clock3 className="h-4 w-4" key="i" />], ["channels", "Input Methods", <PieChart className="h-4 w-4" key="i" />], ["sources", "Sources", <Table2 className="h-4 w-4" key="i" />], ["followup", "Follow-Up", <Clock3 className="h-4 w-4" key="i" />], ["activity", "Service Activity", <Activity className="h-4 w-4" key="i" />] ] as Array<[ReportView, string, React.ReactNode]>).map(([id, label, icon]) => <button key={id} onClick={() => setReportView(id)} className={cn("flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black", reportView === id ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-slate-50")}>{icon}{label}</button>)}</div>
 
@@ -2071,7 +2416,7 @@ function ExecutiveReport({ reportData, pendingPricing }: { reportData: { quotes:
 
 function AgentOperationsReport({ rows }: { rows: Array<{ agent: string; quotes: number; whatsapp: number; ringcentral: number; manual: number; workload: number; updates: number; passes: number; sold: number; notSold: number; finalized: number; pending: number; efficiency: number; conversion: number }> }) {
   return (
-    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 p-6"><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Agent Distribution</p><h3 className="mt-1 text-xl font-black">Sales and operational activity</h3><p className="mt-1 text-sm text-slate-500">Efficiency = final Sold/Not Sold decisions ÷ all quotes. Pending Pricing is not counted as completed.</p></div><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Agent</th><th className="px-5 py-3">WA</th><th className="px-5 py-3">RC</th><th className="px-5 py-3">Manual</th><th className="px-5 py-3">Workload</th><th className="px-5 py-3">WA Updates</th><th className="px-5 py-3">Passes</th><th className="px-5 py-3">Finalized</th><th className="px-5 py-3">Sold</th><th className="px-5 py-3">Pending</th><th className="px-5 py-3">Efficiency</th><th className="px-5 py-3">Conversion</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.agent}><td className="px-5 py-4 font-black">{row.agent}</td><td className="px-5 py-4 font-black text-emerald-700">{row.whatsapp}</td><td className="px-5 py-4 font-black text-blue-700">{row.ringcentral}</td><td className="px-5 py-4 font-black">{row.manual}</td><td className="px-5 py-4 font-black text-violet-700">{row.workload}</td><td className="px-5 py-4 font-black text-amber-700">{row.updates}</td><td className="px-5 py-4 font-black text-rose-700">{row.passes}</td><td className="px-5 py-4 font-black text-cyan-700">{row.finalized}</td><td className="px-5 py-4 font-black text-emerald-700">{row.sold}</td><td className="px-5 py-4 font-black text-blue-700">{row.pending}</td><td className="px-5 py-4"><span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">{row.efficiency.toFixed(1)}%</span></td><td className="px-5 py-4"><span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-xs font-black text-[#223f7a]">{row.conversion.toFixed(1)}%</span></td></tr>)}</tbody></table></div></section>
+    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 p-6"><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Agent Distribution</p><h3 className="mt-1 text-xl font-black">Sales and operational activity</h3><p className="mt-1 text-sm text-slate-500">Efficiency = final Sold/Not Sold decisions ÷ all quotes. Pending Pricing is not counted as completed.</p></div><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Agent</th><th className="px-5 py-3">WA</th><th className="px-5 py-3">RC</th><th className="px-5 py-3">Manual</th><th className="px-5 py-3">Workload</th><th className="px-5 py-3">Payments</th><th className="px-5 py-3">Passes</th><th className="px-5 py-3">Finalized</th><th className="px-5 py-3">Sold</th><th className="px-5 py-3">Pending</th><th className="px-5 py-3">Efficiency</th><th className="px-5 py-3">Conversion</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.agent}><td className="px-5 py-4 font-black">{row.agent}</td><td className="px-5 py-4 font-black text-emerald-700">{row.whatsapp}</td><td className="px-5 py-4 font-black text-blue-700">{row.ringcentral}</td><td className="px-5 py-4 font-black">{row.manual}</td><td className="px-5 py-4 font-black text-violet-700">{row.workload}</td><td className="px-5 py-4 font-black text-amber-700">{row.updates}</td><td className="px-5 py-4 font-black text-rose-700">{row.passes}</td><td className="px-5 py-4 font-black text-cyan-700">{row.finalized}</td><td className="px-5 py-4 font-black text-emerald-700">{row.sold}</td><td className="px-5 py-4 font-black text-blue-700">{row.pending}</td><td className="px-5 py-4"><span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">{row.efficiency.toFixed(1)}%</span></td><td className="px-5 py-4"><span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-xs font-black text-[#223f7a]">{row.conversion.toFixed(1)}%</span></td></tr>)}</tbody></table></div></section>
   );
 }
 
