@@ -1,10 +1,28 @@
-# New Hope Work Desk v0.7.2
+# New Hope Work Desk v0.7.4
 
 Private internal web application for New Hope Insurance Agency.
 
 The application manages three independent rotations, active work, pending pricing follow-up, live management visibility, user accounts, and date-based reporting.
 
 
+
+## What changed in v0.7.4
+
+- Daily queue reset now clears every current queue owner. A new day begins with **No agent yet** instead of leaving yesterday's agent on the turn.
+- The first eligible agent to click **Available** starts each eligible queue. If no eligible agent remains available later, the queue returns to **No agent yet**.
+- Removed the client-side fallback that could display an agent as current even when Supabase had no matching queue owner.
+- Failed turn actions refresh live data immediately so stale screens self-correct.
+- Agents now have an **All Quotes** tab with shared read-only visibility across active, pending, sold, and not-sold quote records.
+- Additional Workload activations and changes now link to an existing quote instead of creating duplicate quote records.
+- Pending Pricing now supports persistent timestamped follow-up notes with author history.
+- Quote deletion also removes the quote's attached notes.
+- Requires `supabase/migrations/v0.7.4.sql` when upgrading from v0.7.3 or earlier.
+
+## What changed in v0.7.3
+
+- Managers can search and permanently delete incorrect quote records from Active, Pending Pricing, Sold, or Not Sold stages.
+- Every deletion requires a reason and writes an audit-log snapshot.
+- Deleted quotes stop contributing to workload, performance, efficiency, conversion, timing, and source reporting.
 
 ## What changed in v0.7.2
 

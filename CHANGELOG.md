@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.4
+
+- Daily reset now clears all three rotation pointers so queues display **No agent yet** until the first eligible agent becomes Available.
+- If the current agent becomes unavailable and nobody else is eligible, the queue becomes empty instead of waiting on an unavailable agent.
+- Removed the client-side fallback that displayed the first agent when the database had no current queue owner.
+- Failed turn actions now force an immediate live-data refresh so stale queue screens self-correct.
+- Added an agent-facing **All Quotes** tab with search across every agent and every quote stage.
+- Additional Workload now links activations and changes to an existing quote instead of re-entering customer/source details and creating duplicate quote records.
+- Added persistent quote follow-up notes that survive Active -> Pending Pricing -> Sold/Not Sold transitions.
+- Added follow-up note history and note entry to both Agent Pending Pricing and Management Pending Pricing.
+- Updated manager quote deletion to remove notes belonging to the deleted quote.
+
 ## 0.7.2
 
 - Managers can type the temporary password they want to issue when resetting a user password.
