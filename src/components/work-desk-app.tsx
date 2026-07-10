@@ -61,6 +61,7 @@ import type {
   PerformanceRow,
   NotSoldReason,
   QuoteOutcome,
+  QuoteNote,
   RotationKind,
   SessionProfile,
   WorkItem,
@@ -143,10 +144,23 @@ function accentForAgent(agent: Agent) {
 }
 
 type ModalType = "whatsapp_quote" | "ringcentral_quote" | "workload_turn" | "whatsapp_update" | "manual_quote" | "manager_assign_quote" | "quote_result" | "not_sold_reason" | null;
-type AgentTab = "desk" | "pricing" | "performance";
+type AgentTab = "desk" | "pricing" | "quotes" | "performance";
 type ManagerTab = "overview" | "tasks" | "pricing" | "quotes" | "reports" | "team" | "sources" | "users";
 type ReportView = "executive" | "agents" | "timing" | "channels" | "sources" | "followup" | "activity";
 type ManagerQuoteStage = "active" | "pending" | "finalized";
+type QuoteRecord = {
+  id: string;
+  sourceWorkItemId: string;
+  stage: ManagerQuoteStage;
+  status: "Active" | "Price Sent" | "Sold" | "Not Sold";
+  statusDate: string;
+  createdAt: string;
+  customer: string;
+  source: string;
+  agent: string;
+  workType: "new_quote" | "requote";
+  receivedThrough: string;
+};
 
 type AdminUserAccount = {
   id: string;
@@ -190,6 +204,52 @@ function cn(...classes: Array<string | false | null | undefined>) {
 function isQuote(item: WorkItem) {
   return item.workType === "new_quote" || item.workType === "requote";
 }
+
+function buildQuoteRecords(workItems: WorkItem[], pendingPricing: PendingPricingItem[], quoteOutcomes: QuoteOutcome[]): QuoteRecord[] {
+  const rows: QuoteRecord[] = [
+    ...workItems.filter(isQuote).map((item) => ({
+      id: item.id,
+      sourceWorkItemId: item.id,
+      stage: "active" as const,
+      status: "Active" as const,
+      statusDate: item.createdAt,
+      createdAt: item.createdAt,
+      customer: item.customer,
+      source: item.dealer,
+      agent: item.assignedAgent,
+      workType: item.workType as "new_quote" | "requote",
+      receivedThrough: item.receivedThrough || "Unknown",
+    })),
+    ...pendingPricing.map((item) => ({
+      id: item.id,
+      sourceWorkItemId: item.sourceWorkItemId,
+      stage: "pending" as const,
+      status: "Price Sent" as const,
+      statusDate: item.priceSentAt,
+      createdAt: item.quoteCreatedAt,
+      customer: item.customer,
+      source: item.dealer,
+      agent: item.assignedAgent,
+      workType: item.workType,
+      receivedThrough: item.receivedThrough || "Unknown",
+    })),
+    ...quoteOutcomes.map((item) => ({
+      id: item.id,
+      sourceWorkItemId: item.sourceWorkItemId,
+      stage: "finalized" as const,
+      status: item.decision === "sold" ? "Sold" as const : "Not Sold" as const,
+      statusDate: item.finalizedAt,
+      createdAt: item.quoteCreatedAt,
+      customer: item.customer,
+      source: item.dealer,
+      agent: item.assignedAgent,
+      workType: item.workType,
+      receivedThrough: item.receivedThrough || "Unknown",
+    })),
+  ];
+  return rows.sort((a, b) => new Date(b.statusDate).getTime() - new Date(a.statusDate).getTime());
+}
+
 
 function isActiveTask(item: WorkItem) {
   return item.status === "active" && item.workType !== "whatsapp_update";
@@ -405,6 +465,82 @@ function SourceCombobox({ sources, required = true, allowEmpty = false }: { sour
   );
 }
 
+function QuoteCombobox({ quotes }: { quotes: QuoteRecord[] }) {
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const matches = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const available = quotes.slice(0, 5000);
+    if (!needle) return available.slice(0, 12);
+    return available
+      .filter((quote) => [quote.customer, quote.source, quote.agent, quote.status, quote.receivedThrough].some((value) => value.toLowerCase().includes(needle)))
+      .slice(0, 12);
+  }, [query, quotes]);
+
+  const selected = quotes.find((quote) => quote.sourceWorkItemId === selectedId);
+
+  return (
+    <div className="relative">
+      <input type="hidden" name="relatedQuote" value={selectedId} />
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          value={query}
+          onChange={(event) => { setQuery(event.target.value); setSelectedId(""); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          placeholder="Search customer, source, or agent"
+          autoComplete="off"
+          className="field"
+          style={{ paddingLeft: "3rem", paddingRight: "2.75rem" }}
+        />
+        {selected ? <Check className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-600" /> : null}
+      </div>
+      {selected ? (
+        <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
+          Linked to {selected.customer} · {selected.source} · {selected.status}
+        </div>
+      ) : <p className="mt-1.5 text-xs font-semibold text-slate-400">Select the existing quote this activation or change belongs to.</p>}
+      {open && matches.length ? (
+        <div className="absolute z-50 mt-2 max-h-80 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl">
+          {matches.map((quote) => (
+            <button
+              key={`${quote.stage}-${quote.id}`}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => { setSelectedId(quote.sourceWorkItemId); setQuery(`${quote.customer} — ${quote.source}`); setOpen(false); }}
+              className="w-full rounded-xl px-3 py-3 text-left hover:bg-[#f3f6fb]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div><p className="font-black text-slate-900">{quote.customer}</p><p className="mt-1 text-xs font-semibold text-slate-500">{quote.source} · {quote.agent}</p></div>
+                <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">{quote.status}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {open && query && !matches.length ? <p className="mt-2 text-xs font-bold text-amber-700">No matching quote found. Search by customer, source, or agent.</p> : null}
+    </div>
+  );
+}
+
+function PendingNotesPanel({ notes, draft, onDraftChange, onAdd }: { notes: QuoteNote[]; draft: string; onDraftChange: (value: string) => void; onAdd: () => void }) {
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between"><p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Follow-up notes</p><span className="text-[10px] font-bold text-slate-400">{notes.length} note{notes.length === 1 ? "" : "s"}</span></div>
+      <div className="mt-3 max-h-40 space-y-2 overflow-auto">
+        {notes.length ? notes.map((note) => <div key={note.id} className="rounded-xl bg-slate-50 px-3 py-2"><p className="text-sm font-semibold text-slate-700">{note.note}</p><p className="mt-1 text-[10px] font-bold text-slate-400">{note.authorName} · {formatDateTime(note.createdAt)}</p></div>) : <p className="text-xs font-semibold text-slate-400">No follow-up notes yet.</p>}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <input value={draft} onChange={(event) => onDraftChange(event.target.value)} placeholder="Log follow-up or changes made" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        <button type="button" onClick={onAdd} disabled={!draft.trim()} className="rounded-xl bg-[#223f7a] px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">Add Note</button>
+      </div>
+    </div>
+  );
+}
+
 function TabBar<T extends string>({ tabs, value, onChange }: { tabs: Array<{ id: T; label: string; icon: React.ReactNode; badge?: number }>; value: T; onChange: (value: T) => void }) {
   return (
     <div className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
@@ -417,7 +553,7 @@ function TabBar<T extends string>({ tabs, value, onChange }: { tabs: Array<{ id:
   );
 }
 
-function RotationCard({ variant, current, upcoming, isMyTurn, onAction, onPass }: { variant: RotationKind; current: Agent; upcoming: Agent[]; isMyTurn: boolean; onAction: () => void; onPass: () => void }) {
+function RotationCard({ variant, current, upcoming, isMyTurn, onAction, onPass }: { variant: RotationKind; current: Agent | null; upcoming: Agent[]; isMyTurn: boolean; onAction: () => void; onPass: () => void }) {
   const config = rotationConfig[variant];
   return (
     <section className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -426,15 +562,24 @@ function RotationCard({ variant, current, upcoming, isMyTurn, onAction, onPass }
           <div className={cn("flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]", config.accent)}>{config.icon}{config.shortTitle}</div>
           <p className="mt-1 text-xs font-semibold text-slate-400">{config.description}</p>
         </div>
-        <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-black ring-1", isMyTurn ? "bg-red-50 text-red-700 ring-red-200" : cn(config.soft, config.accent, config.ring))}>{isMyTurn ? "YOUR TURN" : "LIVE"}</span>
+        <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-black ring-1", isMyTurn ? "bg-red-50 text-red-700 ring-red-200" : current ? cn(config.soft, config.accent, config.ring) : "bg-slate-100 text-slate-500 ring-slate-200")}>{isMyTurn ? "YOUR TURN" : current ? "LIVE" : "WAITING"}</span>
       </div>
-      <div className="mt-5 flex items-center gap-3">
-        <Avatar agent={current} />
-        <div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Current</p><p className="truncate text-xl font-black tracking-tight">{current.name}</p></div>
-      </div>
-      <div className="mt-4 flex items-center gap-2 overflow-hidden text-xs font-bold text-slate-500">
-        <span>Next</span><ChevronRight className="h-3.5 w-3.5" />{upcoming.slice(0, 2).map((agent) => <span key={agent.id} className="rounded-lg bg-slate-50 px-2 py-1">{agent.name}</span>)}
-      </div>
+      {current ? (
+        <>
+          <div className="mt-5 flex items-center gap-3">
+            <Avatar agent={current} />
+            <div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Current</p><p className="truncate text-xl font-black tracking-tight">{current.name}</p></div>
+          </div>
+          <div className="mt-4 flex items-center gap-2 overflow-hidden text-xs font-bold text-slate-500">
+            <span>Next</span><ChevronRight className="h-3.5 w-3.5" />{upcoming.slice(0, 2).map((agent) => <span key={agent.id} className="rounded-lg bg-slate-50 px-2 py-1">{agent.name}</span>)}
+          </div>
+        </>
+      ) : (
+        <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
+          <p className="font-black text-slate-700">No agent yet</p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">The first eligible agent to click Available starts this queue for the day.</p>
+        </div>
+      )}
       <div className="mt-5 flex gap-2">
         <button onClick={onAction} disabled={!isMyTurn} className={cn("flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-3 text-xs font-black transition", isMyTurn ? `${config.button} text-white` : "cursor-not-allowed bg-slate-100 text-slate-400")}>{variant === "workload" ? <BriefcaseBusiness className="h-4 w-4" /> : <Zap className="h-4 w-4" />}{config.action}</button>
         {isMyTurn ? <button onClick={onPass} className="rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-600 hover:bg-slate-50">Pass</button> : null}
@@ -477,6 +622,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   const [workItems, setWorkItems] = useState<WorkItem[]>(initialData.workItems);
   const [pendingPricing, setPendingPricing] = useState<PendingPricingItem[]>(initialData.pendingPricing);
   const [quoteOutcomes, setQuoteOutcomes] = useState<QuoteOutcome[]>(initialData.quoteOutcomes);
+  const [quoteNotes, setQuoteNotes] = useState<QuoteNote[]>(initialData.quoteNotes);
   const [notifications, setNotifications] = useState<AlertNotification[]>(initialData.notifications);
   const [performance, setPerformance] = useState<PerformanceRow[]>(initialData.performance);
   const [passEvents, setPassEvents] = useState<PassEvent[]>(initialData.passEvents);
@@ -491,20 +637,34 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   const [toast, setToast] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => typeof window !== "undefined" && "Notification" in window && window.localStorage.getItem("nhwd-alerts-enabled") === "true" && Notification.permission === "granted");
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+  const [quoteSearch, setQuoteSearch] = useState("");
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const refreshTimer = useRef<number | null>(null);
   const seenNotificationIds = useRef(new Set(initialData.notifications.filter((item) => item.readAt).map((item) => item.id)));
 
   const currentUserId = sessionProfile.id;
   const isManager = sessionProfile.role === "manager";
   const currentUser = agentList.find((agent) => agent.id === currentUserId);
-  const whatsappCurrent = agentList.find((agent) => agent.id === whatsappCurrentId) ?? agentList[0];
-  const ringCentralCurrent = agentList.find((agent) => agent.id === ringCentralCurrentId) ?? agentList[0];
-  const workloadCurrent = agentList.find((agent) => agent.id === workloadCurrentId) ?? agentList[0];
+  const whatsappCurrent = whatsappCurrentId ? agentList.find((agent) => agent.id === whatsappCurrentId) ?? null : null;
+  const ringCentralCurrent = ringCentralCurrentId ? agentList.find((agent) => agent.id === ringCentralCurrentId) ?? null : null;
+  const workloadCurrent = workloadCurrentId ? agentList.find((agent) => agent.id === workloadCurrentId) ?? null : null;
   const myActiveWork = currentUser ? workItems.filter((item) => item.assignedAgent === currentUser.name && isActiveTask(item)) : [];
   const myPendingPricing = currentUser ? pendingPricing.filter((item) => item.assignedAgent === currentUser.name) : [];
   const myRecentActivity = currentUser ? workItems.filter((item) => item.assignedAgent === currentUser.name && item.status !== "active").slice(0, 8) : [];
   const quoteResultItem = workItems.find((item) => item.id === quoteResultItemId) ?? null;
   const unreadNotifications = notifications.filter((item) => !item.readAt);
+
+  const allQuoteRecords = useMemo(() => buildQuoteRecords(workItems, pendingPricing, quoteOutcomes), [pendingPricing, quoteOutcomes, workItems]);
+  const visibleAgentQuotes = useMemo(() => {
+    const needle = quoteSearch.trim().toLowerCase();
+    if (!needle) return allQuoteRecords;
+    return allQuoteRecords.filter((quote) => [quote.customer, quote.source, quote.agent, quote.status, quote.receivedThrough, workTypeLabels[quote.workType]].some((value) => value.toLowerCase().includes(needle)));
+  }, [allQuoteRecords, quoteSearch]);
+  const quoteNotesBySource = useMemo(() => {
+    const rows = new Map<string, QuoteNote[]>();
+    for (const note of quoteNotes) rows.set(note.sourceWorkItemId, [...(rows.get(note.sourceWorkItemId) || []), note]);
+    return rows;
+  }, [quoteNotes]);
 
   const emptyPerformance: PerformanceRow = { agentId: currentUserId, whatsappQuotes: 0, ringCentralQuotes: 0, workloadTurns: 0, whatsappUpdates: 0, manualQuotes: 0, soldQuotes: 0, ownedActivations: 0, ownedChanges: 0, requotes: 0, passedTurns: 0 };
   const myPerformance = performance.find((row) => row.agentId === currentUserId) ?? emptyPerformance;
@@ -546,6 +706,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
     setWorkItems(data.workItems);
     setPendingPricing(data.pendingPricing);
     setQuoteOutcomes(data.quoteOutcomes);
+    setQuoteNotes(data.quoteNotes);
     setNotifications(data.notifications);
     setPerformance(data.performance);
     setPassEvents(data.passEvents);
@@ -572,6 +733,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
       .on("postgres_changes", { event: "*", schema: "public", table: "work_items" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "pending_pricing_quotes" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "quote_outcomes" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "quote_notes" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "user_notifications" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "turn_events" }, scheduleRefresh)
       .subscribe();
@@ -598,6 +760,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   async function runRpc(name: string, args: Record<string, unknown>, successMessage: string) {
     const { error } = await supabase.rpc(name, args);
     if (error) {
+      await refreshLiveData();
       showToast(error.message);
       return false;
     }
@@ -696,6 +859,13 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
     await runRpc("finalize_pending_pricing_quote", { p_pending_id: item.id, p_decision: "sold", p_not_sold_reason: null, p_not_sold_reason_other: null }, `${item.customer} marked Sold.`);
   }
 
+  async function addQuoteNote(sourceWorkItemId: string) {
+    const draft = (noteDrafts[sourceWorkItemId] || "").trim();
+    if (!draft) return;
+    const success = await runRpc("add_quote_note", { p_source_work_item_id: sourceWorkItemId, p_note: draft }, "Follow-up note added.");
+    if (success) setNoteDrafts((current) => ({ ...current, [sourceWorkItemId]: "" }));
+  }
+
   function requestNotSold(target: NotSoldTarget) {
     setNotSoldTarget(target);
     setModal("not_sold_reason");
@@ -738,12 +908,11 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   }
 
   async function submitWorkloadTurn(formData: FormData) {
-    const customer = String(formData.get("customer"));
-    const dealerId = String(formData.get("dealer"));
+    const relatedQuoteId = String(formData.get("relatedQuote") || "");
     const workType = String(formData.get("workType")) as "activation" | "change";
-    const ownerId = String(formData.get("owner") || "");
     const changeType = String(formData.get("changeType") || "");
-    const success = await runRpc("claim_workload_turn", { p_customer_name: customer, p_dealer_id: dealerId, p_work_type: workType, p_original_owner_profile_id: ownerId || null, p_change_type: changeType || null }, `${workTypeLabels[workType]} logged. The Additional Workload rotation advanced.`);
+    if (!relatedQuoteId) return showToast("Select the existing quote this workload belongs to.");
+    const success = await runRpc("claim_linked_workload_turn", { p_related_quote_source_work_item_id: relatedQuoteId, p_work_type: workType, p_change_type: changeType || null }, `${workTypeLabels[workType]} linked to the existing quote. The Additional Workload rotation advanced.`);
     if (success) setModal(null);
   }
 
@@ -824,6 +993,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   const agentTabs: Array<{ id: AgentTab; label: string; icon: React.ReactNode; badge?: number }> = [
     { id: "desk", label: "My Desk", icon: <Gauge className="h-4 w-4" />, badge: myActiveWork.length },
     { id: "pricing", label: "Pending Pricing", icon: <Clock3 className="h-4 w-4" />, badge: myPendingPricing.length },
+    { id: "quotes", label: "All Quotes", icon: <Table2 className="h-4 w-4" />, badge: allQuoteRecords.length },
     { id: "performance", label: "Performance", icon: <TrendingUp className="h-4 w-4" /> },
   ];
 
@@ -872,9 +1042,9 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
             {agentTab === "desk" ? (
               <div className="space-y-6">
                 <section className="grid gap-5 xl:grid-cols-3">
-                  <RotationCard variant="whatsapp" current={whatsappCurrent} upcoming={upcomingAgents(agentList, whatsappCurrentId, "whatsapp")} isMyTurn={currentUserId === whatsappCurrentId} onAction={() => setModal("whatsapp_quote")} onPass={() => handlePass("whatsapp")} />
-                  <RotationCard variant="ringcentral" current={ringCentralCurrent} upcoming={upcomingAgents(agentList, ringCentralCurrentId, "ringcentral")} isMyTurn={currentUserId === ringCentralCurrentId} onAction={() => setModal("ringcentral_quote")} onPass={() => handlePass("ringcentral")} />
-                  <RotationCard variant="workload" current={workloadCurrent} upcoming={upcomingAgents(agentList, workloadCurrentId, "workload")} isMyTurn={currentUserId === workloadCurrentId} onAction={() => setModal("workload_turn")} onPass={() => handlePass("workload")} />
+                  <RotationCard variant="whatsapp" current={whatsappCurrent} upcoming={whatsappCurrentId ? upcomingAgents(agentList, whatsappCurrentId, "whatsapp") : []} isMyTurn={whatsappCurrentId !== null && currentUserId === whatsappCurrentId} onAction={() => setModal("whatsapp_quote")} onPass={() => handlePass("whatsapp")} />
+                  <RotationCard variant="ringcentral" current={ringCentralCurrent} upcoming={ringCentralCurrentId ? upcomingAgents(agentList, ringCentralCurrentId, "ringcentral") : []} isMyTurn={ringCentralCurrentId !== null && currentUserId === ringCentralCurrentId} onAction={() => setModal("ringcentral_quote")} onPass={() => handlePass("ringcentral")} />
+                  <RotationCard variant="workload" current={workloadCurrent} upcoming={workloadCurrentId ? upcomingAgents(agentList, workloadCurrentId, "workload") : []} isMyTurn={workloadCurrentId !== null && currentUserId === workloadCurrentId} onAction={() => setModal("workload_turn")} onPass={() => handlePass("workload")} />
                 </section>
 
                 <section className="grid gap-5 xl:grid-cols-[1.45fr_.55fr]">
@@ -896,6 +1066,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
                                 <div>
                                   <div className="flex flex-wrap items-center gap-2"><span className="font-black text-slate-900">{item.customer}</span><MethodBadge method={item.assignmentMethod} /></div>
                                   <p className="mt-1 text-sm font-semibold text-slate-500">{workTypeLabels[item.workType]} · {item.dealer}</p>
+                                  {item.relatedQuoteSourceWorkItemId ? <p className="mt-2 text-xs font-black text-violet-700">Linked to an existing quote record</p> : null}
                                   <p className="mt-2 text-xs font-semibold text-slate-400">Assigned {formatDateTime(item.assignedAt)}</p>
                                   {item.acceptedAt ? <p className="mt-1 text-xs font-semibold text-emerald-700">Accepted {formatDateTime(item.acceptedAt)}</p> : <p className="mt-1 text-xs font-black text-amber-700">Awaiting your acceptance</p>}
                                 </div>
@@ -934,8 +1105,48 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
 
             {agentTab === "pricing" ? (
               <section className="rounded-[28px] border border-blue-200 bg-white shadow-sm">
-                <div className="flex flex-col gap-3 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-blue-600"><Clock3 className="h-4 w-4" /> Pending Pricing</div><h3 className="mt-1 text-xl font-black">Waiting for source confirmation</h3><p className="mt-1 text-sm text-slate-500">These quotes are not counted as active workload.</p></div><span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700 ring-1 ring-blue-200">{myPendingPricing.length} waiting</span></div>
-                <div className="p-5">{myPendingPricing.length ? <div className="grid gap-3 xl:grid-cols-2">{myPendingPricing.map((item) => <div key={item.id} className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-black text-slate-900">{item.customer}</p><p className="mt-1 text-sm font-semibold text-slate-500">{workTypeLabels[item.workType]} · {item.dealer}</p><p className="mt-2 text-xs font-bold text-blue-700">Price sent {formatDateTime(item.priceSentAt)} · {daysSince(item.priceSentAt)} day{daysSince(item.priceSentAt) === 1 ? "" : "s"} waiting</p></div><MethodBadge method={item.assignmentMethod} /></div><div className="mt-4 flex gap-2"><button onClick={() => void finalizePendingPricingSold(item)} className="flex-1 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white">Sold</button><button onClick={() => requestNotSold({ kind: "pending", item })} className="flex-1 rounded-xl bg-rose-50 px-3 py-2.5 text-xs font-black text-rose-700 ring-1 ring-rose-200">Not Sold</button></div></div>)}</div> : <EmptyState title="No quotes waiting on a decision" note="When you mark a quote Price Sent, it will move here." />}</div>
+                <div className="flex flex-col gap-3 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
+                  <div><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-blue-600"><Clock3 className="h-4 w-4" /> Pending Pricing</div><h3 className="mt-1 text-xl font-black">Waiting for source confirmation</h3><p className="mt-1 text-sm text-slate-500">Log every follow-up and change so the quote can be reviewed by the team later.</p></div>
+                  <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700 ring-1 ring-blue-200">{myPendingPricing.length} waiting</span>
+                </div>
+                <div className="p-5">
+                  {myPendingPricing.length ? (
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      {myPendingPricing.map((item) => {
+                        const notes = quoteNotesBySource.get(item.sourceWorkItemId) || [];
+                        return (
+                          <div key={item.id} className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                            <div className="flex items-start justify-between gap-3"><div><p className="font-black text-slate-900">{item.customer}</p><p className="mt-1 text-sm font-semibold text-slate-500">{workTypeLabels[item.workType]} · {item.dealer}</p><p className="mt-2 text-xs font-bold text-blue-700">Price sent {formatDateTime(item.priceSentAt)} · {daysSince(item.priceSentAt)} day{daysSince(item.priceSentAt) === 1 ? "" : "s"} waiting</p></div><MethodBadge method={item.assignmentMethod} /></div>
+                            <PendingNotesPanel notes={notes} draft={noteDrafts[item.sourceWorkItemId] || ""} onDraftChange={(value) => setNoteDrafts((current) => ({ ...current, [item.sourceWorkItemId]: value }))} onAdd={() => void addQuoteNote(item.sourceWorkItemId)} />
+                            <div className="mt-4 flex gap-2"><button onClick={() => void finalizePendingPricingSold(item)} className="flex-1 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white">Sold</button><button onClick={() => requestNotSold({ kind: "pending", item })} className="flex-1 rounded-xl bg-rose-50 px-3 py-2.5 text-xs font-black text-rose-700 ring-1 ring-rose-200">Not Sold</button></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : <EmptyState title="No quotes waiting on a decision" note="When you mark a quote Price Sent, it will move here." />}
+                </div>
+              </section>
+            ) : null}
+
+            {agentTab === "quotes" ? (
+              <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                <div className="flex flex-col gap-4 border-b border-slate-100 p-6 lg:flex-row lg:items-center lg:justify-between">
+                  <div><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]"><Table2 className="h-4 w-4" /> Shared Quote Database</div><h3 className="mt-1 text-xl font-black">All quotes from every agent</h3><p className="mt-1 text-sm text-slate-500">Search existing quotes before working an activation or change. This prevents duplicate quote records.</p></div>
+                  <div className="relative w-full max-w-lg"><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={quoteSearch} onChange={(event) => setQuoteSearch(event.target.value)} placeholder="Search customer, source, agent, or status" className="field" style={{ paddingLeft: "3rem" }} /></div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Source / Input</th><th className="px-5 py-3">Updated</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {visibleAgentQuotes.map((quote) => {
+                        const statusClass = quote.status === "Sold" ? "bg-emerald-50 text-emerald-700" : quote.status === "Not Sold" ? "bg-rose-50 text-rose-700" : quote.status === "Price Sent" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700";
+                        const latestNote = (quoteNotesBySource.get(quote.sourceWorkItemId) || [])[0];
+                        return <tr key={`${quote.stage}-${quote.id}`} className="hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{quote.customer}</p><p className="mt-1 text-xs text-slate-400">{quote.source}</p>{latestNote ? <p className="mt-2 max-w-md truncate text-xs font-semibold text-slate-500">Latest note: {latestNote.note}</p> : null}</td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", statusClass)}>{quote.status}</span></td><td className="px-5 py-4 font-bold text-slate-600">{workTypeLabels[quote.workType]}</td><td className="px-5 py-4 font-bold text-slate-700">{quote.agent}</td><td className="px-5 py-4"><p className="font-semibold text-slate-600">{quote.source}</p><p className="mt-1 text-xs text-slate-400">{quote.receivedThrough}</p></td><td className="px-5 py-4 text-xs font-semibold text-slate-500">{formatDateTime(quote.statusDate)}</td></tr>;
+                      })}
+                    </tbody>
+                  </table>
+                  {!visibleAgentQuotes.length ? <div className="p-5"><EmptyState title="No matching quotes" note="Try a different customer, source, agent, or status." /></div> : null}
+                </div>
               </section>
             ) : null}
 
@@ -972,6 +1183,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
             workItems={workItems}
             pendingPricing={pendingPricing}
             quoteOutcomes={quoteOutcomes}
+            quoteNotes={quoteNotes}
             performance={performance}
             passEvents={passEvents}
             whatsappCurrentId={whatsappCurrentId}
@@ -985,6 +1197,9 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
             onReassignWork={managerReassignWork}
             onReassignPending={managerReassignPending}
             onDeleteQuote={managerDeleteQuote}
+            onAddQuoteNote={addQuoteNote}
+            noteDrafts={noteDrafts}
+            setNoteDrafts={setNoteDrafts}
             onSetRotation={managerSetRotation}
             onToggleRotation={managerToggleRotation}
             onSetQueueOrder={managerSetQueueOrder}
@@ -1000,8 +1215,13 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
         <form action={submitRingCentralQuote} className="space-y-4 p-6"><Field label="Customer name"><input name="customer" required className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-400" /></Field><Field label="Source"><SourceCombobox sources={sourceList} /></Field><Field label="Quote type"><select name="quoteType" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option value="new_quote">New Quote</option><option value="requote">Requote</option></select></Field><button className="w-full rounded-xl bg-blue-600 px-4 py-3 font-black text-white">Confirm RingCentral Turn</button></form>
       </Modal>
 
-      <Modal open={modal === "workload_turn"} title="Take Additional Workload" subtitle="This advances only the Additional Workload rotation." onClose={() => setModal(null)}>
-        <form action={submitWorkloadTurn} className="space-y-4 p-6"><Field label="Customer name"><input name="customer" required className="w-full rounded-xl border border-slate-200 px-4 py-3" /></Field><Field label="Source"><SourceCombobox sources={sourceList} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Work type"><select name="workType" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option value="activation">Activation</option><option value="change">Change</option></select></Field><Field label="Original owner"><select name="owner" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option value="">Unknown / none</option>{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></Field></div><Field label="Change type (optional)"><select name="changeType" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option value="">Not applicable</option><option>Add Vehicle</option><option>Remove Vehicle</option><option>Add Driver</option><option>Remove Driver</option><option>Change Coverage</option><option>Other Policy Change</option></select></Field><button className="w-full rounded-xl bg-violet-600 px-4 py-3 font-black text-white">Confirm Workload Turn</button></form>
+      <Modal open={modal === "workload_turn"} title="Take Additional Workload" subtitle="Link the activation or change to an existing quote. This prevents duplicate quote records." onClose={() => setModal(null)}>
+        <form action={submitWorkloadTurn} className="space-y-4 p-6">
+          <div className="rounded-2xl bg-violet-50 p-4 text-sm font-semibold text-violet-800">Search the shared quote database and select the quote this work belongs to. Customer, source, and original owner are copied automatically.</div>
+          <Field label="Existing quote"><QuoteCombobox quotes={allQuoteRecords} /></Field>
+          <div className="grid gap-4 sm:grid-cols-2"><Field label="Work type"><select name="workType" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option value="activation">Activation</option><option value="change">Change</option></select></Field><Field label="Change type (optional)"><select name="changeType" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"><option value="">Not applicable</option><option>Add Vehicle</option><option>Remove Vehicle</option><option>Add Driver</option><option>Remove Driver</option><option>Change Coverage</option><option>Other Policy Change</option></select></Field></div>
+          <button className="w-full rounded-xl bg-violet-600 px-4 py-3 font-black text-white">Confirm Linked Workload Turn</button>
+        </form>
       </Modal>
 
       <Modal open={modal === "whatsapp_update"} title="Log WhatsApp Quote Update" subtitle="Recorded in activity only. No rotation changes." onClose={() => setModal(null)}>
@@ -1067,6 +1287,7 @@ function ManagerView({
   workItems,
   pendingPricing,
   quoteOutcomes,
+  quoteNotes,
   performance,
   passEvents,
   whatsappCurrentId,
@@ -1080,6 +1301,9 @@ function ManagerView({
   onReassignWork,
   onReassignPending,
   onDeleteQuote,
+  onAddQuoteNote,
+  noteDrafts,
+  setNoteDrafts,
   onSetRotation,
   onToggleRotation,
   onSetQueueOrder,
@@ -1089,11 +1313,12 @@ function ManagerView({
   workItems: WorkItem[];
   pendingPricing: PendingPricingItem[];
   quoteOutcomes: QuoteOutcome[];
+  quoteNotes: QuoteNote[];
   performance: PerformanceRow[];
   passEvents: PassEvent[];
-  whatsappCurrentId: string;
-  ringCentralCurrentId: string;
-  workloadCurrentId: string;
+  whatsappCurrentId: string | null;
+  ringCentralCurrentId: string | null;
+  workloadCurrentId: string | null;
   managerTab: ManagerTab;
   setManagerTab: (tab: ManagerTab) => void;
   finalizePendingPricingSold: (item: PendingPricingItem) => Promise<void>;
@@ -1102,6 +1327,9 @@ function ManagerView({
   onReassignWork: (itemId: string, profileId: string) => Promise<void>;
   onReassignPending: (itemId: string, profileId: string) => Promise<void>;
   onDeleteQuote: (stage: ManagerQuoteStage, quoteId: string, customer: string) => Promise<void>;
+  onAddQuoteNote: (sourceWorkItemId: string) => Promise<void>;
+  noteDrafts: Record<string, string>;
+  setNoteDrafts: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onSetRotation: (rotation: RotationKind, profileId: string) => Promise<void>;
   onToggleRotation: (agent: Agent, rotation: RotationKind) => Promise<void>;
   onSetQueueOrder: (rotation: RotationKind, profileIds: string[]) => Promise<void>;
@@ -1131,50 +1359,19 @@ function ManagerView({
     ...(maxWorkload ? [`${maxWorkload[0]} currently has the highest active workload: ${maxWorkload[1]} tasks.`] : []),
   ];
 
-  const quoteRecords = useMemo(() => {
-    const rows = [
-      ...workItems.filter(isQuote).map((item) => ({
-        id: item.id,
-        stage: "active" as const,
-        status: "Active",
-        statusDate: item.createdAt,
-        customer: item.customer,
-        source: item.dealer,
-        agent: item.assignedAgent,
-        workType: item.workType,
-        receivedThrough: item.receivedThrough || "Unknown",
-      })),
-      ...pendingPricing.map((item) => ({
-        id: item.id,
-        stage: "pending" as const,
-        status: "Price Sent",
-        statusDate: item.priceSentAt,
-        customer: item.customer,
-        source: item.dealer,
-        agent: item.assignedAgent,
-        workType: item.workType,
-        receivedThrough: item.receivedThrough || "Unknown",
-      })),
-      ...quoteOutcomes.map((item) => ({
-        id: item.id,
-        stage: "finalized" as const,
-        status: item.decision === "sold" ? "Sold" : "Not Sold",
-        statusDate: item.finalizedAt,
-        customer: item.customer,
-        source: item.dealer,
-        agent: item.assignedAgent,
-        workType: item.workType,
-        receivedThrough: item.receivedThrough || "Unknown",
-      })),
-    ];
-    return rows.sort((a, b) => new Date(b.statusDate).getTime() - new Date(a.statusDate).getTime());
-  }, [pendingPricing, quoteOutcomes, workItems]);
+  const quoteRecords = useMemo(() => buildQuoteRecords(workItems, pendingPricing, quoteOutcomes), [pendingPricing, quoteOutcomes, workItems]);
 
   const visibleQuoteRecords = useMemo(() => {
     const needle = quoteSearch.trim().toLowerCase();
     if (!needle) return quoteRecords;
     return quoteRecords.filter((item) => [item.customer, item.source, item.agent, item.status, item.receivedThrough, workTypeLabels[item.workType]].some((value) => value.toLowerCase().includes(needle)));
   }, [quoteRecords, quoteSearch]);
+
+  const quoteNotesBySource = useMemo(() => {
+    const rows = new Map<string, QuoteNote[]>();
+    for (const note of quoteNotes) rows.set(note.sourceWorkItemId, [...(rows.get(note.sourceWorkItemId) || []), note]);
+    return rows;
+  }, [quoteNotes]);
 
   const tabs: Array<{ id: ManagerTab; label: string; icon: React.ReactNode; badge?: number }> = [
     { id: "overview", label: "Overview", icon: <ShieldCheck className="h-4 w-4" /> },
@@ -1366,7 +1563,11 @@ function ManagerView({
           <section>
             <div className="mb-4"><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Rotation Control</p><h2 className="mt-1 text-2xl font-black tracking-tight">Current turns</h2><p className="mt-1 text-sm text-slate-500">Change a rotation only when management needs to correct the order.</p></div>
             <div className="grid gap-5 xl:grid-cols-3">
-              {([ ["whatsapp", whatsappCurrentId], ["ringcentral", ringCentralCurrentId], ["workload", workloadCurrentId] ] as const).map(([kind, currentId]) => { const current = agentList.find((agent) => agent.id === currentId) ?? agentList[0]; const config = rotationConfig[kind]; return <div key={kind} className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm"><div className={cn("flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]", config.accent)}>{config.icon}{config.title}</div><div className="mt-4 flex items-center gap-3"><Avatar agent={current} /><div><p className="text-xs font-bold text-slate-400">Current</p><p className="font-black">{current.name}</p></div></div><select value={currentId} onChange={(event) => void onSetRotation(kind, event.target.value)} className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-black">{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></div>; })}
+              {([ ["whatsapp", whatsappCurrentId], ["ringcentral", ringCentralCurrentId], ["workload", workloadCurrentId] ] as const).map(([kind, currentId]) => {
+                const current = currentId ? agentList.find((agent) => agent.id === currentId) ?? null : null;
+                const config = rotationConfig[kind];
+                return <div key={kind} className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm"><div className={cn("flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]", config.accent)}>{config.icon}{config.title}</div>{current ? <div className="mt-4 flex items-center gap-3"><Avatar agent={current} /><div><p className="text-xs font-bold text-slate-400">Current</p><p className="font-black">{current.name}</p></div></div> : <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4"><p className="font-black text-slate-700">No agent yet</p><p className="mt-1 text-xs font-semibold text-slate-500">Waiting for the first eligible agent to become Available.</p></div>}<select value={currentId || ""} onChange={(event) => { if (event.target.value) void onSetRotation(kind, event.target.value); }} className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-black"><option value="">No agent yet</option>{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></div>;
+              })}
             </div>
           </section>
         </div>
@@ -1375,14 +1576,26 @@ function ManagerView({
       {managerTab === "tasks" ? (
         <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-4 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">All Open Tasks</p><h3 className="mt-1 text-xl font-black">Redistribute active work</h3><p className="mt-1 text-sm text-slate-500">Pending pricing is intentionally excluded from workload.</p></div><div className="flex items-center gap-2"><span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">{activeTasks.length} open</span><button onClick={onOpenAssignQuote} className="inline-flex items-center gap-2 rounded-xl bg-[#223f7a] px-4 py-2.5 text-xs font-black text-white"><FilePlus2 className="h-4 w-4" /> Create & Assign Quote</button></div></div>
-          <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Work</th><th className="px-5 py-3">Owner</th><th className="px-5 py-3">Assigned</th><th className="px-5 py-3">Acceptance</th><th className="px-5 py-3">Source</th><th className="px-5 py-3">Assigned</th></tr></thead><tbody className="divide-y divide-slate-100">{activeTasks.map((item) => <tr key={item.id}><td className="px-5 py-4"><p className="font-black">{item.customer}</p><p className="mt-1 text-xs text-slate-400">{item.dealer}</p></td><td className="px-5 py-4"><p className="font-bold">{workTypeLabels[item.workType]}</p><div className="mt-2"><MethodBadge method={item.assignmentMethod} /></div></td><td className="px-5 py-4 text-slate-600">{item.originalOwner || "—"}</td><td className="px-5 py-4"><select value={agentList.find((agent) => agent.name === item.assignedAgent)?.id || ""} onChange={(event) => void onReassignWork(item.id, event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black">{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></td><td className="px-5 py-4">{item.acceptedAt ? <div><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">Accepted</span><p className="mt-2 text-[10px] font-semibold text-slate-400">{formatDateTime(item.acceptedAt)}</p></div> : <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-700">Awaiting acceptance</span>}</td><td className="px-5 py-4 text-slate-600">{item.receivedThrough}</td><td className="px-5 py-4 text-xs font-semibold text-slate-400">{formatDateTime(item.assignedAt)}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Work</th><th className="px-5 py-3">Owner</th><th className="px-5 py-3">Assigned</th><th className="px-5 py-3">Acceptance</th><th className="px-5 py-3">Source</th><th className="px-5 py-3">Assigned</th></tr></thead><tbody className="divide-y divide-slate-100">{activeTasks.map((item) => <tr key={item.id}><td className="px-5 py-4"><p className="font-black">{item.customer}</p><p className="mt-1 text-xs text-slate-400">{item.dealer}</p>{item.relatedQuoteSourceWorkItemId ? <p className="mt-2 text-[10px] font-black uppercase tracking-wide text-violet-700">Linked quote</p> : null}</td><td className="px-5 py-4"><p className="font-bold">{workTypeLabels[item.workType]}</p><div className="mt-2"><MethodBadge method={item.assignmentMethod} /></div></td><td className="px-5 py-4 text-slate-600">{item.originalOwner || "—"}</td><td className="px-5 py-4"><select value={agentList.find((agent) => agent.name === item.assignedAgent)?.id || ""} onChange={(event) => void onReassignWork(item.id, event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black">{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></td><td className="px-5 py-4">{item.acceptedAt ? <div><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">Accepted</span><p className="mt-2 text-[10px] font-semibold text-slate-400">{formatDateTime(item.acceptedAt)}</p></div> : <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-700">Awaiting acceptance</span>}</td><td className="px-5 py-4 text-slate-600">{item.receivedThrough}</td><td className="px-5 py-4 text-xs font-semibold text-slate-400">{formatDateTime(item.assignedAt)}</td></tr>)}</tbody></table></div>
         </section>
       ) : null}
 
       {managerTab === "pricing" ? (
         <section className="overflow-hidden rounded-[28px] border border-blue-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-100 p-6 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-blue-600"><Clock3 className="h-4 w-4" /> Pending Pricing Follow-Up</div><h3 className="mt-1 text-xl font-black">Management follow-up list</h3><p className="mt-1 text-sm text-slate-500">Pull this list at the end of the day and follow up the next business day.</p></div><button onClick={exportPendingPricing} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white"><Download className="h-4 w-4" /> Export Pending CSV</button></div>
-          <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-blue-50/60 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Price Sent</th><th className="px-5 py-3">Age</th><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Source</th><th className="px-5 py-3">Decision</th></tr></thead><tbody className="divide-y divide-slate-100">{pendingPricing.map((item) => <tr key={item.id} className={daysSince(item.priceSentAt) >= 2 ? "bg-amber-50/40" : ""}><td className="px-5 py-4"><p className="font-black">{item.customer}</p><p className="mt-1 text-xs text-slate-400">{item.dealer} · {workTypeLabels[item.workType]}</p></td><td className="px-5 py-4 text-xs font-semibold text-slate-600">{formatDateTime(item.priceSentAt)}</td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", daysSince(item.priceSentAt) >= 2 ? "bg-amber-100 text-amber-800" : "bg-blue-50 text-blue-700")}>{daysSince(item.priceSentAt)} day{daysSince(item.priceSentAt) === 1 ? "" : "s"}</span></td><td className="px-5 py-4"><select value={agentList.find((agent) => agent.name === item.assignedAgent)?.id || ""} onChange={(event) => void onReassignPending(item.id, event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black">{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></td><td className="px-5 py-4 text-slate-600">{item.receivedThrough}</td><td className="px-5 py-4"><div className="flex gap-2"><button onClick={() => void finalizePendingPricingSold(item)} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white">Sold</button><button onClick={() => onRequestNotSold(item)} className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-200">Not Sold</button></div></td></tr>)}</tbody></table></div>
+          <div className="flex flex-col gap-4 border-b border-slate-100 p-6 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-blue-600"><Clock3 className="h-4 w-4" /> Pending Pricing Follow-Up</div><h3 className="mt-1 text-xl font-black">Management follow-up list</h3><p className="mt-1 text-sm text-slate-500">Review follow-up notes, reassign responsibility, and record the final decision.</p></div><button onClick={exportPendingPricing} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white"><Download className="h-4 w-4" /> Export Pending CSV</button></div>
+          <div className="grid gap-4 p-5 xl:grid-cols-2">
+            {pendingPricing.map((item) => {
+              const notes = quoteNotesBySource.get(item.sourceWorkItemId) || [];
+              return (
+                <div key={item.id} className={cn("rounded-2xl border p-4", daysSince(item.priceSentAt) >= 2 ? "border-amber-200 bg-amber-50/40" : "border-blue-100 bg-blue-50/30")}>
+                  <div className="flex items-start justify-between gap-4"><div><p className="font-black text-slate-900">{item.customer}</p><p className="mt-1 text-sm font-semibold text-slate-500">{item.dealer} · {workTypeLabels[item.workType]}</p><p className="mt-2 text-xs font-bold text-blue-700">Price sent {formatDateTime(item.priceSentAt)} · {daysSince(item.priceSentAt)} day{daysSince(item.priceSentAt) === 1 ? "" : "s"} waiting</p></div><span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-600 ring-1 ring-slate-200">{item.receivedThrough || "Unknown"}</span></div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]"><select value={agentList.find((agent) => agent.name === item.assignedAgent)?.id || ""} onChange={(event) => void onReassignPending(item.id, event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black">{agentList.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select><div className="flex gap-2"><button onClick={() => void finalizePendingPricingSold(item)} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white">Sold</button><button onClick={() => onRequestNotSold(item)} className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-200">Not Sold</button></div></div>
+                  <PendingNotesPanel notes={notes} draft={noteDrafts[item.sourceWorkItemId] || ""} onDraftChange={(value) => setNoteDrafts((current) => ({ ...current, [item.sourceWorkItemId]: value }))} onAdd={() => void onAddQuoteNote(item.sourceWorkItemId)} />
+                </div>
+              );
+            })}
+          </div>
+          {!pendingPricing.length ? <div className="p-5"><EmptyState title="No pending pricing quotes" note="Price-sent quotes will appear here with their follow-up history." /></div> : null}
         </section>
       ) : null}
 
