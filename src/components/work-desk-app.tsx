@@ -150,7 +150,7 @@ function accentForAgent(agent: Agent) {
 type ModalType = "whatsapp_quote" | "ringcentral_quote" | "workload_turn" | "payment" | "manual_quote" | "manager_assign_quote" | "quote_result" | "not_sold_reason" | "take_quote" | "quote_log" | null;
 type AgentTab = "desk" | "pricing" | "quotes" | "performance";
 type ManagerTab = "overview" | "tasks" | "pricing" | "quotes" | "reports" | "team" | "sources" | "users";
-type ReportView = "executive" | "agents" | "timing" | "channels" | "sources" | "followup" | "activity";
+type ReportView = "executive" | "agents" | "timing" | "taken" | "channels" | "sources" | "followup" | "activity";
 type ManagerQuoteStage = "active" | "pending" | "finalized";
 type QuoteRecord = {
   id: string;
@@ -1834,10 +1834,51 @@ function ManagerView({
     });
     const notSoldReasons = Array.from(notSoldReasonMap.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 
+    const quoteBySource = new Map(quoteRecords.map((quote) => [quote.sourceWorkItemId, quote]));
+    const takenRows = quoteTakeEvents
+      .filter((event) => withinDateRange(event.takenAt, reportStart, reportEnd))
+      .map((event) => {
+        const quote = quoteBySource.get(event.sourceWorkItemId);
+        return {
+          ...event,
+          customer: quote?.customer || "Unknown quote",
+          source: quote?.source || "Unknown source",
+          quoteAgent: quote?.agent || "Unknown agent",
+          quoteStatus: quote?.status || "Unknown",
+          workType: quote?.workType || "new_quote",
+          receivedThrough: quote?.receivedThrough || (event.rotation === "whatsapp" ? "WhatsApp" : "RingCentral"),
+        };
+      })
+      .sort((a, b) => new Date(b.takenAt).getTime() - new Date(a.takenAt).getTime());
+
+    const takenByAgent = agentList
+      .map((agent) => {
+        const rows = takenRows.filter((row) => row.takerProfileId === agent.id);
+        return {
+          agent: agent.name,
+          username: rows[0]?.takerUsername || "",
+          total: rows.length,
+          whatsapp: rows.filter((row) => row.rotation === "whatsapp").length,
+          ringcentral: rows.filter((row) => row.rotation === "ringcentral").length,
+          skippedAgents: rows.reduce((sum, row) => sum + row.skippedAgents.length, 0),
+          avgElapsedSeconds: rows.length ? rows.reduce((sum, row) => sum + row.elapsedSeconds, 0) / rows.length : 0,
+        };
+      })
+      .filter((row) => row.total > 0)
+      .sort((a, b) => b.total - a.total || a.avgElapsedSeconds - b.avgElapsedSeconds);
+
+    const takenSummary = {
+      total: takenRows.length,
+      whatsapp: takenRows.filter((row) => row.rotation === "whatsapp").length,
+      ringcentral: takenRows.filter((row) => row.rotation === "ringcentral").length,
+      skippedAgents: takenRows.reduce((sum, row) => sum + row.skippedAgents.length, 0),
+      avgElapsedSeconds: takenRows.length ? takenRows.reduce((sum, row) => sum + row.elapsedSeconds, 0) / takenRows.length : 0,
+    };
+
     const pendingInRange = pendingPricing.filter((item) => withinDateRange(item.priceSentAt, reportStart, reportEnd));
     const totalPasses = passEvents.filter((event) => withinDateRange(event.createdAt, reportStart, reportEnd)).length;
-    return { quotes, timingRows, timingByAgent, notSoldReasons, service, sold, notSold, finalized, efficiency, conversion, pendingInRange, totalPasses, byAgent, byChannel: group("channel"), bySource: group("dealer") };
-  }, [agentList, passEvents, pendingPricing, quoteOutcomes, reportEnd, reportStart, workItems]);
+    return { quotes, timingRows, timingByAgent, notSoldReasons, service, sold, notSold, finalized, efficiency, conversion, pendingInRange, totalPasses, byAgent, byChannel: group("channel"), bySource: group("dealer"), takenRows, takenByAgent, takenSummary };
+  }, [agentList, passEvents, pendingPricing, quoteOutcomes, quoteRecords, quoteTakeEvents, reportEnd, reportStart, workItems]);
 
   function exportAllQuotes() {
     downloadCsv(`quotes-${reportStart}-to-${reportEnd}.csv`, reportData.timingRows.map((row) => ({
@@ -1887,6 +1928,24 @@ function ManagerView({
       "Avg Acceptance to Final Decision": formatDuration(row.avgFinal),
       "Avg Price Sent to Decision": formatDuration(row.avgPriceDecision),
       "Avg Total Quote Cycle": formatDuration(row.avgTotalCycle),
+    })));
+  }
+
+  function exportTakenReport() {
+    downloadCsv(`taken-quotes-${reportStart}-to-${reportEnd}.csv`, reportData.takenRows.map((row) => ({
+      "Taken At": formatDateTime(row.takenAt),
+      "Quote Received At": formatDateTime(row.receivedAt),
+      Customer: row.customer,
+      Source: row.source,
+      Queue: row.rotation === "whatsapp" ? "WhatsApp" : "RingCentral",
+      "Taken By": `@${row.takerUsername}`,
+      "Quote Agent": row.quoteAgent,
+      "Skipped Agents": row.skippedAgents.map((agent) => `@${agent.username}`).join(", "),
+      "Skipped Count": row.skippedAgents.length,
+      "Elapsed Seconds": row.elapsedSeconds,
+      "Elapsed Time": formatElapsedSeconds(row.elapsedSeconds),
+      "Quote Status": row.quoteStatus,
+      "Input Method": row.receivedThrough,
     })));
   }
 
@@ -1982,17 +2041,18 @@ function ManagerView({
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"><SummaryCard label="Quotes" value={reportData.quotes.length} note="All input methods" icon={<ClipboardList className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /><SummaryCard label="Finalized" value={reportData.finalized} note="Sold + Not Sold" icon={<CheckCircle2 className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Efficiency" value={`${reportData.efficiency.toFixed(1)}%`} note="Finalized ÷ all quotes" icon={<Gauge className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Sold" value={reportData.sold} note="Final decisions" icon={<CircleDollarSign className="h-5 w-5 text-emerald-700" />} tone="bg-emerald-50" /><SummaryCard label="Not Sold" value={reportData.notSold} note="Final decisions" icon={<XCircle className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Conversion" value={`${reportData.conversion.toFixed(1)}%`} note="Sold ÷ finalized" icon={<TrendingUp className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /><SummaryCard label="Pending Now" value={pendingPricing.length} note="Current follow-up list" icon={<Clock3 className="h-5 w-5 text-amber-700" />} tone="bg-amber-50" /><SummaryCard label="Turns Passed" value={reportData.totalPasses} note="Selected date range" icon={<SkipForward className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Service Activity" value={reportData.service.length} note="Payments + service work" icon={<BriefcaseBusiness className="h-5 w-5 text-violet-700" />} tone="bg-violet-50" /></div>
 
-          <div className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">{([ ["executive", "Executive", <Gauge className="h-4 w-4" key="i" />], ["agents", "Agents", <UsersRound className="h-4 w-4" key="i" />], ["timing", "Quote Timing", <Clock3 className="h-4 w-4" key="i" />], ["channels", "Input Methods", <PieChart className="h-4 w-4" key="i" />], ["sources", "Sources", <Table2 className="h-4 w-4" key="i" />], ["followup", "Follow-Up", <Clock3 className="h-4 w-4" key="i" />], ["activity", "Service Activity", <Activity className="h-4 w-4" key="i" />] ] as Array<[ReportView, string, React.ReactNode]>).map(([id, label, icon]) => <button key={id} onClick={() => setReportView(id)} className={cn("flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black", reportView === id ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-slate-50")}>{icon}{label}</button>)}</div>
+          <div className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">{([ ["executive", "Executive", <Gauge className="h-4 w-4" key="i" />], ["agents", "Agents", <UsersRound className="h-4 w-4" key="i" />], ["timing", "Quote Timing", <Clock3 className="h-4 w-4" key="i" />], ["taken", "Taken Quotes", <Zap className="h-4 w-4" key="i" />], ["channels", "Input Methods", <PieChart className="h-4 w-4" key="i" />], ["sources", "Sources", <Table2 className="h-4 w-4" key="i" />], ["followup", "Follow-Up", <Clock3 className="h-4 w-4" key="i" />], ["activity", "Service Activity", <Activity className="h-4 w-4" key="i" />] ] as Array<[ReportView, string, React.ReactNode]>).map(([id, label, icon]) => <button key={id} onClick={() => setReportView(id)} className={cn("flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black", reportView === id ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-slate-50")}>{icon}{label}</button>)}</div>
 
           {reportView === "executive" ? <ExecutiveReport reportData={reportData} pendingPricing={pendingPricing} /> : null}
           {reportView === "agents" ? <AgentOperationsReport rows={reportData.byAgent} /> : null}
           {reportView === "timing" ? <QuoteTimingReport rows={reportData.timingByAgent} details={reportData.timingRows} /> : null}
+          {reportView === "taken" ? <TakenQuotesReport rows={reportData.takenRows} byAgent={reportData.takenByAgent} summary={reportData.takenSummary} /> : null}
           {reportView === "channels" ? <RankedReportTable title="Input Method Performance" rows={reportData.byChannel} /> : null}
           {reportView === "sources" ? <RankedReportTable title="Source Performance" rows={reportData.bySource} /> : null}
           {reportView === "followup" ? <FollowUpReport pendingPricing={reportData.pendingInRange} /> : null}
           {reportView === "activity" ? <ServiceActivityReport items={reportData.service} /> : null}
 
-          <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Exports</p><h3 className="mt-1 text-xl font-black">Download report data</h3><p className="mt-1 text-sm text-slate-500">CSV files open directly in Excel.</p></div><div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6"><ExportButton label="All Quote Data" onClick={exportAllQuotes} /><ExportButton label="Quote Timing" onClick={exportTimingReport} /><ExportButton label="Pending Pricing" onClick={exportPendingPricing} /><ExportButton label="Agent Performance" onClick={exportAgentReport} /><ExportButton label="Source Performance" onClick={exportSourceReport} /><ExportButton label="Service Activity" onClick={exportServiceActivity} /></div></section>
+          <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Exports</p><h3 className="mt-1 text-xl font-black">Download report data</h3><p className="mt-1 text-sm text-slate-500">CSV files open directly in Excel.</p></div><div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-7"><ExportButton label="All Quote Data" onClick={exportAllQuotes} /><ExportButton label="Quote Timing" onClick={exportTimingReport} /><ExportButton label="Taken Quotes" onClick={exportTakenReport} /><ExportButton label="Pending Pricing" onClick={exportPendingPricing} /><ExportButton label="Agent Performance" onClick={exportAgentReport} /><ExportButton label="Source Performance" onClick={exportSourceReport} /><ExportButton label="Service Activity" onClick={exportServiceActivity} /></div></section>
         </section>
       ) : null}
 
@@ -2448,6 +2508,40 @@ function RankedReportTable({ title, rows }: { title: string; rows: Array<{ name:
   );
 }
 
+
+function TakenQuotesReport({
+  rows,
+  byAgent,
+  summary,
+}: {
+  rows: Array<QuoteTakeEvent & { customer: string; source: string; quoteAgent: string; quoteStatus: string; workType: WorkType; receivedThrough: string }>;
+  byAgent: Array<{ agent: string; username: string; total: number; whatsapp: number; ringcentral: number; skippedAgents: number; avgElapsedSeconds: number }>;
+  summary: { total: number; whatsapp: number; ringcentral: number; skippedAgents: number; avgElapsedSeconds: number };
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <SummaryCard label="Taken Quotes" value={summary.total} note="Overdue quotes taken" icon={<Zap className="h-5 w-5 text-amber-700" />} tone="bg-amber-50" />
+        <SummaryCard label="Avg Elapsed" value={formatElapsedSeconds(summary.avgElapsedSeconds)} note="Received → Take" icon={<Clock3 className="h-5 w-5 text-blue-700" />} tone="bg-blue-50" />
+        <SummaryCard label="Agents Skipped" value={summary.skippedAgents} note="Total skipped windows" icon={<SkipForward className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" />
+        <SummaryCard label="WhatsApp" value={summary.whatsapp} note="Taken from WA queue" icon={<MessageCircleMore className="h-5 w-5 text-emerald-700" />} tone="bg-emerald-50" />
+        <SummaryCard label="RingCentral" value={summary.ringcentral} note="Taken from RC queue" icon={<PhoneCall className="h-5 w-5 text-blue-700" />} tone="bg-blue-50" />
+      </div>
+
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6"><p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Taken Performance</p><h3 className="mt-1 text-xl font-black">Who takes overdue quotes</h3><p className="mt-1 text-sm text-slate-500">Counts only successful Take actions. Lower elapsed time means the agent acted sooner after becoming eligible.</p></div>
+        <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-amber-50/60 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Taken</th><th className="px-5 py-3">WhatsApp</th><th className="px-5 py-3">RingCentral</th><th className="px-5 py-3">Avg Elapsed</th><th className="px-5 py-3">Agents Skipped</th></tr></thead><tbody className="divide-y divide-slate-100">{byAgent.map((row) => <tr key={row.agent}><td className="px-5 py-4"><p className="font-black">{row.agent}</p>{row.username ? <p className="mt-1 text-xs font-bold text-slate-400">@{row.username}</p> : null}</td><td className="px-5 py-4 font-black text-amber-700">{row.total}</td><td className="px-5 py-4 font-black text-emerald-700">{row.whatsapp}</td><td className="px-5 py-4 font-black text-blue-700">{row.ringcentral}</td><td className="px-5 py-4 font-black">{formatElapsedSeconds(row.avgElapsedSeconds)}</td><td className="px-5 py-4 font-black text-rose-700">{row.skippedAgents}</td></tr>)}</tbody></table></div>
+        {!byAgent.length ? <div className="p-8 text-center text-sm font-semibold text-slate-500">No successful Take actions in this date range.</div> : null}
+      </section>
+
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6"><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Taken Quote Detail</p><h3 className="mt-1 text-xl font-black">Every successful Take action</h3><p className="mt-1 text-sm text-slate-500">Shows the exact quote, taker, skipped agents, queue, and elapsed time.</p></div>
+        <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Taken</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Queue</th><th className="px-5 py-3">Taken By</th><th className="px-5 py-3">Skipped</th><th className="px-5 py-3">Elapsed</th><th className="px-5 py-3">Quote Agent</th><th className="px-5 py-3">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.id}><td className="px-5 py-4"><p className="text-xs font-bold text-slate-600">{formatDateTime(row.takenAt)}</p><p className="mt-1 text-[10px] font-semibold text-slate-400">Received {formatDateTime(row.receivedAt)}</p></td><td className="px-5 py-4"><p className="font-black">{row.customer}</p><p className="mt-1 text-xs text-slate-400">{row.source}</p></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", row.rotation === "whatsapp" ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700")}>{row.rotation === "whatsapp" ? "WhatsApp" : "RingCentral"}</span></td><td className="px-5 py-4"><p className="font-black">{row.takerName}</p><p className="mt-1 text-xs font-bold text-slate-400">@{row.takerUsername}</p></td><td className="px-5 py-4 text-xs font-semibold text-slate-600">{row.skippedAgents.length ? row.skippedAgents.map((agent) => `@${agent.username}`).join(", ") : "None"}</td><td className="px-5 py-4 font-black text-amber-700">{formatElapsedSeconds(row.elapsedSeconds)}</td><td className="px-5 py-4 font-bold text-slate-700">{row.quoteAgent}</td><td className="px-5 py-4"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-700">{row.quoteStatus}</span></td></tr>)}</tbody></table></div>
+        {!rows.length ? <div className="p-8 text-center text-sm font-semibold text-slate-500">No taken quotes in this date range.</div> : null}
+      </section>
+    </div>
+  );
+}
 
 function FollowUpReport({ pendingPricing }: { pendingPricing: PendingPricingItem[] }) {
   const buckets = [
