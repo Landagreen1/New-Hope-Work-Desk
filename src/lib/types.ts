@@ -60,6 +60,7 @@ export interface WorkItem {
   note?: string;
   receivedThrough?: string;
   completedAt?: string;
+  relatedQuoteSourceWorkItemId?: string;
 }
 
 export interface PendingPricingItem {
@@ -97,6 +98,15 @@ export interface QuoteOutcome {
   decision: QuoteDecision;
   notSoldReason?: NotSoldReason;
   notSoldReasonOther?: string;
+}
+
+export interface QuoteNote {
+  id: string;
+  sourceWorkItemId: string;
+  authorProfileId: string;
+  authorName: string;
+  note: string;
+  createdAt: string;
 }
 
 export interface AlertNotification {
@@ -139,8 +149,9 @@ export interface DashboardData {
   workItems: WorkItem[];
   pendingPricing: PendingPricingItem[];
   quoteOutcomes: QuoteOutcome[];
+  quoteNotes: QuoteNote[];
   notifications: AlertNotification[];
   performance: PerformanceRow[];
   passEvents: PassEvent[];
-  rotations: Record<RotationKind, string>;
+  rotations: Record<RotationKind, string | null>;
 }

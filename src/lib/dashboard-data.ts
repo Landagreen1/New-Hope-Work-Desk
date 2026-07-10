@@ -9,6 +9,7 @@ import type {
   PassEvent,
   PerformanceRow,
   QuoteOutcome,
+  QuoteNote,
   RotationKind,
   WorkItem,
   WorkStatus,
@@ -51,6 +52,7 @@ type WorkRow = {
   assigned_at: string | null;
   accepted_at: string | null;
   completed_at: string | null;
+  related_quote_source_work_item_id: string | null;
 };
 
 type PendingRow = {
@@ -90,6 +92,14 @@ type OutcomeRow = {
   not_sold_reason_other: string | null;
 };
 
+
+type QuoteNoteRow = {
+  id: string;
+  source_work_item_id: string;
+  author_profile_id: string;
+  note: string;
+  created_at: string;
+};
 
 type NotificationRow = {
   id: string;
@@ -132,19 +142,20 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
   const { error: dailyResetError } = await supabase.rpc("ensure_daily_availability_reset");
   if (dailyResetError) throw new Error(`Daily availability reset check failed: ${dailyResetError.message}`);
 
-  const [profilesResult, dealersResult, rotationsResult, workResult, pendingResult, outcomesResult, notificationsResult, performanceResult, passEventsResult] = await Promise.all([
+  const [profilesResult, dealersResult, rotationsResult, workResult, pendingResult, outcomesResult, quoteNotesResult, notificationsResult, performanceResult, passEventsResult] = await Promise.all([
     supabase.from("profiles").select("id,display_name,initials,role,rotation_position,whatsapp_position,ringcentral_position,workload_position,availability,whatsapp_active,ringcentral_active,workload_active,is_active").eq("is_active", true).order("rotation_position"),
     supabase.from("dealers").select("id,name,is_active").order("name"),
     supabase.from("rotation_state").select("kind,current_profile_id"),
-    supabase.from("work_items").select("id,customer_name,dealer_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,status,change_type,note,received_through,created_at,assigned_at,accepted_at,completed_at").order("created_at", { ascending: false }).limit(5000),
+    supabase.from("work_items").select("id,customer_name,dealer_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,status,change_type,note,received_through,created_at,assigned_at,accepted_at,completed_at,related_quote_source_work_item_id").order("created_at", { ascending: false }).limit(5000),
     supabase.from("pending_pricing_quotes").select("id,source_work_item_id,customer_name,dealer_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,received_through,note,quote_created_at,assigned_at,accepted_at,price_sent_at").order("price_sent_at", { ascending: true }).limit(5000),
     supabase.from("quote_outcomes").select("id,source_work_item_id,customer_name,dealer_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,received_through,quote_created_at,assigned_at,accepted_at,price_sent_at,finalized_at,decision,not_sold_reason,not_sold_reason_other").order("finalized_at", { ascending: false }).limit(10000),
+    supabase.from("quote_notes").select("id,source_work_item_id,author_profile_id,note,created_at").order("created_at", { ascending: false }).limit(20000),
     supabase.from("user_notifications").select("id,notification_type,title,message,entity_type,entity_id,created_at,read_at").order("created_at", { ascending: false }).limit(100),
     supabase.from("daily_agent_performance").select("profile_id,whatsapp_quotes,ringcentral_quotes,workload_turns,whatsapp_updates,manual_quotes,sold_quotes,owned_activations,owned_changes,requotes,passed_turns"),
     supabase.from("turn_events").select("id,rotation,actor_profile_id,created_at,reason").eq("action", "pass").order("created_at", { ascending: false }).limit(10000),
   ]);
 
-  const errors = [profilesResult.error, dealersResult.error, rotationsResult.error, workResult.error, pendingResult.error, outcomesResult.error, notificationsResult.error, performanceResult.error, passEventsResult.error].filter(Boolean);
+  const errors = [profilesResult.error, dealersResult.error, rotationsResult.error, workResult.error, pendingResult.error, outcomesResult.error, quoteNotesResult.error, notificationsResult.error, performanceResult.error, passEventsResult.error].filter(Boolean);
   if (errors.length) throw new Error(errors[0]?.message || "Unable to load Work Desk data.");
 
   const profiles = (profilesResult.data || []) as ProfileRow[];
@@ -193,6 +204,7 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     note: row.note || undefined,
     receivedThrough: row.received_through || undefined,
     completedAt: row.completed_at || undefined,
+    relatedQuoteSourceWorkItemId: row.related_quote_source_work_item_id || undefined,
   }));
 
   const pendingPricing: PendingPricingItem[] = ((pendingResult.data || []) as PendingRow[]).map((row) => ({
@@ -233,6 +245,16 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
   }));
 
 
+
+  const quoteNotes: QuoteNote[] = ((quoteNotesResult.data || []) as QuoteNoteRow[]).map((row) => ({
+    id: row.id,
+    sourceWorkItemId: row.source_work_item_id,
+    authorProfileId: row.author_profile_id,
+    authorName: nameByProfile.get(row.author_profile_id) || "Unknown agent",
+    note: row.note,
+    createdAt: row.created_at,
+  }));
+
   const notifications: AlertNotification[] = ((notificationsResult.data || []) as NotificationRow[]).map((row) => ({
     id: row.id,
     type: row.notification_type,
@@ -271,15 +293,11 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     };
   });
 
-  const rotations: Record<RotationKind, string> = { whatsapp: "", ringcentral: "", workload: "" };
+  const rotations: Record<RotationKind, string | null> = { whatsapp: null, ringcentral: null, workload: null };
   for (const row of rotationsResult.data || []) {
     const kind = row.kind as RotationKind;
-    if (row.current_profile_id) rotations[kind] = row.current_profile_id;
+    rotations[kind] = row.current_profile_id || null;
   }
 
-  for (const kind of ["whatsapp", "ringcentral", "workload"] as RotationKind[]) {
-    if (!rotations[kind]) rotations[kind] = agents[0]?.id || "";
-  }
-
-  return { agents, sources: sourceOptions, workItems, pendingPricing, quoteOutcomes, notifications, performance, passEvents, rotations };
+  return { agents, sources: sourceOptions, workItems, pendingPricing, quoteOutcomes, quoteNotes, notifications, performance, passEvents, rotations };
 }
