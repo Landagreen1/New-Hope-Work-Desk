@@ -151,6 +151,82 @@ type ModalType = "whatsapp_quote" | "ringcentral_quote" | "workload_turn" | "pay
 type AgentTab = "desk" | "pricing" | "quotes" | "performance";
 type ManagerTab = "overview" | "tasks" | "pricing" | "quotes" | "reports" | "team" | "sources" | "users";
 type ReportView = "executive" | "exceptions" | "funnel" | "trends" | "agents" | "scorecard" | "workload" | "queues" | "taken" | "missed" | "passes" | "followup" | "documentation" | "channels" | "sources" | "service" | "activation" | "manager" | "integrity" | "system" | "timing" | "activity";
+
+type ReportNavigationItem = {
+  id: ReportView;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
+
+type ReportNavigationGroup = {
+  label: string;
+  description: string;
+  items: ReportNavigationItem[];
+};
+
+const reportNavigationGroups: ReportNavigationGroup[] = [
+  {
+    label: "Command Center",
+    description: "Start here for priorities and daily direction.",
+    items: [
+      { id: "executive", label: "Executive Overview", description: "Top operating and sales indicators for the selected period.", icon: Gauge },
+      { id: "exceptions", label: "Needs Attention", description: "Urgent exceptions, stalled work, and manager action items.", icon: AlertTriangle },
+      { id: "trends", label: "Daily Operations", description: "Day-by-day quote, sales, queue, and service movement.", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Sales",
+    description: "Conversion, sources, channels, and speed.",
+    items: [
+      { id: "funnel", label: "Sales Funnel", description: "Follow quotes from receipt through Sold or Not Sold.", icon: TrendingUp },
+      { id: "sources", label: "Source Intelligence", description: "Compare volume, conversion, aging, and source opportunity.", icon: Table2 },
+      { id: "channels", label: "Input Methods", description: "Compare WhatsApp, RingCentral, phone, walk-in, and other channels.", icon: PieChart },
+      { id: "timing", label: "Quote Timing", description: "Measure assignment, acceptance, pricing, and final-decision speed.", icon: Clock3 },
+    ],
+  },
+  {
+    label: "People",
+    description: "Performance, capacity, and documentation.",
+    items: [
+      { id: "scorecard", label: "Agent 360", description: "Balanced agent scorecards across sales, speed, queues, and follow-up.", icon: Sparkles },
+      { id: "agents", label: "Agent Comparison", description: "Side-by-side operating and sales results for every agent.", icon: UsersRound },
+      { id: "workload", label: "Workload Capacity", description: "Open work, pending pricing, and workload distribution by agent.", icon: BriefcaseBusiness },
+      { id: "documentation", label: "Documentation Quality", description: "Note coverage, follow-up history, and documentation gaps.", icon: Pencil },
+    ],
+  },
+  {
+    label: "Queues",
+    description: "Turn health, missed windows, and rescue activity.",
+    items: [
+      { id: "queues", label: "Queue Health", description: "Queue volume, passes, manual changes, and distribution health.", icon: ListChecks },
+      { id: "taken", label: "Taken Quotes", description: "Quotes rescued after one or more agent windows expired.", icon: Zap },
+      { id: "missed", label: "Missed Turns", description: "Agents skipped during Take events and the outcomes of missed quotes.", icon: SkipForward },
+      { id: "passes", label: "Pass Behavior", description: "Pass volume, reasons, and patterns by agent and queue.", icon: RefreshCw },
+    ],
+  },
+  {
+    label: "Service",
+    description: "Follow-up, activations, changes, and payments.",
+    items: [
+      { id: "followup", label: "Pending Follow-Up", description: "Aging, stale activity, and pending-pricing follow-up status.", icon: Clock3 },
+      { id: "service", label: "Service Work", description: "Activations, changes, payments, and open service workload.", icon: Layers3 },
+      { id: "activation", label: "Activation & Sold Audit", description: "Verify Sold credit, activation users, and missing activation history.", icon: CheckCircle2 },
+      { id: "activity", label: "Raw Activity", description: "Detailed operational activity for deeper review and export.", icon: Activity },
+    ],
+  },
+  {
+    label: "Control",
+    description: "Management oversight, accuracy, and system integrity.",
+    items: [
+      { id: "manager", label: "Manager Actions", description: "Assignments, reassignments, interventions, and outcomes.", icon: ShieldCheck },
+      { id: "integrity", label: "Data Integrity", description: "Duplicates, missing information, and workflow inconsistencies.", icon: AlertTriangle },
+      { id: "system", label: "System Health", description: "Queue, reset, data-link, and production health checks.", icon: Settings2 },
+    ],
+  },
+];
+
+const reportNavigationItems = reportNavigationGroups.flatMap((group) => group.items);
 type ManagerQuoteStage = "active" | "pending" | "finalized";
 type QuoteRecord = {
   id: string;
@@ -1684,6 +1760,9 @@ function ManagerView({
   onSetQueueOrder: (rotation: RotationKind, profileIds: string[]) => Promise<void>;
 }) {
   const [reportView, setReportView] = useState<ReportView>("executive");
+  const selectedReport = reportNavigationItems.find((item) => item.id === reportView) ?? reportNavigationItems[0];
+  const selectedReportGroup = reportNavigationGroups.find((group) => group.items.some((item) => item.id === reportView)) ?? reportNavigationGroups[0];
+  const SelectedReportIcon = selectedReport.icon;
   const [quoteSearch, setQuoteSearch] = useState("");
   const [managerNow] = useState(() => Date.now());
   const today = new Date();
@@ -2153,39 +2232,136 @@ function ManagerView({
 
       {managerTab === "reports" ? (
         <section className="space-y-5">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between"><div><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]"><BarChart3 className="h-4 w-4" /> Reports Center</div><h2 className="mt-2 text-2xl font-black">Operational and sales intelligence</h2><p className="mt-1 text-sm text-slate-500">Select any date range, then analyze or export the filtered data.</p></div><div className="flex flex-wrap items-end gap-3"><Field label="Start date"><input type="date" value={reportStart} onChange={(event) => setReportStart(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" /></Field><Field label="End date"><input type="date" value={reportEnd} onChange={(event) => setReportEnd(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" /></Field></div></div>
-            <div className="mt-5 flex flex-wrap gap-2"><button onClick={() => setPreset("today")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">Today</button><button onClick={() => setPreset("yesterday")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">Yesterday</button><button onClick={() => setPreset("week")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">Last 7 Days</button><button onClick={() => setPreset("month")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">This Month</button><span className="ml-auto text-xs font-bold text-slate-400">Showing {formatDate(`${reportStart}T12:00:00`)} – {formatDate(`${reportEnd}T12:00:00`)}</span></div>
+          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-end 2xl:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]"><BarChart3 className="h-4 w-4" /> Reports Center</div>
+                <h2 className="mt-2 text-2xl font-black">Operational and sales intelligence</h2>
+                <p className="mt-1 max-w-2xl text-sm font-semibold text-slate-500">Start with the Command Center, then use the grouped report library for deeper analysis.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Start date"><input type="date" value={reportStart} onChange={(event) => setReportStart(event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" /></Field>
+                <Field label="End date"><input type="date" value={reportEnd} onChange={(event) => setReportEnd(event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" /></Field>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <button onClick={() => setPreset("today")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-200">Today</button>
+              <button onClick={() => setPreset("yesterday")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-200">Yesterday</button>
+              <button onClick={() => setPreset("week")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-200">Last 7 Days</button>
+              <button onClick={() => setPreset("month")} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-200">This Month</button>
+              <span className="w-full pt-1 text-xs font-bold text-slate-400 sm:ml-auto sm:w-auto sm:pt-0">Showing {formatDate(`${reportStart}T12:00:00`)} – {formatDate(`${reportEnd}T12:00:00`)}</span>
+            </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"><SummaryCard label="Quotes" value={reportData.quotes.length} note="All input methods" icon={<ClipboardList className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /><SummaryCard label="Finalized" value={reportData.finalized} note="Sold + Not Sold" icon={<CheckCircle2 className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Efficiency" value={`${reportData.efficiency.toFixed(1)}%`} note="Finalized ÷ all quotes" icon={<Gauge className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Sold" value={reportData.sold} note="Final decisions" icon={<CircleDollarSign className="h-5 w-5 text-emerald-700" />} tone="bg-emerald-50" /><SummaryCard label="Not Sold" value={reportData.notSold} note="Final decisions" icon={<XCircle className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Conversion" value={`${reportData.conversion.toFixed(1)}%`} note="Sold ÷ finalized" icon={<TrendingUp className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /><SummaryCard label="Pending Now" value={pendingPricing.length} note="Current follow-up list" icon={<Clock3 className="h-5 w-5 text-amber-700" />} tone="bg-amber-50" /><SummaryCard label="Turns Passed" value={reportData.totalPasses} note="Selected date range" icon={<SkipForward className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Service Activity" value={reportData.service.length} note="Payments + service work" icon={<BriefcaseBusiness className="h-5 w-5 text-violet-700" />} tone="bg-violet-50" /></div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+            <SummaryCard label="Quotes" value={reportData.quotes.length} note="All input methods" icon={<ClipboardList className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" />
+            <SummaryCard label="Sold" value={reportData.sold} note="Final Sold decisions" icon={<CircleDollarSign className="h-5 w-5 text-emerald-700" />} tone="bg-emerald-50" />
+            <SummaryCard label="Conversion" value={`${reportData.conversion.toFixed(1)}%`} note="Sold ÷ finalized" icon={<TrendingUp className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" />
+            <SummaryCard label="Efficiency" value={`${reportData.efficiency.toFixed(1)}%`} note="Finalized ÷ all quotes" icon={<Gauge className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" />
+            <SummaryCard label="Pending" value={pendingPricing.length} note="Current follow-up list" icon={<Clock3 className="h-5 w-5 text-amber-700" />} tone="bg-amber-50" />
+            <SummaryCard label="Exceptions" value={reportData.exceptionItems.length} note="Items needing review" icon={<AlertTriangle className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" />
+          </div>
 
-          <div className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">{([ ["executive", "Executive", <Gauge className="h-4 w-4" key="i" />], ["exceptions", "Needs Attention", <AlertTriangle className="h-4 w-4" key="i" />], ["funnel", "Sales Funnel", <TrendingUp className="h-4 w-4" key="i" />], ["trends", "Daily Ops", <BarChart3 className="h-4 w-4" key="i" />], ["agents", "Agents", <UsersRound className="h-4 w-4" key="i" />], ["scorecard", "Agent 360", <Sparkles className="h-4 w-4" key="i" />], ["workload", "Workload", <BriefcaseBusiness className="h-4 w-4" key="i" />], ["queues", "Queue Health", <ListChecks className="h-4 w-4" key="i" />], ["taken", "Taken Quotes", <Zap className="h-4 w-4" key="i" />], ["missed", "Missed Turns", <SkipForward className="h-4 w-4" key="i" />], ["passes", "Passes", <RefreshCw className="h-4 w-4" key="i" />], ["followup", "Follow-Up", <Clock3 className="h-4 w-4" key="i" />], ["documentation", "Documentation", <Pencil className="h-4 w-4" key="i" />], ["channels", "Input Methods", <PieChart className="h-4 w-4" key="i" />], ["sources", "Sources", <Table2 className="h-4 w-4" key="i" />], ["service", "Service Work", <Layers3 className="h-4 w-4" key="i" />], ["activation", "Activation Audit", <CheckCircle2 className="h-4 w-4" key="i" />], ["manager", "Manager Actions", <ShieldCheck className="h-4 w-4" key="i" />], ["integrity", "Data Integrity", <AlertTriangle className="h-4 w-4" key="i" />], ["system", "System Health", <Settings2 className="h-4 w-4" key="i" />], ["timing", "Quote Timing", <Clock3 className="h-4 w-4" key="i" />], ["activity", "Raw Activity", <Activity className="h-4 w-4" key="i" />] ] as Array<[ReportView, string, React.ReactNode]>).map(([id, label, icon]) => <button key={id} onClick={() => setReportView(id)} className={cn("flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black", reportView === id ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-slate-50")}>{icon}{label}</button>)}</div>
+          <div className="grid min-w-0 gap-5 xl:grid-cols-[270px_minmax(0,1fr)]">
+            <aside className="hidden xl:block">
+              <div className="sticky top-5 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                <div className="border-b border-slate-100 p-5">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Report Library</p>
+                  <div className="mt-1 flex items-end justify-between gap-3">
+                    <h3 className="text-xl font-black text-slate-900">Choose a view</h3>
+                    <span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-[10px] font-black text-[#223f7a]">{reportNavigationItems.length} reports</span>
+                  </div>
+                </div>
+                <nav className="max-h-[calc(100vh-9rem)] space-y-5 overflow-y-auto p-3">
+                  {reportNavigationGroups.map((group) => (
+                    <div key={group.label}>
+                      <div className="px-2 pb-2">
+                        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{group.label}</p>
+                      </div>
+                      <div className="space-y-1">
+                        {group.items.map((item) => {
+                          const Icon = item.icon;
+                          const active = reportView === item.id;
+                          return (
+                            <button key={item.id} onClick={() => setReportView(item.id)} className={cn("flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-black transition", active ? "bg-[#223f7a] text-white shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")}>
+                              <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-xl", active ? "bg-white/15" : "bg-slate-100 text-[#223f7a]")}><Icon className="h-4 w-4" /></span>
+                              <span className="min-w-0 truncate">{item.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </nav>
+              </div>
+            </aside>
 
-          {reportView === "executive" ? <ExecutiveReport reportData={reportData} pendingPricing={pendingPricing} /> : null}
-          {reportView === "exceptions" ? <ExceptionCenterReport items={reportData.exceptionItems} /> : null}
-          {reportView === "funnel" ? <FunnelReport quotes={reportData.quotes} sold={reportData.sold} notSold={reportData.notSold} pending={pendingPricing.length} /> : null}
-          {reportView === "trends" ? <DailyOperationsReport rows={reportData.dailyRows} /> : null}
-          {reportView === "agents" ? <AgentOperationsReport rows={reportData.byAgent} /> : null}
-          {reportView === "scorecard" ? <AgentScorecardReport rows={reportData.agentScorecards} /> : null}
-          {reportView === "workload" ? <WorkloadCapacityReport rows={reportData.workloadByAgent} /> : null}
-          {reportView === "queues" ? <QueueHealthReport rows={reportData.queueHealth} /> : null}
-          {reportView === "taken" ? <TakenQuotesReport rows={reportData.takenRows} byAgent={reportData.takenByAgent} summary={reportData.takenSummary} /> : null}
-          {reportView === "missed" ? <MissedTurnsReport rows={reportData.missedByAgent} /> : null}
-          {reportView === "passes" ? <PassBehaviorReport rows={reportData.passByAgent} /> : null}
-          {reportView === "followup" ? <FollowUpReport pendingPricing={reportData.pendingInRange} /> : null}
-          {reportView === "documentation" ? <DocumentationQualityReport rows={reportData.documentationByAgent} /> : null}
-          {reportView === "channels" ? <RankedReportTable title="Input Method Performance" rows={reportData.byChannel} /> : null}
-          {reportView === "sources" ? <SourceRiskReport rows={reportData.sourceRisk} /> : null}
-          {reportView === "service" ? <ServiceControlReport activations={reportData.activationRows} changes={reportData.changeRows} payments={reportData.paymentRows} /> : null}
-          {reportView === "activation" ? <ActivationAuditReport activations={reportData.activationRows} activationEvents={reportData.activationEvents} outcomes={quoteOutcomes} /> : null}
-          {reportView === "manager" ? <ManagerInterventionReport rows={reportData.managerInterventions} /> : null}
-          {reportView === "integrity" ? <IntegrityReport issues={reportData.integrityIssues} /> : null}
-          {reportView === "system" ? <SystemHealthReport checks={reportData.systemChecks} /> : null}
-          {reportView === "timing" ? <QuoteTimingReport rows={reportData.timingByAgent} details={reportData.timingRows} /> : null}
-          {reportView === "activity" ? <ServiceActivityReport items={reportData.service} /> : null}
+            <div className="min-w-0 space-y-5">
+              <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm xl:hidden">
+                <label className="text-xs font-black uppercase tracking-[0.14em] text-slate-500" htmlFor="mobile-report-selector">Select report</label>
+                <select id="mobile-report-selector" value={reportView} onChange={(event) => setReportView(event.target.value as ReportView)} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 outline-none focus:border-[#6b84b5] focus:ring-4 focus:ring-[#eef3fb]">
+                  {reportNavigationGroups.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.items.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
 
-          <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Exports</p><h3 className="mt-1 text-xl font-black">Download report data</h3><p className="mt-1 text-sm text-slate-500">CSV files open directly in Excel.</p></div><div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-7"><ExportButton label="All Quote Data" onClick={exportAllQuotes} /><ExportButton label="Quote Timing" onClick={exportTimingReport} /><ExportButton label="Taken Quotes" onClick={exportTakenReport} /><ExportButton label="Pending Pricing" onClick={exportPendingPricing} /><ExportButton label="Agent Performance" onClick={exportAgentReport} /><ExportButton label="Source Performance" onClick={exportSourceReport} /><ExportButton label="Service Activity" onClick={exportServiceActivity} /></div></section>
+              <div className="rounded-[28px] border border-[#c9d5e9] bg-gradient-to-br from-white to-[#f3f6fb] p-5 shadow-sm sm:p-6">
+                <div className="flex items-start gap-4">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#223f7a] text-white shadow-sm"><SelectedReportIcon className="h-5 w-5" /></div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#4d6aa8]">{selectedReportGroup.label}</p>
+                    <h3 className="mt-1 text-2xl font-black tracking-tight text-[#17305f]">{selectedReport.label}</h3>
+                    <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">{selectedReport.description}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-w-0">
+                {reportView === "executive" ? <ExecutiveReport reportData={reportData} pendingPricing={pendingPricing} /> : null}
+                {reportView === "exceptions" ? <ExceptionCenterReport items={reportData.exceptionItems} /> : null}
+                {reportView === "funnel" ? <FunnelReport quotes={reportData.quotes} sold={reportData.sold} notSold={reportData.notSold} pending={pendingPricing.length} /> : null}
+                {reportView === "trends" ? <DailyOperationsReport rows={reportData.dailyRows} /> : null}
+                {reportView === "agents" ? <AgentOperationsReport rows={reportData.byAgent} /> : null}
+                {reportView === "scorecard" ? <AgentScorecardReport rows={reportData.agentScorecards} /> : null}
+                {reportView === "workload" ? <WorkloadCapacityReport rows={reportData.workloadByAgent} /> : null}
+                {reportView === "queues" ? <QueueHealthReport rows={reportData.queueHealth} /> : null}
+                {reportView === "taken" ? <TakenQuotesReport rows={reportData.takenRows} byAgent={reportData.takenByAgent} summary={reportData.takenSummary} /> : null}
+                {reportView === "missed" ? <MissedTurnsReport rows={reportData.missedByAgent} /> : null}
+                {reportView === "passes" ? <PassBehaviorReport rows={reportData.passByAgent} /> : null}
+                {reportView === "followup" ? <FollowUpReport pendingPricing={reportData.pendingInRange} /> : null}
+                {reportView === "documentation" ? <DocumentationQualityReport rows={reportData.documentationByAgent} /> : null}
+                {reportView === "channels" ? <RankedReportTable title="Input Method Performance" rows={reportData.byChannel} /> : null}
+                {reportView === "sources" ? <SourceRiskReport rows={reportData.sourceRisk} /> : null}
+                {reportView === "service" ? <ServiceControlReport activations={reportData.activationRows} changes={reportData.changeRows} payments={reportData.paymentRows} /> : null}
+                {reportView === "activation" ? <ActivationAuditReport activations={reportData.activationRows} activationEvents={reportData.activationEvents} outcomes={quoteOutcomes} /> : null}
+                {reportView === "manager" ? <ManagerInterventionReport rows={reportData.managerInterventions} /> : null}
+                {reportView === "integrity" ? <IntegrityReport issues={reportData.integrityIssues} /> : null}
+                {reportView === "system" ? <SystemHealthReport checks={reportData.systemChecks} /> : null}
+                {reportView === "timing" ? <QuoteTimingReport rows={reportData.timingByAgent} details={reportData.timingRows} /> : null}
+                {reportView === "activity" ? <ServiceActivityReport items={reportData.service} /> : null}
+              </div>
+
+              <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Exports</p>
+                  <h3 className="mt-1 text-xl font-black">Download report data</h3>
+                  <p className="mt-1 text-sm text-slate-500">CSV files open directly in Excel.</p>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  <ExportButton label="All Quote Data" onClick={exportAllQuotes} />
+                  <ExportButton label="Quote Timing" onClick={exportTimingReport} />
+                  <ExportButton label="Taken Quotes" onClick={exportTakenReport} />
+                  <ExportButton label="Pending Pricing" onClick={exportPendingPricing} />
+                  <ExportButton label="Agent Performance" onClick={exportAgentReport} />
+                  <ExportButton label="Source Performance" onClick={exportSourceReport} />
+                  <ExportButton label="Service Activity" onClick={exportServiceActivity} />
+                </div>
+              </section>
+            </div>
+          </div>
         </section>
       ) : null}
 
