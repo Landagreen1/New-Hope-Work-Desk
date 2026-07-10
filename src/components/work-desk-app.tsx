@@ -150,7 +150,7 @@ function accentForAgent(agent: Agent) {
 type ModalType = "whatsapp_quote" | "ringcentral_quote" | "workload_turn" | "payment" | "manual_quote" | "manager_assign_quote" | "quote_result" | "not_sold_reason" | "take_quote" | "quote_log" | null;
 type AgentTab = "desk" | "pricing" | "quotes" | "performance";
 type ManagerTab = "overview" | "tasks" | "pricing" | "quotes" | "reports" | "team" | "sources" | "users";
-type ReportView = "executive" | "agents" | "timing" | "taken" | "channels" | "sources" | "followup" | "activity";
+type ReportView = "executive" | "exceptions" | "funnel" | "trends" | "agents" | "scorecard" | "workload" | "queues" | "taken" | "missed" | "passes" | "followup" | "documentation" | "channels" | "sources" | "service" | "activation" | "manager" | "integrity" | "system" | "timing" | "activity";
 type ManagerQuoteStage = "active" | "pending" | "finalized";
 type QuoteRecord = {
   id: string;
@@ -1488,6 +1488,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
             pendingPricing={pendingPricing}
             quoteOutcomes={quoteOutcomes}
             quoteNotes={quoteNotes}
+            quoteActivities={quoteActivities}
             quoteTakeEvents={quoteTakeEvents}
             performance={performance}
             passEvents={passEvents}
@@ -1630,6 +1631,7 @@ function ManagerView({
   pendingPricing,
   quoteOutcomes,
   quoteNotes,
+  quoteActivities,
   quoteTakeEvents,
   performance,
   passEvents,
@@ -1658,6 +1660,7 @@ function ManagerView({
   pendingPricing: PendingPricingItem[];
   quoteOutcomes: QuoteOutcome[];
   quoteNotes: QuoteNote[];
+  quoteActivities: QuoteActivity[];
   quoteTakeEvents: QuoteTakeEvent[];
   performance: PerformanceRow[];
   passEvents: PassEvent[];
@@ -1718,6 +1721,11 @@ function ManagerView({
     for (const note of quoteNotes) rows.set(note.sourceWorkItemId, [...(rows.get(note.sourceWorkItemId) || []), note]);
     return rows;
   }, [quoteNotes]);
+  const quoteActivitiesBySource = useMemo(() => {
+    const rows = new Map<string, QuoteActivity[]>();
+    for (const activity of quoteActivities) rows.set(activity.sourceWorkItemId, [...(rows.get(activity.sourceWorkItemId) || []), activity]);
+    return rows;
+  }, [quoteActivities]);
   const tabs: Array<{ id: ManagerTab; label: string; icon: React.ReactNode; badge?: number }> = [
     { id: "overview", label: "Overview", icon: <ShieldCheck className="h-4 w-4" /> },
     { id: "tasks", label: "Open Tasks", icon: <ClipboardList className="h-4 w-4" />, badge: activeTasks.length },
@@ -1877,8 +1885,119 @@ function ManagerView({
 
     const pendingInRange = pendingPricing.filter((item) => withinDateRange(item.priceSentAt, reportStart, reportEnd));
     const totalPasses = passEvents.filter((event) => withinDateRange(event.createdAt, reportStart, reportEnd)).length;
-    return { quotes, timingRows, timingByAgent, notSoldReasons, service, sold, notSold, finalized, efficiency, conversion, pendingInRange, totalPasses, byAgent, byChannel: group("channel"), bySource: group("dealer"), takenRows, takenByAgent, takenSummary };
-  }, [agentList, passEvents, pendingPricing, quoteOutcomes, quoteRecords, quoteTakeEvents, reportEnd, reportStart, workItems]);
+    const byChannel = group("channel");
+    const bySource = group("dealer");
+    const activitiesInRange = quoteActivities.filter((item) => withinDateRange(item.createdAt, reportStart, reportEnd));
+    const notesInRange = quoteNotes.filter((item) => withinDateRange(item.createdAt, reportStart, reportEnd));
+    const paymentRows = service.filter((item) => item.workType === "payment");
+    const activationRows = service.filter((item) => item.workType === "activation");
+    const changeRows = service.filter((item) => item.workType === "change");
+    const now = managerNow;
+    const referenceIso = new Date(managerNow).toISOString();
+    const stalePending = pendingPricing.filter((item) => daysSince(item.priceSentAt) >= 2);
+    const noNotePending = pendingPricing.filter((item) => !(quoteNotesBySource.get(item.sourceWorkItemId) || []).length);
+    const quoteSourceCounts = quoteRecords.reduce<Record<string, number>>((acc, quote) => {
+      const key = `${quote.customer.toLowerCase()}|${quote.source.toLowerCase()}`;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const duplicateCount = Object.values(quoteSourceCounts).filter((count) => count > 1).length;
+    const managerInterventions = activitiesInRange.filter((activity) => /assign|reassign|manager|delete|rotation/i.test(activity.eventType));
+    const activationEvents = activitiesInRange.filter((activity) => /activation/i.test(activity.eventType));
+    const soldWithoutActivation = quoteOutcomes.filter((quote) => quote.decision === "sold" && !(quoteActivitiesBySource.get(quote.sourceWorkItemId) || []).some((activity) => /activation/i.test(activity.eventType))).length;
+    const exceptionItems = [
+      ...awaitingAcceptance.map((item) => ({ severity: "warning" as const, area: "Assignment", issue: `${item.customer} is awaiting acceptance`, owner: item.assignedAgent, age: formatDuration(durationMinutes(item.assignedAt, referenceIso)) })),
+      ...staleAssignments.map((item) => ({ severity: "critical" as const, area: "Assignment", issue: `${item.customer} has waited more than 5 minutes`, owner: item.assignedAgent, age: formatDuration(durationMinutes(item.assignedAt, referenceIso)) })),
+      ...stalePending.map((item) => ({ severity: "warning" as const, area: "Follow-Up", issue: `${item.customer} has stale pricing`, owner: item.assignedAgent, age: `${daysSince(item.priceSentAt)} days` })),
+      ...noNotePending.map((item) => ({ severity: "warning" as const, area: "Documentation", issue: `${item.customer} has pending pricing with no notes`, owner: item.assignedAgent, age: `${daysSince(item.priceSentAt)} days` })),
+      ...activeTasks.filter((item) => (now - new Date(item.assignedAt).getTime()) > 30 * 60_000).map((item) => ({ severity: "warning" as const, area: "Workload", issue: `${item.customer} active more than 30 minutes`, owner: item.assignedAgent, age: formatDuration(durationMinutes(item.assignedAt, referenceIso)) })),
+      ...unavailableWithWork.map((agent) => ({ severity: "critical" as const, area: "Coverage", issue: `${agent.name} is unavailable with active work`, owner: agent.name, age: `${openCountByAgent[agent.name] ?? 0} tasks` })),
+    ].slice(0, 100);
+    const workloadByAgent = agentList.map((agent) => {
+      const agentActive = activeTasks.filter((item) => item.assignedAgent === agent.name);
+      const agentPending = pendingPricing.filter((item) => item.assignedAgent === agent.name);
+      return {
+        agent: agent.name,
+        status: agent.availability,
+        activeQuotes: agentActive.filter(isQuote).length,
+        activations: agentActive.filter((item) => item.workType === "activation").length,
+        changes: agentActive.filter((item) => item.workType === "change").length,
+        payments: agentActive.filter((item) => item.workType === "payment").length,
+        pending: agentPending.length,
+        unaccepted: agentActive.filter((item) => !item.acceptedAt).length,
+        total: agentActive.length + agentPending.length,
+      };
+    }).sort((a, b) => b.total - a.total);
+    const documentationByAgent = agentList.map((agent) => {
+      const authored = notesInRange.filter((note) => note.authorName === agent.name);
+      const agentQuotes = quotes.filter((quote) => quote.agent === agent.name);
+      const withNotes = agentQuotes.filter((quote) => (quoteNotesBySource.get(quote.id) || []).length > 0).length;
+      return { agent: agent.name, notes: authored.length, quotes: agentQuotes.length, withNotes, coverage: agentQuotes.length ? (withNotes / agentQuotes.length) * 100 : 0 };
+    }).sort((a, b) => b.notes - a.notes);
+    const missedByAgent = agentList.map((agent) => {
+      const rows = takenRows.filter((row) => row.skippedAgents.some((skipped) => skipped.id === agent.id));
+      return {
+        agent: agent.name,
+        missed: rows.length,
+        whatsapp: rows.filter((row) => row.rotation === "whatsapp").length,
+        ringcentral: rows.filter((row) => row.rotation === "ringcentral").length,
+        sold: rows.filter((row) => row.quoteStatus === "Sold").length,
+        pending: rows.filter((row) => row.quoteStatus === "Price Sent" || row.quoteStatus === "Active").length,
+      };
+    }).filter((row) => row.missed > 0).sort((a, b) => b.missed - a.missed);
+    const passByAgent = agentList.map((agent) => {
+      const rows = passEvents.filter((event) => event.actorAgentId === agent.id && withinDateRange(event.createdAt, reportStart, reportEnd));
+      return { agent: agent.name, total: rows.length, whatsapp: rows.filter((row) => row.rotation === "whatsapp").length, ringcentral: rows.filter((row) => row.rotation === "ringcentral").length, workload: rows.filter((row) => row.rotation === "workload").length, reasons: rows.map((row) => row.reason || "No reason") };
+    }).filter((row) => row.total > 0).sort((a, b) => b.total - a.total);
+    const queueHealth = (["whatsapp", "ringcentral", "workload"] as RotationKind[]).map((rotation) => {
+      const rotationName = rotation === "whatsapp" ? "WhatsApp" : rotation === "ringcentral" ? "RingCentral" : "Additional Workload";
+      const currentId = rotation === "whatsapp" ? whatsappCurrentId : rotation === "ringcentral" ? ringCentralCurrentId : workloadCurrentId;
+      const currentAgent = agentList.find((agent) => agent.id === currentId) || null;
+      const eligible = agentList.filter((agent) => rotationEligibility(agent, rotation));
+      const available = eligible.filter((agent) => agent.availability === "available");
+      const passes = passEvents.filter((event) => event.rotation === rotation && withinDateRange(event.createdAt, reportStart, reportEnd)).length;
+      const taken = takenRows.filter((row) => row.rotation === rotation).length;
+      const claims = quotes.filter((quote) => rotation === "whatsapp" ? quote.method === "whatsapp_turn" : rotation === "ringcentral" ? quote.method === "ringcentral_turn" : false).length + service.filter((item) => rotation === "workload" && item.assignmentMethod === "workload_turn").length;
+      const health = !currentAgent && available.length ? "Needs current agent" : currentAgent && currentAgent.availability !== "available" ? "Current unavailable" : "Healthy";
+      return { rotation: rotationName, current: currentAgent?.name || "No agent yet", eligible: eligible.length, available: available.length, claims, passes, taken, health };
+    });
+    const agentScorecards = byAgent.map((row) => {
+      const timing = timingByAgent.find((item) => item.agent === row.agent);
+      const workload = workloadByAgent.find((item) => item.agent === row.agent);
+      const docs = documentationByAgent.find((item) => item.agent === row.agent);
+      const taken = takenByAgent.find((item) => item.agent === row.agent);
+      const score = Math.round((row.efficiency * 0.22) + (row.conversion * 0.22) + (docs?.coverage || 0) * 0.18 + Math.max(0, 100 - ((timing?.avgPrice || 0) / 60) * 20) * 0.18 + Math.max(0, 100 - ((workload?.unaccepted || 0) * 15)) * 0.1 + Math.min(100, (taken?.total || 0) * 20) * 0.1);
+      return { ...row, score, avgPrice: timing?.avgPrice ?? null, docCoverage: docs?.coverage || 0, taken: taken?.total || 0, workload: workload?.total || 0 };
+    }).sort((a, b) => b.score - a.score);
+    const sourceRisk = bySource.map((row) => ({
+      ...row,
+      taken: takenRows.filter((event) => event.source === row.name).length,
+      notes: quoteRecords.filter((quote) => quote.source === row.name).reduce((sum, quote) => sum + (quoteNotesBySource.get(quote.sourceWorkItemId) || []).length, 0),
+      category: row.quotes >= 10 && row.conversion >= 60 ? "High value" : row.quotes >= 10 && row.conversion < 50 ? "Needs attention" : row.quotes < 5 && row.conversion < 40 ? "Low value" : "Monitor",
+    }));
+    const dailyMap = new Map<string, { date: string; quotes: number; sold: number; notSold: number; pending: number; taken: number; passes: number; service: number }>();
+    const ensureDay = (date: string) => { const key = date.slice(0,10); const row = dailyMap.get(key) || { date: key, quotes: 0, sold: 0, notSold: 0, pending: 0, taken: 0, passes: 0, service: 0 }; dailyMap.set(key, row); return row; };
+    quotes.forEach((quote) => { const row = ensureDay(quote.createdAt); row.quotes += 1; if (quote.lifecycle === "Sold") row.sold += 1; if (quote.lifecycle === "Not Sold") row.notSold += 1; if (quote.lifecycle === "Price Sent") row.pending += 1; });
+    takenRows.forEach((row) => { ensureDay(row.takenAt).taken += 1; });
+    passEvents.filter((event) => withinDateRange(event.createdAt, reportStart, reportEnd)).forEach((event) => { ensureDay(event.createdAt).passes += 1; });
+    service.forEach((item) => { ensureDay(item.createdAt).service += 1; });
+    const dailyRows = Array.from(dailyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+    const integrityIssues = [
+      ...(duplicateCount ? [{ severity: "warning" as const, issue: "Possible duplicate quote groups", detail: `${duplicateCount} customer/source groups have multiple records` }] : []),
+      ...(soldWithoutActivation ? [{ severity: "warning" as const, issue: "Sold without activation log", detail: `${soldWithoutActivation} sold quotes do not show activation activity` }] : []),
+      ...quoteRecords.filter((quote) => quote.status === "Price Sent" && !(quoteNotesBySource.get(quote.sourceWorkItemId) || []).length).map((quote) => ({ severity: "warning" as const, issue: "Price Sent without notes", detail: `${quote.customer} · ${quote.agent}` })).slice(0, 20),
+      ...queueHealth.filter((row) => row.health !== "Healthy").map((row) => ({ severity: "critical" as const, issue: `${row.rotation} queue issue`, detail: row.health })),
+    ];
+    const systemChecks = [
+      { check: "Agents loaded", status: agentList.length > 0, detail: `${agentList.length} active agents` },
+      { check: "Sources loaded", status: sourceList.length > 0, detail: `${sourceList.length} active sources` },
+      { check: "Quote logs loaded", status: true, detail: `${quoteActivities.length} activities · ${quoteNotes.length} notes` },
+      { check: "Take events loaded", status: true, detail: `${quoteTakeEvents.length} take records` },
+      { check: "Queue records present", status: queueHealth.length === 3, detail: `${queueHealth.length}/3 queues` },
+      { check: "No stuck queue", status: !queueHealth.some((row) => row.health !== "Healthy"), detail: queueHealth.map((row) => `${row.rotation}: ${row.health}`).join(" · ") },
+    ];
+    return { quotes, timingRows, timingByAgent, notSoldReasons, service, sold, notSold, finalized, efficiency, conversion, pendingInRange, totalPasses, byAgent, byChannel, bySource, takenRows, takenByAgent, takenSummary, exceptionItems, workloadByAgent, documentationByAgent, missedByAgent, passByAgent, queueHealth, agentScorecards, sourceRisk, paymentRows, activationRows, changeRows, managerInterventions, activationEvents, integrityIssues, systemChecks, dailyRows };
+  }, [agentList, passEvents, pendingPricing, quoteOutcomes, quoteRecords, quoteTakeEvents, reportEnd, reportStart, workItems, quoteActivities, quoteNotes, quoteNotesBySource, quoteActivitiesBySource, activeTasks, awaitingAcceptance, staleAssignments, unavailableWithWork, openCountByAgent, sourceList.length, whatsappCurrentId, ringCentralCurrentId, workloadCurrentId, managerNow]);
 
   function exportAllQuotes() {
     downloadCsv(`quotes-${reportStart}-to-${reportEnd}.csv`, reportData.timingRows.map((row) => ({
@@ -2041,15 +2160,29 @@ function ManagerView({
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"><SummaryCard label="Quotes" value={reportData.quotes.length} note="All input methods" icon={<ClipboardList className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /><SummaryCard label="Finalized" value={reportData.finalized} note="Sold + Not Sold" icon={<CheckCircle2 className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Efficiency" value={`${reportData.efficiency.toFixed(1)}%`} note="Finalized ÷ all quotes" icon={<Gauge className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Sold" value={reportData.sold} note="Final decisions" icon={<CircleDollarSign className="h-5 w-5 text-emerald-700" />} tone="bg-emerald-50" /><SummaryCard label="Not Sold" value={reportData.notSold} note="Final decisions" icon={<XCircle className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Conversion" value={`${reportData.conversion.toFixed(1)}%`} note="Sold ÷ finalized" icon={<TrendingUp className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /><SummaryCard label="Pending Now" value={pendingPricing.length} note="Current follow-up list" icon={<Clock3 className="h-5 w-5 text-amber-700" />} tone="bg-amber-50" /><SummaryCard label="Turns Passed" value={reportData.totalPasses} note="Selected date range" icon={<SkipForward className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Service Activity" value={reportData.service.length} note="Payments + service work" icon={<BriefcaseBusiness className="h-5 w-5 text-violet-700" />} tone="bg-violet-50" /></div>
 
-          <div className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">{([ ["executive", "Executive", <Gauge className="h-4 w-4" key="i" />], ["agents", "Agents", <UsersRound className="h-4 w-4" key="i" />], ["timing", "Quote Timing", <Clock3 className="h-4 w-4" key="i" />], ["taken", "Taken Quotes", <Zap className="h-4 w-4" key="i" />], ["channels", "Input Methods", <PieChart className="h-4 w-4" key="i" />], ["sources", "Sources", <Table2 className="h-4 w-4" key="i" />], ["followup", "Follow-Up", <Clock3 className="h-4 w-4" key="i" />], ["activity", "Service Activity", <Activity className="h-4 w-4" key="i" />] ] as Array<[ReportView, string, React.ReactNode]>).map(([id, label, icon]) => <button key={id} onClick={() => setReportView(id)} className={cn("flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black", reportView === id ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-slate-50")}>{icon}{label}</button>)}</div>
+          <div className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">{([ ["executive", "Executive", <Gauge className="h-4 w-4" key="i" />], ["exceptions", "Needs Attention", <AlertTriangle className="h-4 w-4" key="i" />], ["funnel", "Sales Funnel", <TrendingUp className="h-4 w-4" key="i" />], ["trends", "Daily Ops", <BarChart3 className="h-4 w-4" key="i" />], ["agents", "Agents", <UsersRound className="h-4 w-4" key="i" />], ["scorecard", "Agent 360", <Sparkles className="h-4 w-4" key="i" />], ["workload", "Workload", <BriefcaseBusiness className="h-4 w-4" key="i" />], ["queues", "Queue Health", <ListChecks className="h-4 w-4" key="i" />], ["taken", "Taken Quotes", <Zap className="h-4 w-4" key="i" />], ["missed", "Missed Turns", <SkipForward className="h-4 w-4" key="i" />], ["passes", "Passes", <RefreshCw className="h-4 w-4" key="i" />], ["followup", "Follow-Up", <Clock3 className="h-4 w-4" key="i" />], ["documentation", "Documentation", <Pencil className="h-4 w-4" key="i" />], ["channels", "Input Methods", <PieChart className="h-4 w-4" key="i" />], ["sources", "Sources", <Table2 className="h-4 w-4" key="i" />], ["service", "Service Work", <Layers3 className="h-4 w-4" key="i" />], ["activation", "Activation Audit", <CheckCircle2 className="h-4 w-4" key="i" />], ["manager", "Manager Actions", <ShieldCheck className="h-4 w-4" key="i" />], ["integrity", "Data Integrity", <AlertTriangle className="h-4 w-4" key="i" />], ["system", "System Health", <Settings2 className="h-4 w-4" key="i" />], ["timing", "Quote Timing", <Clock3 className="h-4 w-4" key="i" />], ["activity", "Raw Activity", <Activity className="h-4 w-4" key="i" />] ] as Array<[ReportView, string, React.ReactNode]>).map(([id, label, icon]) => <button key={id} onClick={() => setReportView(id)} className={cn("flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black", reportView === id ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-slate-50")}>{icon}{label}</button>)}</div>
 
           {reportView === "executive" ? <ExecutiveReport reportData={reportData} pendingPricing={pendingPricing} /> : null}
+          {reportView === "exceptions" ? <ExceptionCenterReport items={reportData.exceptionItems} /> : null}
+          {reportView === "funnel" ? <FunnelReport quotes={reportData.quotes} sold={reportData.sold} notSold={reportData.notSold} pending={pendingPricing.length} /> : null}
+          {reportView === "trends" ? <DailyOperationsReport rows={reportData.dailyRows} /> : null}
           {reportView === "agents" ? <AgentOperationsReport rows={reportData.byAgent} /> : null}
-          {reportView === "timing" ? <QuoteTimingReport rows={reportData.timingByAgent} details={reportData.timingRows} /> : null}
+          {reportView === "scorecard" ? <AgentScorecardReport rows={reportData.agentScorecards} /> : null}
+          {reportView === "workload" ? <WorkloadCapacityReport rows={reportData.workloadByAgent} /> : null}
+          {reportView === "queues" ? <QueueHealthReport rows={reportData.queueHealth} /> : null}
           {reportView === "taken" ? <TakenQuotesReport rows={reportData.takenRows} byAgent={reportData.takenByAgent} summary={reportData.takenSummary} /> : null}
-          {reportView === "channels" ? <RankedReportTable title="Input Method Performance" rows={reportData.byChannel} /> : null}
-          {reportView === "sources" ? <RankedReportTable title="Source Performance" rows={reportData.bySource} /> : null}
+          {reportView === "missed" ? <MissedTurnsReport rows={reportData.missedByAgent} /> : null}
+          {reportView === "passes" ? <PassBehaviorReport rows={reportData.passByAgent} /> : null}
           {reportView === "followup" ? <FollowUpReport pendingPricing={reportData.pendingInRange} /> : null}
+          {reportView === "documentation" ? <DocumentationQualityReport rows={reportData.documentationByAgent} /> : null}
+          {reportView === "channels" ? <RankedReportTable title="Input Method Performance" rows={reportData.byChannel} /> : null}
+          {reportView === "sources" ? <SourceRiskReport rows={reportData.sourceRisk} /> : null}
+          {reportView === "service" ? <ServiceControlReport activations={reportData.activationRows} changes={reportData.changeRows} payments={reportData.paymentRows} /> : null}
+          {reportView === "activation" ? <ActivationAuditReport activations={reportData.activationRows} activationEvents={reportData.activationEvents} outcomes={quoteOutcomes} /> : null}
+          {reportView === "manager" ? <ManagerInterventionReport rows={reportData.managerInterventions} /> : null}
+          {reportView === "integrity" ? <IntegrityReport issues={reportData.integrityIssues} /> : null}
+          {reportView === "system" ? <SystemHealthReport checks={reportData.systemChecks} /> : null}
+          {reportView === "timing" ? <QuoteTimingReport rows={reportData.timingByAgent} details={reportData.timingRows} /> : null}
           {reportView === "activity" ? <ServiceActivityReport items={reportData.service} /> : null}
 
           <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Exports</p><h3 className="mt-1 text-xl font-black">Download report data</h3><p className="mt-1 text-sm text-slate-500">CSV files open directly in Excel.</p></div><div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-7"><ExportButton label="All Quote Data" onClick={exportAllQuotes} /><ExportButton label="Quote Timing" onClick={exportTimingReport} /><ExportButton label="Taken Quotes" onClick={exportTakenReport} /><ExportButton label="Pending Pricing" onClick={exportPendingPricing} /><ExportButton label="Agent Performance" onClick={exportAgentReport} /><ExportButton label="Source Performance" onClick={exportSourceReport} /><ExportButton label="Service Activity" onClick={exportServiceActivity} /></div></section>
@@ -2554,6 +2687,101 @@ function FollowUpReport({ pendingPricing }: { pendingPricing: PendingPricingItem
 
 function ServiceActivityReport({ items }: { items: WorkItem[] }) {
   return <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 p-6"><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Non-Quote Activity</p><h3 className="mt-1 text-xl font-black">Updates, activations, and changes</h3></div><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Date</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Method</th><th className="px-5 py-3">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{items.map((item) => <tr key={item.id}><td className="px-5 py-4 text-xs text-slate-500">{formatDateTime(item.createdAt)}</td><td className="px-5 py-4"><p className="font-black">{item.customer}</p><p className="mt-1 text-xs text-slate-400">{item.dealer}</p></td><td className="px-5 py-4 font-bold">{workTypeLabels[item.workType]}</td><td className="px-5 py-4 font-bold">{item.assignedAgent}</td><td className="px-5 py-4"><MethodBadge method={item.assignmentMethod} /></td><td className="px-5 py-4 capitalize text-slate-600">{item.status}</td></tr>)}</tbody></table></div></section>;
+}
+
+
+type ExceptionRow = { severity: "warning" | "critical"; area: string; issue: string; owner: string; age: string };
+type DailyRow = { date: string; quotes: number; sold: number; notSold: number; pending: number; taken: number; passes: number; service: number };
+type AgentScoreRow = { agent: string; score: number; quotes: number; sold: number; conversion: number; efficiency: number; avgPrice: number | null; docCoverage: number; taken: number; workload: number; passes: number };
+type WorkloadRow = { agent: string; status: AvailabilityStatus; activeQuotes: number; activations: number; changes: number; payments: number; pending: number; unaccepted: number; total: number };
+type QueueHealthRow = { rotation: string; current: string; eligible: number; available: number; claims: number; passes: number; taken: number; health: string };
+type MissedTurnRow = { agent: string; missed: number; whatsapp: number; ringcentral: number; sold: number; pending: number };
+type PassBehaviorRow = { agent: string; total: number; whatsapp: number; ringcentral: number; workload: number; reasons: string[] };
+type DocumentationRow = { agent: string; notes: number; quotes: number; withNotes: number; coverage: number };
+type SourceRiskRow = { name: string; quotes: number; sold: number; notSold: number; pending: number; finalized: number; efficiency: number; conversion: number; taken: number; notes: number; category: string };
+type IntegrityIssue = { severity: "warning" | "critical"; issue: string; detail: string };
+type SystemCheck = { check: string; status: boolean; detail: string };
+
+type ManagerActivityRow = QuoteActivity;
+
+function ReportShell({ eyebrow, title, note, children }: { eyebrow: string; title: string; note: string; children: React.ReactNode }) {
+  return <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{eyebrow}</p><h3 className="mt-1 text-xl font-black">{title}</h3><p className="mt-1 text-sm text-slate-500">{note}</p><div className="mt-5">{children}</div></section>;
+}
+
+function EmptyReport({ title, note }: { title: string; note: string }) {
+  return <EmptyState title={title} note={note} />;
+}
+
+function ExceptionCenterReport({ items }: { items: ExceptionRow[] }) {
+  const critical = items.filter((item) => item.severity === "critical").length;
+  return <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-3"><SummaryCard label="Exceptions" value={items.length} note="Current red flags" icon={<AlertTriangle className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Critical" value={critical} note="Needs manager action" icon={<XCircle className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" /><SummaryCard label="Warnings" value={items.length - critical} note="Monitor closely" icon={<Clock3 className="h-5 w-5 text-amber-700" />} tone="bg-amber-50" /></div><ReportShell eyebrow="Control Room" title="Needs Attention" note="Assignments, stale follow-ups, unavailable agents with work, and other operating exceptions.">{items.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3">Level</th><th className="py-3">Area</th><th className="py-3">Issue</th><th className="py-3">Owner</th><th className="py-3">Age / Count</th></tr></thead><tbody className="divide-y divide-slate-100">{items.map((item, index) => <tr key={`${item.issue}-${index}`}><td className="py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", item.severity === "critical" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700")}>{item.severity}</span></td><td className="py-4 font-bold">{item.area}</td><td className="py-4 font-black">{item.issue}</td><td className="py-4 text-slate-600">{item.owner}</td><td className="py-4 font-bold text-slate-500">{item.age}</td></tr>)}</tbody></table></div> : <EmptyReport title="No exceptions found" note="The selected date range and current workload look clean." />}</ReportShell></div>;
+}
+
+function FunnelReport({ quotes, sold, notSold, pending }: { quotes: Array<{ lifecycle: string }>; sold: number; notSold: number; pending: number }) {
+  const active = quotes.filter((quote) => quote.lifecycle === "Active").length;
+  const finalized = sold + notSold;
+  const total = Math.max(1, quotes.length);
+  const bars = [
+    { label: "Active", value: active, tone: "bg-slate-400" },
+    { label: "Price Sent", value: pending, tone: "bg-blue-500" },
+    { label: "Sold", value: sold, tone: "bg-emerald-500" },
+    { label: "Not Sold", value: notSold, tone: "bg-rose-500" },
+  ];
+  return <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-4"><SummaryCard label="Quote Volume" value={quotes.length} note="Selected range" icon={<ClipboardList className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /><SummaryCard label="Finalized" value={finalized} note="Sold + Not Sold" icon={<CheckCircle2 className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Pending" value={pending} note="Needs follow-up" icon={<Clock3 className="h-5 w-5 text-amber-700" />} tone="bg-amber-50" /><SummaryCard label="Conversion" value={`${finalized ? ((sold / finalized) * 100).toFixed(1) : "0.0"}%`} note="Sold ÷ Finalized" icon={<TrendingUp className="h-5 w-5 text-emerald-700" />} tone="bg-emerald-50" /></div><ReportShell eyebrow="Sales Funnel" title="Quote lifecycle breakdown" note="Shows where quotes are sitting in the process."><div className="space-y-5">{bars.map((bar) => <div key={bar.label}><div className="flex justify-between text-sm"><span className="font-black">{bar.label}</span><span className="font-black">{bar.value}</span></div><div className="mt-2 h-4 overflow-hidden rounded-full bg-slate-100"><div className={cn("h-full rounded-full", bar.tone)} style={{ width: `${(bar.value / total) * 100}%` }} /></div></div>)}</div></ReportShell></div>;
+}
+
+function DailyOperationsReport({ rows }: { rows: DailyRow[] }) {
+  return <ReportShell eyebrow="Daily Operations" title="Day-by-day performance" note="Compares volume, sales, service activity, passes, and Taken activity by day.">{rows.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3">Date</th><th className="py-3">Quotes</th><th className="py-3">Sold</th><th className="py-3">Not Sold</th><th className="py-3">Pending</th><th className="py-3">Taken</th><th className="py-3">Passes</th><th className="py-3">Service</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.date}><td className="py-4 font-black">{formatDate(`${row.date}T12:00:00`)}</td><td className="py-4 font-black">{row.quotes}</td><td className="py-4 font-black text-emerald-700">{row.sold}</td><td className="py-4 font-black text-rose-700">{row.notSold}</td><td className="py-4 font-black text-blue-700">{row.pending}</td><td className="py-4 font-black text-amber-700">{row.taken}</td><td className="py-4 font-black text-rose-700">{row.passes}</td><td className="py-4 font-black text-violet-700">{row.service}</td></tr>)}</tbody></table></div> : <EmptyReport title="No daily data" note="Activity will appear as the team works in the selected date range." />}</ReportShell>;
+}
+
+function AgentScorecardReport({ rows }: { rows: AgentScoreRow[] }) {
+  return <ReportShell eyebrow="Agent 360" title="Balanced performance scorecard" note="Combines sales, completion, speed, documentation, workload, and quote rescue behavior."><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3">Rank</th><th className="py-3">Agent</th><th className="py-3">Score</th><th className="py-3">Quotes</th><th className="py-3">Sold</th><th className="py-3">Conversion</th><th className="py-3">Efficiency</th><th className="py-3">Avg Price</th><th className="py-3">Notes Coverage</th><th className="py-3">Taken</th><th className="py-3">Open Load</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row, index) => <tr key={row.agent}><td className="py-4 font-black text-slate-400">#{index + 1}</td><td className="py-4 font-black">{row.agent}</td><td className="py-4"><span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-xs font-black text-[#223f7a]">{row.score}/100</span></td><td className="py-4 font-black">{row.quotes}</td><td className="py-4 font-black text-emerald-700">{row.sold}</td><td className="py-4 font-black">{row.conversion.toFixed(1)}%</td><td className="py-4 font-black">{row.efficiency.toFixed(1)}%</td><td className="py-4 font-black">{formatDuration(row.avgPrice)}</td><td className="py-4 font-black">{row.docCoverage.toFixed(1)}%</td><td className="py-4 font-black text-amber-700">{row.taken}</td><td className="py-4 font-black text-violet-700">{row.workload}</td></tr>)}</tbody></table></div></ReportShell>;
+}
+
+function WorkloadCapacityReport({ rows }: { rows: WorkloadRow[] }) {
+  return <ReportShell eyebrow="Workload Capacity" title="Who is carrying work right now" note="Combines active quotes, service tasks, pending pricing, and unaccepted assignments."><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3">Agent</th><th className="py-3">Status</th><th className="py-3">Active Quotes</th><th className="py-3">Pending</th><th className="py-3">Activations</th><th className="py-3">Changes</th><th className="py-3">Payments</th><th className="py-3">Unaccepted</th><th className="py-3">Total Load</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.agent}><td className="py-4 font-black">{row.agent}</td><td className="py-4 capitalize"><span className="inline-flex items-center gap-2 font-black"><StatusDot status={row.status} />{row.status === "break" ? "Break / Lunch" : row.status}</span></td><td className="py-4 font-black">{row.activeQuotes}</td><td className="py-4 font-black text-blue-700">{row.pending}</td><td className="py-4 font-black text-emerald-700">{row.activations}</td><td className="py-4 font-black text-violet-700">{row.changes}</td><td className="py-4 font-black text-amber-700">{row.payments}</td><td className="py-4 font-black text-rose-700">{row.unaccepted}</td><td className="py-4 font-black text-[#223f7a]">{row.total}</td></tr>)}</tbody></table></div></ReportShell>;
+}
+
+function QueueHealthReport({ rows }: { rows: QueueHealthRow[] }) {
+  return <ReportShell eyebrow="Queue Health" title="Rotation health and queue behavior" note="Shows current owner, available coverage, claims, passes, and Taken activity by queue."><div className="grid gap-4 xl:grid-cols-3">{rows.map((row) => <div key={row.rotation} className="rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between"><p className="font-black">{row.rotation}</p><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", row.health === "Healthy" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700")}>{row.health}</span></div><p className="mt-4 text-sm font-bold text-slate-500">Current</p><p className="text-2xl font-black text-[#223f7a]">{row.current}</p><div className="mt-5 grid grid-cols-2 gap-3 text-sm"><p><strong>{row.eligible}</strong><br />Eligible</p><p><strong>{row.available}</strong><br />Available</p><p><strong>{row.claims}</strong><br />Claims</p><p><strong>{row.passes}</strong><br />Passes</p><p><strong>{row.taken}</strong><br />Taken</p></div></div>)}</div></ReportShell>;
+}
+
+function MissedTurnsReport({ rows }: { rows: MissedTurnRow[] }) {
+  return <ReportShell eyebrow="Missed Turns" title="Agents skipped by the 3-minute Take rule" note="Shows when an agent's available window expired and another employee took the opportunity.">{rows.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3">Agent Skipped</th><th className="py-3">Total</th><th className="py-3">WhatsApp</th><th className="py-3">RingCentral</th><th className="py-3">Eventually Sold</th><th className="py-3">Still Pending/Active</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.agent}><td className="py-4 font-black">{row.agent}</td><td className="py-4 font-black text-rose-700">{row.missed}</td><td className="py-4 font-black text-emerald-700">{row.whatsapp}</td><td className="py-4 font-black text-blue-700">{row.ringcentral}</td><td className="py-4 font-black text-emerald-700">{row.sold}</td><td className="py-4 font-black text-amber-700">{row.pending}</td></tr>)}</tbody></table></div> : <EmptyReport title="No missed turns" note="No successful Take events skipped another agent in this period." />}</ReportShell>;
+}
+
+function PassBehaviorReport({ rows }: { rows: PassBehaviorRow[] }) {
+  return <ReportShell eyebrow="Pass Behavior" title="Turn pass activity" note="Shows who passed, which queues were affected, and the reasons entered.">{rows.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3">Agent</th><th className="py-3">Passes</th><th className="py-3">WhatsApp</th><th className="py-3">RingCentral</th><th className="py-3">Workload</th><th className="py-3">Top Reasons</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.agent}><td className="py-4 font-black">{row.agent}</td><td className="py-4 font-black text-rose-700">{row.total}</td><td className="py-4 font-black">{row.whatsapp}</td><td className="py-4 font-black">{row.ringcentral}</td><td className="py-4 font-black">{row.workload}</td><td className="py-4 text-xs font-semibold text-slate-500">{row.reasons.slice(0, 3).join(" · ")}</td></tr>)}</tbody></table></div> : <EmptyReport title="No passes" note="No turns were passed in this date range." />}</ReportShell>;
+}
+
+function DocumentationQualityReport({ rows }: { rows: DocumentationRow[] }) {
+  return <ReportShell eyebrow="Documentation Quality" title="Notes and quote documentation" note="Measures quote note coverage and note writing by employee."><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3">Agent</th><th className="py-3">Notes Written</th><th className="py-3">Quotes</th><th className="py-3">Quotes with Notes</th><th className="py-3">Coverage</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.agent}><td className="py-4 font-black">{row.agent}</td><td className="py-4 font-black text-[#223f7a]">{row.notes}</td><td className="py-4 font-black">{row.quotes}</td><td className="py-4 font-black text-emerald-700">{row.withNotes}</td><td className="py-4"><span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">{row.coverage.toFixed(1)}%</span></td></tr>)}</tbody></table></div></ReportShell>;
+}
+
+function SourceRiskReport({ rows }: { rows: SourceRiskRow[] }) {
+  return <div className="space-y-5"><RankedReportTable title="Source Performance" rows={rows} /><ReportShell eyebrow="Source Risk" title="Opportunity and risk by source" note="Classifies sources by quote volume, conversion, and performance."><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3">Source</th><th className="py-3">Category</th><th className="py-3">Quotes</th><th className="py-3">Sold</th><th className="py-3">Conversion</th><th className="py-3">Taken</th><th className="py-3">Notes</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.name}><td className="py-4 font-black">{row.name}</td><td className="py-4"><span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-xs font-black text-[#223f7a]">{row.category}</span></td><td className="py-4 font-black">{row.quotes}</td><td className="py-4 font-black text-emerald-700">{row.sold}</td><td className="py-4 font-black">{row.conversion.toFixed(1)}%</td><td className="py-4 font-black text-amber-700">{row.taken}</td><td className="py-4 font-black text-slate-600">{row.notes}</td></tr>)}</tbody></table></div></ReportShell></div>;
+}
+
+function ServiceControlReport({ activations, changes, payments }: { activations: WorkItem[]; changes: WorkItem[]; payments: WorkItem[] }) {
+  const items = [...activations, ...changes, ...payments].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-3"><SummaryCard label="Activations" value={activations.length} note="Service workload" icon={<CheckCircle2 className="h-5 w-5 text-emerald-700" />} tone="bg-emerald-50" /><SummaryCard label="Changes" value={changes.length} note="Service workload" icon={<Pencil className="h-5 w-5 text-violet-700" />} tone="bg-violet-50" /><SummaryCard label="Payments" value={payments.length} note="No-turn activity" icon={<CircleDollarSign className="h-5 w-5 text-amber-700" />} tone="bg-amber-50" /></div><ServiceActivityReport items={items} /></div>;
+}
+
+function ActivationAuditReport({ activations, activationEvents, outcomes }: { activations: WorkItem[]; activationEvents: QuoteActivity[]; outcomes: QuoteOutcome[] }) {
+  const sold = outcomes.filter((outcome) => outcome.decision === "sold").length;
+  return <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-3"><SummaryCard label="Sold Quotes" value={sold} note="Final sold decisions" icon={<CircleDollarSign className="h-5 w-5 text-emerald-700" />} tone="bg-emerald-50" /><SummaryCard label="Activation Tasks" value={activations.length} note="Taken as workload" icon={<CheckCircle2 className="h-5 w-5 text-cyan-700" />} tone="bg-cyan-50" /><SummaryCard label="Activation Logs" value={activationEvents.length} note="Quote log events" icon={<ListChecks className="h-5 w-5 text-[#223f7a]" />} tone="bg-[#eef3fb]" /></div><ReportShell eyebrow="Activation Audit" title="Recent activation work" note="Shows activation tasks and whether they are still open or completed.">{activations.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3">Customer</th><th className="py-3">Source</th><th className="py-3">Agent</th><th className="py-3">Status</th><th className="py-3">Created</th></tr></thead><tbody className="divide-y divide-slate-100">{activations.map((item) => <tr key={item.id}><td className="py-4 font-black">{item.customer}</td><td className="py-4 text-slate-600">{item.dealer}</td><td className="py-4 font-bold">{item.assignedAgent}</td><td className="py-4 capitalize">{item.status}</td><td className="py-4 text-xs text-slate-500">{formatDateTime(item.createdAt)}</td></tr>)}</tbody></table></div> : <EmptyReport title="No activations" note="Activation work will appear here." />}</ReportShell></div>;
+}
+
+function ManagerInterventionReport({ rows }: { rows: ManagerActivityRow[] }) {
+  return <ReportShell eyebrow="Manager Interventions" title="Assignments, reassignments, and control actions" note="Tracks management involvement and the note trail behind it.">{rows.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3">Date</th><th className="py-3">Action</th><th className="py-3">Manager</th><th className="py-3">Assigned Agent</th><th className="py-3">Details</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.id}><td className="py-4 text-xs text-slate-500">{formatDateTime(row.createdAt)}</td><td className="py-4 font-black">{row.eventType}</td><td className="py-4"><p className="font-bold">{row.actorName}</p><p className="text-xs text-slate-400">@{row.actorUsername}</p></td><td className="py-4 font-bold">{row.assignedAgent || "—"}</td><td className="py-4 text-xs font-semibold text-slate-500">{row.details ? JSON.stringify(row.details).slice(0, 160) : "—"}</td></tr>)}</tbody></table></div> : <EmptyReport title="No manager interventions" note="Assignments and reassignments will appear here when recorded." />}</ReportShell>;
+}
+
+function IntegrityReport({ issues }: { issues: IntegrityIssue[] }) {
+  return <ReportShell eyebrow="Data Integrity" title="Possible duplicates and workflow inconsistencies" note="Flags records that may need correction before reports are trusted.">{issues.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3">Level</th><th className="py-3">Issue</th><th className="py-3">Detail</th></tr></thead><tbody className="divide-y divide-slate-100">{issues.map((row, index) => <tr key={`${row.issue}-${index}`}><td className="py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", row.severity === "critical" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700")}>{row.severity}</span></td><td className="py-4 font-black">{row.issue}</td><td className="py-4 text-slate-600">{row.detail}</td></tr>)}</tbody></table></div> : <EmptyReport title="No integrity issues" note="No major duplicate or workflow consistency issues were detected." />}</ReportShell>;
+}
+
+function SystemHealthReport({ checks }: { checks: SystemCheck[] }) {
+  return <ReportShell eyebrow="System Health" title="Production checks" note="Basic configuration and live-data health indicators."><div className="grid gap-4 md:grid-cols-2">{checks.map((check) => <div key={check.check} className="rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between"><p className="font-black">{check.check}</p><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", check.status ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700")}>{check.status ? "OK" : "Check"}</span></div><p className="mt-2 text-sm font-semibold text-slate-500">{check.detail}</p></div>)}</div></ReportShell>;
 }
 
 function ExportButton({ label, onClick }: { label: string; onClick: () => void }) {
