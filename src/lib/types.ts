@@ -1,7 +1,7 @@
 export type AppRole = "agent" | "manager";
 export type AvailabilityStatus = "available" | "break" | "unavailable";
 export type RotationKind = "whatsapp" | "ringcentral" | "workload";
-export type WorkType = "new_quote" | "requote" | "activation" | "change" | "whatsapp_update";
+export type WorkType = "new_quote" | "requote" | "activation" | "change" | "whatsapp_update" | "payment";
 export type AssignmentMethod =
   | "whatsapp_turn"
   | "ringcentral_turn"
@@ -9,7 +9,8 @@ export type AssignmentMethod =
   | "owner"
   | "update_log"
   | "manager_manual"
-  | "manual_quote";
+  | "manual_quote"
+  | "payment_log";
 export type WorkStatus = "active" | "completed" | "cancelled";
 export type QuoteDecision = "sold" | "not_sold";
 export type NotSoldReason = "price_too_high" | "chose_another_option" | "no_response" | "no_longer_needed" | "other";
@@ -105,8 +106,35 @@ export interface QuoteNote {
   sourceWorkItemId: string;
   authorProfileId: string;
   authorName: string;
+  authorUsername: string;
   note: string;
   createdAt: string;
+}
+
+export interface QuoteActivity {
+  id: string;
+  sourceWorkItemId: string;
+  eventType: string;
+  actorProfileId?: string;
+  actorName: string;
+  actorUsername: string;
+  assignedAgent?: string;
+  details?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface QuoteTakeEvent {
+  id: string;
+  sourceWorkItemId: string;
+  rotation: "whatsapp" | "ringcentral";
+  receivedAt: string;
+  takenAt: string;
+  takerProfileId: string;
+  takerName: string;
+  takerUsername: string;
+  skippedProfileIds: string[];
+  skippedAgents: Array<{ id: string; name: string; username: string }>;
+  elapsedSeconds: number;
 }
 
 export interface AlertNotification {
@@ -150,6 +178,8 @@ export interface DashboardData {
   pendingPricing: PendingPricingItem[];
   quoteOutcomes: QuoteOutcome[];
   quoteNotes: QuoteNote[];
+  quoteActivities: QuoteActivity[];
+  quoteTakeEvents: QuoteTakeEvent[];
   notifications: AlertNotification[];
   performance: PerformanceRow[];
   passEvents: PassEvent[];

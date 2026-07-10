@@ -10,6 +10,8 @@ import type {
   PerformanceRow,
   QuoteOutcome,
   QuoteNote,
+  QuoteActivity,
+  QuoteTakeEvent,
   RotationKind,
   WorkItem,
   WorkStatus,
@@ -20,6 +22,7 @@ import type {
 
 type ProfileRow = {
   id: string;
+  username: string;
   display_name: string;
   initials: string;
   role: "agent" | "manager";
@@ -101,6 +104,29 @@ type QuoteNoteRow = {
   created_at: string;
 };
 
+
+
+type WorkItemEventRow = {
+  id: string;
+  source_work_item_id: string;
+  event_type: string;
+  actor_profile_id: string | null;
+  assigned_profile_id: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+};
+
+type QuoteTakeEventRow = {
+  id: string;
+  source_work_item_id: string;
+  rotation: "whatsapp" | "ringcentral";
+  received_at: string;
+  taken_at: string;
+  taker_profile_id: string;
+  skipped_profile_ids: string[] | null;
+  elapsed_seconds: number;
+};
+
 type NotificationRow = {
   id: string;
   notification_type: "turn" | "assignment";
@@ -142,26 +168,29 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
   const { error: dailyResetError } = await supabase.rpc("ensure_daily_availability_reset");
   if (dailyResetError) throw new Error(`Daily availability reset check failed: ${dailyResetError.message}`);
 
-  const [profilesResult, dealersResult, rotationsResult, workResult, pendingResult, outcomesResult, quoteNotesResult, notificationsResult, performanceResult, passEventsResult] = await Promise.all([
-    supabase.from("profiles").select("id,display_name,initials,role,rotation_position,whatsapp_position,ringcentral_position,workload_position,availability,whatsapp_active,ringcentral_active,workload_active,is_active").eq("is_active", true).order("rotation_position"),
+  const [profilesResult, dealersResult, rotationsResult, workResult, pendingResult, outcomesResult, quoteNotesResult, quoteActivitiesResult, quoteTakeEventsResult, notificationsResult, performanceResult, passEventsResult] = await Promise.all([
+    supabase.from("profiles").select("id,username,display_name,initials,role,rotation_position,whatsapp_position,ringcentral_position,workload_position,availability,whatsapp_active,ringcentral_active,workload_active,is_active").eq("is_active", true).order("rotation_position"),
     supabase.from("dealers").select("id,name,is_active").order("name"),
     supabase.from("rotation_state").select("kind,current_profile_id"),
     supabase.from("work_items").select("id,customer_name,dealer_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,status,change_type,note,received_through,created_at,assigned_at,accepted_at,completed_at,related_quote_source_work_item_id").order("created_at", { ascending: false }).limit(5000),
     supabase.from("pending_pricing_quotes").select("id,source_work_item_id,customer_name,dealer_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,received_through,note,quote_created_at,assigned_at,accepted_at,price_sent_at").order("price_sent_at", { ascending: true }).limit(5000),
     supabase.from("quote_outcomes").select("id,source_work_item_id,customer_name,dealer_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,received_through,quote_created_at,assigned_at,accepted_at,price_sent_at,finalized_at,decision,not_sold_reason,not_sold_reason_other").order("finalized_at", { ascending: false }).limit(10000),
     supabase.from("quote_notes").select("id,source_work_item_id,author_profile_id,note,created_at").order("created_at", { ascending: false }).limit(20000),
+    supabase.from("work_item_events").select("id,source_work_item_id,event_type,actor_profile_id,assigned_profile_id,details,created_at").order("created_at", { ascending: false }).limit(30000),
+    supabase.from("quote_take_events").select("id,source_work_item_id,rotation,received_at,taken_at,taker_profile_id,skipped_profile_ids,elapsed_seconds").order("taken_at", { ascending: false }).limit(10000),
     supabase.from("user_notifications").select("id,notification_type,title,message,entity_type,entity_id,created_at,read_at").order("created_at", { ascending: false }).limit(100),
     supabase.from("daily_agent_performance").select("profile_id,whatsapp_quotes,ringcentral_quotes,workload_turns,whatsapp_updates,manual_quotes,sold_quotes,owned_activations,owned_changes,requotes,passed_turns"),
     supabase.from("turn_events").select("id,rotation,actor_profile_id,created_at,reason").eq("action", "pass").order("created_at", { ascending: false }).limit(10000),
   ]);
 
-  const errors = [profilesResult.error, dealersResult.error, rotationsResult.error, workResult.error, pendingResult.error, outcomesResult.error, quoteNotesResult.error, notificationsResult.error, performanceResult.error, passEventsResult.error].filter(Boolean);
+  const errors = [profilesResult.error, dealersResult.error, rotationsResult.error, workResult.error, pendingResult.error, outcomesResult.error, quoteNotesResult.error, quoteActivitiesResult.error, quoteTakeEventsResult.error, notificationsResult.error, performanceResult.error, passEventsResult.error].filter(Boolean);
   if (errors.length) throw new Error(errors[0]?.message || "Unable to load Work Desk data.");
 
   const profiles = (profilesResult.data || []) as ProfileRow[];
   const agentProfiles = profiles.filter((profile) => profile.role === "agent");
   const dealers = (dealersResult.data || []) as DealerRow[];
   const nameByProfile = new Map(profiles.map((profile) => [profile.id, profile.display_name]));
+  const usernameByProfile = new Map(profiles.map((profile) => [profile.id, profile.username]));
   const dealerById = new Map(dealers.map((dealer) => [dealer.id, dealer.name]));
 
   const activeCountByAgent = new Map<string, number>();
@@ -251,8 +280,39 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     sourceWorkItemId: row.source_work_item_id,
     authorProfileId: row.author_profile_id,
     authorName: nameByProfile.get(row.author_profile_id) || "Unknown agent",
+    authorUsername: usernameByProfile.get(row.author_profile_id) || "unknown",
     note: row.note,
     createdAt: row.created_at,
+  }));
+
+  const quoteActivities: QuoteActivity[] = ((quoteActivitiesResult.data || []) as WorkItemEventRow[]).map((row) => ({
+    id: row.id,
+    sourceWorkItemId: row.source_work_item_id,
+    eventType: row.event_type,
+    actorProfileId: row.actor_profile_id || undefined,
+    actorName: row.actor_profile_id ? nameByProfile.get(row.actor_profile_id) || "Unknown user" : "System",
+    actorUsername: row.actor_profile_id ? usernameByProfile.get(row.actor_profile_id) || "unknown" : "system",
+    assignedAgent: row.assigned_profile_id ? nameByProfile.get(row.assigned_profile_id) || "Unknown agent" : undefined,
+    details: row.details || undefined,
+    createdAt: row.created_at,
+  }));
+
+  const quoteTakeEvents: QuoteTakeEvent[] = ((quoteTakeEventsResult.data || []) as QuoteTakeEventRow[]).map((row) => ({
+    id: row.id,
+    sourceWorkItemId: row.source_work_item_id,
+    rotation: row.rotation,
+    receivedAt: row.received_at,
+    takenAt: row.taken_at,
+    takerProfileId: row.taker_profile_id,
+    takerName: nameByProfile.get(row.taker_profile_id) || "Unknown agent",
+    takerUsername: usernameByProfile.get(row.taker_profile_id) || "unknown",
+    skippedProfileIds: row.skipped_profile_ids || [],
+    skippedAgents: (row.skipped_profile_ids || []).map((id) => ({
+      id,
+      name: nameByProfile.get(id) || "Unknown agent",
+      username: usernameByProfile.get(id) || "unknown",
+    })),
+    elapsedSeconds: row.elapsed_seconds,
   }));
 
   const notifications: AlertNotification[] = ((notificationsResult.data || []) as NotificationRow[]).map((row) => ({
@@ -299,5 +359,5 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     rotations[kind] = row.current_profile_id || null;
   }
 
-  return { agents, sources: sourceOptions, workItems, pendingPricing, quoteOutcomes, quoteNotes, notifications, performance, passEvents, rotations };
+  return { agents, sources: sourceOptions, workItems, pendingPricing, quoteOutcomes, quoteNotes, quoteActivities, quoteTakeEvents, notifications, performance, passEvents, rotations };
 }
