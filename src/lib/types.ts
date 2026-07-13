@@ -1,7 +1,13 @@
 export type AppRole = "agent" | "manager" | "customer_service";
 export type AvailabilityStatus = "available" | "break" | "unavailable";
 export type RotationKind = "whatsapp" | "ringcentral" | "workload";
-export type WorkType = "new_quote" | "requote" | "activation" | "change" | "whatsapp_update" | "payment";
+export type WorkType =
+  | "new_quote"
+  | "requote"
+  | "activation"
+  | "change"
+  | "whatsapp_update"
+  | "payment";
 export type AssignmentMethod =
   | "whatsapp_turn"
   | "ringcentral_turn"
@@ -10,11 +16,17 @@ export type AssignmentMethod =
   | "update_log"
   | "manager_manual"
   | "manual_quote"
+  | "manual_workload"
   | "payment_log"
   | "customer_service";
 export type WorkStatus = "active" | "completed" | "cancelled";
 export type QuoteDecision = "sold" | "not_sold";
-export type NotSoldReason = "price_too_high" | "chose_another_option" | "no_response" | "no_longer_needed" | "other";
+export type NotSoldReason =
+  | "price_too_high"
+  | "chose_another_option"
+  | "no_response"
+  | "no_longer_needed"
+  | "other";
 export type NotificationType = "turn" | "assignment";
 
 export interface SessionProfile {
@@ -29,6 +41,15 @@ export interface SessionProfile {
 export interface SourceOption {
   id: string;
   name: string;
+}
+
+export interface DealerSalesperson {
+  id: string;
+  dealerId: string;
+  name: string;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
 }
 
 export interface Agent {
@@ -54,6 +75,8 @@ export interface WorkItem {
   acceptedAt?: string;
   customer: string;
   dealer: string;
+  salespersonId?: string;
+  salesperson?: string;
   workType: WorkType;
   originalOwner?: string;
   assignedAgent: string;
@@ -76,6 +99,8 @@ export interface PendingPricingItem {
   priceSentAt: string;
   customer: string;
   dealer: string;
+  salespersonId?: string;
+  salesperson?: string;
   workType: "new_quote" | "requote";
   originalOwner?: string;
   assignedAgent: string;
@@ -95,6 +120,8 @@ export interface QuoteOutcome {
   finalizedAt: string;
   customer: string;
   dealer: string;
+  salespersonId?: string;
+  salesperson?: string;
   workType: "new_quote" | "requote";
   originalOwner?: string;
   assignedAgent: string;
@@ -141,7 +168,6 @@ export interface QuoteTakeEvent {
   elapsedSeconds: number;
 }
 
-
 export interface QuoteTakeTimer {
   id: string;
   rotation: "whatsapp" | "ringcentral";
@@ -155,13 +181,14 @@ export interface QuoteTakeTimer {
   deadlineAt: string;
   customer: string;
   dealer: string;
+  salespersonId?: string;
+  salesperson?: string;
   workType: "new_quote" | "requote";
   note?: string;
   status: "active" | "claimed" | "stolen" | "cancelled";
   startedAt: string;
   warningSentAt?: string;
 }
-
 
 export interface CustomerServiceUser {
   id: string;
@@ -216,6 +243,7 @@ export interface DashboardData {
   agents: Agent[];
   customerServiceUsers: CustomerServiceUser[];
   sources: SourceOption[];
+  salespeople: DealerSalesperson[];
   workItems: WorkItem[];
   pendingPricing: PendingPricingItem[];
   quoteOutcomes: QuoteOutcome[];

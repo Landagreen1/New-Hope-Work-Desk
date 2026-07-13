@@ -7,6 +7,7 @@ import type {
   AssignmentMethod,
   DashboardData,
   SourceOption,
+  DealerSalesperson,
   PassEvent,
   PerformanceRow,
   QuoteOutcome,
@@ -42,10 +43,20 @@ type ProfileRow = {
 
 type DealerRow = { id: string; name: string; is_active: boolean };
 
+type DealerSalespersonRow = {
+  id: string;
+  dealer_id: string;
+  name: string;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
 type WorkRow = {
   id: string;
   customer_name: string;
   dealer_id: string | null;
+  salesperson_id: string | null;
   work_type: WorkType;
   original_owner_profile_id: string | null;
   assigned_profile_id: string;
@@ -66,6 +77,7 @@ type PendingRow = {
   source_work_item_id: string;
   customer_name: string;
   dealer_id: string | null;
+  salesperson_id: string | null;
   work_type: "new_quote" | "requote";
   original_owner_profile_id: string | null;
   assigned_profile_id: string;
@@ -83,6 +95,7 @@ type OutcomeRow = {
   source_work_item_id: string;
   customer_name: string;
   dealer_id: string | null;
+  salesperson_id: string | null;
   work_type: "new_quote" | "requote";
   original_owner_profile_id: string | null;
   assigned_profile_id: string;
@@ -98,7 +111,6 @@ type OutcomeRow = {
   not_sold_reason_other: string | null;
 };
 
-
 type QuoteNoteRow = {
   id: string;
   source_work_item_id: string;
@@ -106,8 +118,6 @@ type QuoteNoteRow = {
   note: string;
   created_at: string;
 };
-
-
 
 type WorkItemEventRow = {
   id: string;
@@ -139,6 +149,7 @@ type QuoteTakeTimerRow = {
   deadline_at: string;
   customer_name: string;
   dealer_id: string | null;
+  salesperson_id: string | null;
   work_type: "new_quote" | "requote";
   note: string | null;
   status: "active" | "claimed" | "stolen" | "cancelled";
@@ -188,42 +199,165 @@ function asWorkStatus(status: string): WorkStatus {
   return status === "completed" || status === "cancelled" ? status : "active";
 }
 
-export async function loadDashboardData(supabase: SupabaseClient): Promise<DashboardData> {
-  const { error: dailyResetError } = await supabase.rpc("ensure_daily_availability_reset");
-  if (dailyResetError) throw new Error(`Daily availability reset check failed: ${dailyResetError.message}`);
+export async function loadDashboardData(
+  supabase: SupabaseClient,
+): Promise<DashboardData> {
+  const { error: dailyResetError } = await supabase.rpc(
+    "ensure_daily_availability_reset",
+  );
+  if (dailyResetError)
+    throw new Error(
+      `Daily availability reset check failed: ${dailyResetError.message}`,
+    );
 
-  const [profilesResult, dealersResult, rotationsResult, workResult, pendingResult, outcomesResult, quoteNotesResult, quoteActivitiesResult, quoteTakeEventsResult, quoteTakeTimersResult, settingsResult, notificationsResult, performanceResult, passEventsResult] = await Promise.all([
-    supabase.from("profiles").select("id,username,display_name,initials,role,rotation_position,whatsapp_position,ringcentral_position,workload_position,availability,whatsapp_active,ringcentral_active,workload_active,is_active").eq("is_active", true).order("rotation_position"),
+  const [
+    profilesResult,
+    dealersResult,
+    salespeopleResult,
+    rotationsResult,
+    workResult,
+    pendingResult,
+    outcomesResult,
+    quoteNotesResult,
+    quoteActivitiesResult,
+    quoteTakeEventsResult,
+    quoteTakeTimersResult,
+    settingsResult,
+    notificationsResult,
+    performanceResult,
+    passEventsResult,
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "id,username,display_name,initials,role,rotation_position,whatsapp_position,ringcentral_position,workload_position,availability,whatsapp_active,ringcentral_active,workload_active,is_active",
+      )
+      .eq("is_active", true)
+      .order("rotation_position"),
     supabase.from("dealers").select("id,name,is_active").order("name"),
+    supabase
+      .from("dealer_salespeople")
+      .select("id,dealer_id,name,notes,is_active,created_at")
+      .order("name"),
     supabase.from("rotation_state").select("kind,current_profile_id"),
-    supabase.from("work_items").select("id,customer_name,dealer_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,status,change_type,note,received_through,created_at,assigned_at,accepted_at,completed_at,related_quote_source_work_item_id").order("created_at", { ascending: false }).limit(5000),
-    supabase.from("pending_pricing_quotes").select("id,source_work_item_id,customer_name,dealer_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,received_through,note,quote_created_at,assigned_at,accepted_at,price_sent_at").order("price_sent_at", { ascending: true }).limit(5000),
-    supabase.from("quote_outcomes").select("id,source_work_item_id,customer_name,dealer_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,received_through,quote_created_at,assigned_at,accepted_at,price_sent_at,finalized_at,decision,not_sold_reason,not_sold_reason_other").order("finalized_at", { ascending: false }).limit(10000),
-    supabase.from("quote_notes").select("id,source_work_item_id,author_profile_id,note,created_at").order("created_at", { ascending: false }).limit(20000),
-    supabase.from("work_item_events").select("id,source_work_item_id,event_type,actor_profile_id,assigned_profile_id,details,created_at").order("created_at", { ascending: false }).limit(30000),
-    supabase.from("quote_take_events").select("id,source_work_item_id,rotation,received_at,taken_at,taker_profile_id,skipped_profile_ids,elapsed_seconds").order("taken_at", { ascending: false }).limit(10000),
-    supabase.from("quote_take_timers").select("id,rotation,current_profile_id,started_by_profile_id,received_at,deadline_at,customer_name,dealer_id,work_type,note,status,started_at,warning_sent_at").eq("status", "active").order("started_at", { ascending: false }),
-    supabase.from("work_desk_settings").select("customer_service_overflow_enabled,customer_service_profile_id").eq("singleton_id", true).maybeSingle(),
-    supabase.from("user_notifications").select("id,notification_type,title,message,entity_type,entity_id,created_at,read_at").order("created_at", { ascending: false }).limit(100),
-    supabase.from("daily_agent_performance").select("profile_id,whatsapp_quotes,ringcentral_quotes,workload_turns,whatsapp_updates,manual_quotes,sold_quotes,owned_activations,owned_changes,requotes,passed_turns"),
-    supabase.from("turn_events").select("id,rotation,actor_profile_id,created_at,reason").eq("action", "pass").order("created_at", { ascending: false }).limit(10000),
+    supabase
+      .from("work_items")
+      .select(
+        "id,customer_name,dealer_id,salesperson_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,status,change_type,note,received_through,created_at,assigned_at,accepted_at,completed_at,related_quote_source_work_item_id",
+      )
+      .order("created_at", { ascending: false })
+      .limit(5000),
+    supabase
+      .from("pending_pricing_quotes")
+      .select(
+        "id,source_work_item_id,customer_name,dealer_id,salesperson_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,received_through,note,quote_created_at,assigned_at,accepted_at,price_sent_at",
+      )
+      .order("price_sent_at", { ascending: true })
+      .limit(5000),
+    supabase
+      .from("quote_outcomes")
+      .select(
+        "id,source_work_item_id,customer_name,dealer_id,salesperson_id,work_type,original_owner_profile_id,assigned_profile_id,assignment_method,received_through,quote_created_at,assigned_at,accepted_at,price_sent_at,finalized_at,decision,not_sold_reason,not_sold_reason_other",
+      )
+      .order("finalized_at", { ascending: false })
+      .limit(10000),
+    supabase
+      .from("quote_notes")
+      .select("id,source_work_item_id,author_profile_id,note,created_at")
+      .order("created_at", { ascending: false })
+      .limit(20000),
+    supabase
+      .from("work_item_events")
+      .select(
+        "id,source_work_item_id,event_type,actor_profile_id,assigned_profile_id,details,created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(30000),
+    supabase
+      .from("quote_take_events")
+      .select(
+        "id,source_work_item_id,rotation,received_at,taken_at,taker_profile_id,skipped_profile_ids,elapsed_seconds",
+      )
+      .order("taken_at", { ascending: false })
+      .limit(10000),
+    supabase
+      .from("quote_take_timers")
+      .select(
+        "id,rotation,current_profile_id,started_by_profile_id,received_at,deadline_at,customer_name,dealer_id,salesperson_id,work_type,note,status,started_at,warning_sent_at",
+      )
+      .eq("status", "active")
+      .order("started_at", { ascending: false }),
+    supabase
+      .from("work_desk_settings")
+      .select("customer_service_overflow_enabled,customer_service_profile_id")
+      .eq("singleton_id", true)
+      .maybeSingle(),
+    supabase
+      .from("user_notifications")
+      .select(
+        "id,notification_type,title,message,entity_type,entity_id,created_at,read_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("daily_agent_performance")
+      .select(
+        "profile_id,whatsapp_quotes,ringcentral_quotes,workload_turns,whatsapp_updates,manual_quotes,sold_quotes,owned_activations,owned_changes,requotes,passed_turns",
+      ),
+    supabase
+      .from("turn_events")
+      .select("id,rotation,actor_profile_id,created_at,reason")
+      .eq("action", "pass")
+      .order("created_at", { ascending: false })
+      .limit(10000),
   ]);
 
-  const errors = [profilesResult.error, dealersResult.error, rotationsResult.error, workResult.error, pendingResult.error, outcomesResult.error, quoteNotesResult.error, quoteActivitiesResult.error, quoteTakeEventsResult.error, quoteTakeTimersResult.error, settingsResult.error, notificationsResult.error, performanceResult.error, passEventsResult.error].filter(Boolean);
-  if (errors.length) throw new Error(errors[0]?.message || "Unable to load Work Desk data.");
+  const errors = [
+    profilesResult.error,
+    dealersResult.error,
+    salespeopleResult.error,
+    rotationsResult.error,
+    workResult.error,
+    pendingResult.error,
+    outcomesResult.error,
+    quoteNotesResult.error,
+    quoteActivitiesResult.error,
+    quoteTakeEventsResult.error,
+    quoteTakeTimersResult.error,
+    settingsResult.error,
+    notificationsResult.error,
+    performanceResult.error,
+    passEventsResult.error,
+  ].filter(Boolean);
+  if (errors.length)
+    throw new Error(errors[0]?.message || "Unable to load Work Desk data.");
 
   const profiles = (profilesResult.data || []) as ProfileRow[];
   const agentProfiles = profiles.filter((profile) => profile.role === "agent");
-  const customerServiceProfiles = profiles.filter((profile) => profile.role === "customer_service");
+  const customerServiceProfiles = profiles.filter(
+    (profile) => profile.role === "customer_service",
+  );
   const dealers = (dealersResult.data || []) as DealerRow[];
-  const nameByProfile = new Map(profiles.map((profile) => [profile.id, profile.display_name]));
-  const usernameByProfile = new Map(profiles.map((profile) => [profile.id, profile.username]));
+  const salespersonRows = (salespeopleResult.data ||
+    []) as DealerSalespersonRow[];
+  const nameByProfile = new Map(
+    profiles.map((profile) => [profile.id, profile.display_name]),
+  );
+  const usernameByProfile = new Map(
+    profiles.map((profile) => [profile.id, profile.username]),
+  );
   const dealerById = new Map(dealers.map((dealer) => [dealer.id, dealer.name]));
+  const salespersonById = new Map(
+    salespersonRows.map((salesperson) => [salesperson.id, salesperson.name]),
+  );
 
   const activeCountByAgent = new Map<string, number>();
   for (const row of (workResult.data || []) as WorkRow[]) {
     if (row.status === "active" && row.work_type !== "whatsapp_update") {
-      activeCountByAgent.set(row.assigned_profile_id, (activeCountByAgent.get(row.assigned_profile_id) || 0) + 1);
+      activeCountByAgent.set(
+        row.assigned_profile_id,
+        (activeCountByAgent.get(row.assigned_profile_id) || 0) + 1,
+      );
     }
   }
 
@@ -242,37 +376,64 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     activeCount: activeCountByAgent.get(profile.id) || 0,
   }));
 
-  const customerServiceUsers: CustomerServiceUser[] = customerServiceProfiles.map((profile) => ({
-    id: profile.id,
-    username: profile.username,
-    name: profile.display_name,
-    initials: profile.initials,
-    activeCount: activeCountByAgent.get(profile.id) || 0,
-  }));
+  const customerServiceUsers: CustomerServiceUser[] =
+    customerServiceProfiles.map((profile) => ({
+      id: profile.id,
+      username: profile.username,
+      name: profile.display_name,
+      initials: profile.initials,
+      activeCount: activeCountByAgent.get(profile.id) || 0,
+    }));
 
-  const sourceOptions: SourceOption[] = dealers.filter((dealer) => dealer.is_active).map((dealer) => ({ id: dealer.id, name: dealer.name }));
+  const sourceOptions: SourceOption[] = dealers
+    .filter((dealer) => dealer.is_active)
+    .map((dealer) => ({ id: dealer.id, name: dealer.name }));
+  const salespeople: DealerSalesperson[] = salespersonRows.map(
+    (salesperson) => ({
+      id: salesperson.id,
+      dealerId: salesperson.dealer_id,
+      name: salesperson.name,
+      notes: salesperson.notes || undefined,
+      isActive: salesperson.is_active,
+      createdAt: salesperson.created_at,
+    }),
+  );
 
-  const workItems: WorkItem[] = ((workResult.data || []) as WorkRow[]).map((row) => ({
-    id: row.id,
-    assignedProfileId: row.assigned_profile_id,
-    createdAt: row.created_at,
-    assignedAt: row.assigned_at || row.created_at,
-    acceptedAt: row.accepted_at || undefined,
-    customer: row.customer_name,
-    dealer: row.dealer_id ? dealerById.get(row.dealer_id) || "Unknown source" : "Direct / No source",
-    workType: row.work_type,
-    originalOwner: row.original_owner_profile_id ? nameByProfile.get(row.original_owner_profile_id) : undefined,
-    assignedAgent: nameByProfile.get(row.assigned_profile_id) || "Unknown agent",
-    assignmentMethod: row.assignment_method,
-    status: asWorkStatus(row.status),
-    changeType: row.change_type || undefined,
-    note: row.note || undefined,
-    receivedThrough: row.received_through || undefined,
-    completedAt: row.completed_at || undefined,
-    relatedQuoteSourceWorkItemId: row.related_quote_source_work_item_id || undefined,
-  }));
+  const workItems: WorkItem[] = ((workResult.data || []) as WorkRow[]).map(
+    (row) => ({
+      id: row.id,
+      assignedProfileId: row.assigned_profile_id,
+      createdAt: row.created_at,
+      assignedAt: row.assigned_at || row.created_at,
+      acceptedAt: row.accepted_at || undefined,
+      customer: row.customer_name,
+      dealer: row.dealer_id
+        ? dealerById.get(row.dealer_id) || "Unknown source"
+        : "Direct / No source",
+      salespersonId: row.salesperson_id || undefined,
+      salesperson: row.salesperson_id
+        ? salespersonById.get(row.salesperson_id) || "Unknown salesperson"
+        : undefined,
+      workType: row.work_type,
+      originalOwner: row.original_owner_profile_id
+        ? nameByProfile.get(row.original_owner_profile_id)
+        : undefined,
+      assignedAgent:
+        nameByProfile.get(row.assigned_profile_id) || "Unknown agent",
+      assignmentMethod: row.assignment_method,
+      status: asWorkStatus(row.status),
+      changeType: row.change_type || undefined,
+      note: row.note || undefined,
+      receivedThrough: row.received_through || undefined,
+      completedAt: row.completed_at || undefined,
+      relatedQuoteSourceWorkItemId:
+        row.related_quote_source_work_item_id || undefined,
+    }),
+  );
 
-  const pendingPricing: PendingPricingItem[] = ((pendingResult.data || []) as PendingRow[]).map((row) => ({
+  const pendingPricing: PendingPricingItem[] = (
+    (pendingResult.data || []) as PendingRow[]
+  ).map((row) => ({
     id: row.id,
     assignedProfileId: row.assigned_profile_id,
     sourceWorkItemId: row.source_work_item_id,
@@ -281,16 +442,27 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     acceptedAt: row.accepted_at || row.quote_created_at,
     priceSentAt: row.price_sent_at,
     customer: row.customer_name,
-    dealer: row.dealer_id ? dealerById.get(row.dealer_id) || "Unknown source" : "Direct / No source",
+    dealer: row.dealer_id
+      ? dealerById.get(row.dealer_id) || "Unknown source"
+      : "Direct / No source",
+    salespersonId: row.salesperson_id || undefined,
+    salesperson: row.salesperson_id
+      ? salespersonById.get(row.salesperson_id) || "Unknown salesperson"
+      : undefined,
     workType: row.work_type,
-    originalOwner: row.original_owner_profile_id ? nameByProfile.get(row.original_owner_profile_id) : undefined,
-    assignedAgent: nameByProfile.get(row.assigned_profile_id) || "Unknown agent",
+    originalOwner: row.original_owner_profile_id
+      ? nameByProfile.get(row.original_owner_profile_id)
+      : undefined,
+    assignedAgent:
+      nameByProfile.get(row.assigned_profile_id) || "Unknown agent",
     assignmentMethod: row.assignment_method,
     receivedThrough: row.received_through || undefined,
     note: row.note || undefined,
   }));
 
-  const quoteOutcomes: QuoteOutcome[] = ((outcomesResult.data || []) as OutcomeRow[]).map((row) => ({
+  const quoteOutcomes: QuoteOutcome[] = (
+    (outcomesResult.data || []) as OutcomeRow[]
+  ).map((row) => ({
     id: row.id,
     assignedProfileId: row.assigned_profile_id,
     sourceWorkItemId: row.source_work_item_id,
@@ -300,10 +472,19 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     priceSentAt: row.price_sent_at || undefined,
     finalizedAt: row.finalized_at,
     customer: row.customer_name,
-    dealer: row.dealer_id ? dealerById.get(row.dealer_id) || "Unknown source" : "Direct / No source",
+    dealer: row.dealer_id
+      ? dealerById.get(row.dealer_id) || "Unknown source"
+      : "Direct / No source",
+    salespersonId: row.salesperson_id || undefined,
+    salesperson: row.salesperson_id
+      ? salespersonById.get(row.salesperson_id) || "Unknown salesperson"
+      : undefined,
     workType: row.work_type,
-    originalOwner: row.original_owner_profile_id ? nameByProfile.get(row.original_owner_profile_id) : undefined,
-    assignedAgent: nameByProfile.get(row.assigned_profile_id) || "Unknown agent",
+    originalOwner: row.original_owner_profile_id
+      ? nameByProfile.get(row.original_owner_profile_id)
+      : undefined,
+    assignedAgent:
+      nameByProfile.get(row.assigned_profile_id) || "Unknown agent",
     assignmentMethod: row.assignment_method,
     receivedThrough: row.received_through || undefined,
     decision: row.decision,
@@ -311,9 +492,9 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     notSoldReasonOther: row.not_sold_reason_other || undefined,
   }));
 
-
-
-  const quoteNotes: QuoteNote[] = ((quoteNotesResult.data || []) as QuoteNoteRow[]).map((row) => ({
+  const quoteNotes: QuoteNote[] = (
+    (quoteNotesResult.data || []) as QuoteNoteRow[]
+  ).map((row) => ({
     id: row.id,
     sourceWorkItemId: row.source_work_item_id,
     authorProfileId: row.author_profile_id,
@@ -323,19 +504,29 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     createdAt: row.created_at,
   }));
 
-  const quoteActivities: QuoteActivity[] = ((quoteActivitiesResult.data || []) as WorkItemEventRow[]).map((row) => ({
+  const quoteActivities: QuoteActivity[] = (
+    (quoteActivitiesResult.data || []) as WorkItemEventRow[]
+  ).map((row) => ({
     id: row.id,
     sourceWorkItemId: row.source_work_item_id,
     eventType: row.event_type,
     actorProfileId: row.actor_profile_id || undefined,
-    actorName: row.actor_profile_id ? nameByProfile.get(row.actor_profile_id) || "Unknown user" : "System",
-    actorUsername: row.actor_profile_id ? usernameByProfile.get(row.actor_profile_id) || "unknown" : "system",
-    assignedAgent: row.assigned_profile_id ? nameByProfile.get(row.assigned_profile_id) || "Unknown agent" : undefined,
+    actorName: row.actor_profile_id
+      ? nameByProfile.get(row.actor_profile_id) || "Unknown user"
+      : "System",
+    actorUsername: row.actor_profile_id
+      ? usernameByProfile.get(row.actor_profile_id) || "unknown"
+      : "system",
+    assignedAgent: row.assigned_profile_id
+      ? nameByProfile.get(row.assigned_profile_id) || "Unknown agent"
+      : undefined,
     details: row.details || undefined,
     createdAt: row.created_at,
   }));
 
-  const quoteTakeEvents: QuoteTakeEvent[] = ((quoteTakeEventsResult.data || []) as QuoteTakeEventRow[]).map((row) => ({
+  const quoteTakeEvents: QuoteTakeEvent[] = (
+    (quoteTakeEventsResult.data || []) as QuoteTakeEventRow[]
+  ).map((row) => ({
     id: row.id,
     sourceWorkItemId: row.source_work_item_id,
     rotation: row.rotation,
@@ -353,19 +544,31 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     elapsedSeconds: row.elapsed_seconds,
   }));
 
-  const quoteTakeTimers: QuoteTakeTimer[] = ((quoteTakeTimersResult.data || []) as QuoteTakeTimerRow[]).map((row) => ({
+  const quoteTakeTimers: QuoteTakeTimer[] = (
+    (quoteTakeTimersResult.data || []) as QuoteTakeTimerRow[]
+  ).map((row) => ({
     id: row.id,
     rotation: row.rotation,
     currentProfileId: row.current_profile_id,
-    currentAgentName: nameByProfile.get(row.current_profile_id) || "Unknown agent",
-    currentAgentUsername: usernameByProfile.get(row.current_profile_id) || "unknown",
+    currentAgentName:
+      nameByProfile.get(row.current_profile_id) || "Unknown agent",
+    currentAgentUsername:
+      usernameByProfile.get(row.current_profile_id) || "unknown",
     startedByProfileId: row.started_by_profile_id,
-    startedByName: nameByProfile.get(row.started_by_profile_id) || "Unknown agent",
-    startedByUsername: usernameByProfile.get(row.started_by_profile_id) || "unknown",
+    startedByName:
+      nameByProfile.get(row.started_by_profile_id) || "Unknown agent",
+    startedByUsername:
+      usernameByProfile.get(row.started_by_profile_id) || "unknown",
     receivedAt: row.received_at,
     deadlineAt: row.deadline_at,
     customer: row.customer_name,
-    dealer: row.dealer_id ? dealerById.get(row.dealer_id) || "Unknown source" : "Direct / No source",
+    dealer: row.dealer_id
+      ? dealerById.get(row.dealer_id) || "Unknown source"
+      : "Direct / No source",
+    salespersonId: row.salesperson_id || undefined,
+    salesperson: row.salesperson_id
+      ? salespersonById.get(row.salesperson_id) || "Unknown salesperson"
+      : undefined,
     workType: row.work_type,
     note: row.note || undefined,
     status: row.status,
@@ -375,13 +578,21 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
 
   const settingsRow = settingsResult.data as WorkDeskSettingsRow | null;
   const settings: WorkDeskSettings = {
-    customerServiceOverflowEnabled: settingsRow?.customer_service_overflow_enabled || false,
-    customerServiceProfileId: settingsRow?.customer_service_profile_id || undefined,
-    customerServiceProfileName: settingsRow?.customer_service_profile_id ? nameByProfile.get(settingsRow.customer_service_profile_id) : undefined,
-    customerServiceProfileUsername: settingsRow?.customer_service_profile_id ? usernameByProfile.get(settingsRow.customer_service_profile_id) : undefined,
+    customerServiceOverflowEnabled:
+      settingsRow?.customer_service_overflow_enabled || false,
+    customerServiceProfileId:
+      settingsRow?.customer_service_profile_id || undefined,
+    customerServiceProfileName: settingsRow?.customer_service_profile_id
+      ? nameByProfile.get(settingsRow.customer_service_profile_id)
+      : undefined,
+    customerServiceProfileUsername: settingsRow?.customer_service_profile_id
+      ? usernameByProfile.get(settingsRow.customer_service_profile_id)
+      : undefined,
   };
 
-  const notifications: AlertNotification[] = ((notificationsResult.data || []) as NotificationRow[]).map((row) => ({
+  const notifications: AlertNotification[] = (
+    (notificationsResult.data || []) as NotificationRow[]
+  ).map((row) => ({
     id: row.id,
     type: row.notification_type,
     title: row.title,
@@ -392,7 +603,9 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     readAt: row.read_at || undefined,
   }));
 
-  const passEvents: PassEvent[] = ((passEventsResult.data || []) as PassEventRow[]).map((row) => ({
+  const passEvents: PassEvent[] = (
+    (passEventsResult.data || []) as PassEventRow[]
+  ).map((row) => ({
     id: row.id,
     rotation: row.rotation,
     actorAgentId: row.actor_profile_id,
@@ -401,7 +614,12 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     reason: row.reason || undefined,
   }));
 
-  const performanceMap = new Map(((performanceResult.data || []) as PerformanceDbRow[]).map((row) => [row.profile_id, row]));
+  const performanceMap = new Map(
+    ((performanceResult.data || []) as PerformanceDbRow[]).map((row) => [
+      row.profile_id,
+      row,
+    ]),
+  );
   const performance: PerformanceRow[] = agentProfiles.map((profile) => {
     const row = performanceMap.get(profile.id);
     return {
@@ -419,11 +637,32 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     };
   });
 
-  const rotations: Record<RotationKind, string | null> = { whatsapp: null, ringcentral: null, workload: null };
+  const rotations: Record<RotationKind, string | null> = {
+    whatsapp: null,
+    ringcentral: null,
+    workload: null,
+  };
   for (const row of rotationsResult.data || []) {
     const kind = row.kind as RotationKind;
     rotations[kind] = row.current_profile_id || null;
   }
 
-  return { agents, customerServiceUsers, sources: sourceOptions, workItems, pendingPricing, quoteOutcomes, quoteNotes, quoteActivities, quoteTakeEvents, quoteTakeTimers, settings, notifications, performance, passEvents, rotations };
+  return {
+    agents,
+    customerServiceUsers,
+    sources: sourceOptions,
+    salespeople,
+    workItems,
+    pendingPricing,
+    quoteOutcomes,
+    quoteNotes,
+    quoteActivities,
+    quoteTakeEvents,
+    quoteTakeTimers,
+    settings,
+    notifications,
+    performance,
+    passEvents,
+    rotations,
+  };
 }
