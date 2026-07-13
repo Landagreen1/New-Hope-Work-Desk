@@ -51,6 +51,7 @@ import { loadDashboardData } from "@/lib/dashboard-data";
 import { createClient } from "@/lib/supabase/client";
 import type {
   Agent,
+  CustomerServiceUser,
   AlertNotification,
   DashboardData,
   SourceOption,
@@ -150,7 +151,7 @@ function accentForAgent(agent: Agent) {
   return agentAccentCycle[(agent.rotationPosition - 1) % agentAccentCycle.length];
 }
 
-type ModalType = "whatsapp_quote" | "ringcentral_quote" | "workload_turn" | "payment" | "manual_quote" | "manager_assign_quote" | "quote_result" | "not_sold_reason" | "take_quote" | "quote_log" | "customer_service_pass" | null;
+type ModalType = "whatsapp_quote" | "ringcentral_quote" | "workload_turn" | "payment" | "manual_quote" | "manager_assign_quote" | "quote_result" | "not_sold_reason" | "take_quote" | "quote_log" | "customer_service_pass" | "reopen_not_sold" | null;
 type AgentTab = "desk" | "pricing" | "quotes" | "performance";
 type ManagerTab = "overview" | "tasks" | "pricing" | "quotes" | "reports" | "team" | "sources" | "users";
 type ReportView = "executive" | "exceptions" | "funnel" | "trends" | "agents" | "scorecard" | "workload" | "queues" | "taken" | "missed" | "passes" | "followup" | "documentation" | "channels" | "sources" | "service" | "activation" | "manager" | "integrity" | "system" | "timing" | "activity";
@@ -241,6 +242,7 @@ type QuoteRecord = {
   customer: string;
   source: string;
   agent: string;
+  assignedProfileId: string;
   workType: "new_quote" | "requote";
   receivedThrough: string;
   takeEvent?: QuoteTakeEvent;
@@ -251,7 +253,7 @@ type AdminUserAccount = {
   username: string;
   display_name: string;
   initials: string;
-  role: "agent" | "manager";
+  role: "agent" | "manager" | "customer_service";
   rotation_position: number;
   availability: AvailabilityStatus;
   is_active: boolean;
@@ -302,6 +304,7 @@ function buildQuoteRecords(workItems: WorkItem[], pendingPricing: PendingPricing
       customer: item.customer,
       source: item.dealer,
       agent: item.assignedAgent,
+      assignedProfileId: item.assignedProfileId,
       workType: item.workType as "new_quote" | "requote",
       receivedThrough: item.receivedThrough || "Unknown",
       takeEvent: takeBySource.get(item.id),
@@ -316,6 +319,7 @@ function buildQuoteRecords(workItems: WorkItem[], pendingPricing: PendingPricing
       customer: item.customer,
       source: item.dealer,
       agent: item.assignedAgent,
+      assignedProfileId: item.assignedProfileId,
       workType: item.workType,
       receivedThrough: item.receivedThrough || "Unknown",
       takeEvent: takeBySource.get(item.sourceWorkItemId),
@@ -330,6 +334,7 @@ function buildQuoteRecords(workItems: WorkItem[], pendingPricing: PendingPricing
       customer: item.customer,
       source: item.dealer,
       agent: item.assignedAgent,
+      assignedProfileId: item.assignedProfileId,
       workType: item.workType,
       receivedThrough: item.receivedThrough || "Unknown",
       takeEvent: takeBySource.get(item.sourceWorkItemId),
@@ -620,7 +625,7 @@ function QuoteCombobox({ quotes }: { quotes: QuoteRecord[] }) {
         <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
           Linked to {selected.customer} · {selected.source} · {selected.status}
         </div>
-      ) : <p className="mt-1.5 text-xs font-semibold text-slate-400">Select the existing quote this activation or change belongs to.</p>}
+      ) : <p className="mt-1.5 text-xs font-semibold text-slate-400">Select a Sold or Pending Pricing quote for this activation or change.</p>}
       {open && matches.length ? (
         <div className="absolute z-50 mt-2 max-h-80 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl">
           {matches.map((quote) => (
@@ -639,7 +644,7 @@ function QuoteCombobox({ quotes }: { quotes: QuoteRecord[] }) {
           ))}
         </div>
       ) : null}
-      {open && query && !matches.length ? <p className="mt-2 text-xs font-bold text-amber-700">No matching quote found. Search by customer, source, or agent.</p> : null}
+      {open && query && !matches.length ? <p className="mt-2 text-xs font-bold text-amber-700">No matching Sold or Pending Pricing quote found. Use Old / Not in System when appropriate.</p> : null}
     </div>
   );
 }
@@ -842,7 +847,7 @@ function WorkloadTurnForm({
       </div>
       {mode === "linked" ? (
         <>
-          <div className="rounded-2xl bg-violet-50 p-4 text-sm font-semibold text-violet-800">Select the existing quote. Customer, source, and original owner are copied automatically.</div>
+          <div className="rounded-2xl bg-violet-50 p-4 text-sm font-semibold text-violet-800">Only Sold and Pending Pricing quotes are available. Customer, source, and original owner are copied automatically.</div>
           <Field label="Existing quote"><QuoteCombobox quotes={quotes} /></Field>
         </>
       ) : (
@@ -935,7 +940,7 @@ function RotationCard({
       <div className="mt-5 flex flex-wrap gap-2">
         {!timer ? <button onClick={onAction} disabled={!isMyTurn} className={cn("flex min-w-[150px] flex-1 items-center justify-center gap-2 rounded-xl px-3 py-3 text-xs font-black transition", isMyTurn ? `${config.button} text-white` : "cursor-not-allowed bg-slate-100 text-slate-400")}>{variant === "workload" ? <BriefcaseBusiness className="h-4 w-4" /> : <Zap className="h-4 w-4" />}{config.action}</button> : null}
         {!timer && canStartTimer && onStartTimer ? <button onClick={onStartTimer} className="rounded-xl bg-amber-500 px-4 py-3 text-xs font-black text-white transition hover:bg-amber-600">Start Timer</button> : null}
-        {isMyTurn && !timer ? <button onClick={onPass} className="rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-600 hover:bg-slate-50">Pass</button> : null}
+        {isMyTurn && !timer && variant !== "workload" ? <button onClick={onPass} className="rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-600 hover:bg-slate-50">Pass</button> : null}
       </div>
       {timer ? <p className="mt-3 text-[11px] font-semibold leading-5 text-slate-400">Stealing consumes only the displayed current agent&apos;s turn. The next regular queue position does not change.</p> : null}
     </section>
@@ -968,10 +973,79 @@ function EmptyState({ title, note }: { title: string; note: string }) {
   return <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" /><p className="mt-3 font-black text-slate-800">{title}</p><p className="mt-1 text-sm text-slate-500">{note}</p></div>;
 }
 
+function CustomerServiceWorkspace({
+  user,
+  activeWork,
+  recentActivity,
+  quoteNotesBySource,
+  noteDrafts,
+  onDraftChange,
+  onAccept,
+  onComplete,
+  onOpenLog,
+  onAddNote,
+}: {
+  user: CustomerServiceUser;
+  activeWork: WorkItem[];
+  recentActivity: WorkItem[];
+  quoteNotesBySource: Map<string, QuoteNote[]>;
+  noteDrafts: Record<string, string>;
+  onDraftChange: (sourceWorkItemId: string, value: string) => void;
+  onAccept: (item: WorkItem) => Promise<void>;
+  onComplete: (item: WorkItem) => Promise<void>;
+  onOpenLog: (sourceWorkItemId: string) => void;
+  onAddNote: (sourceWorkItemId: string) => Promise<void>;
+}) {
+  return (
+    <div className="space-y-6">
+      <section className="rounded-[28px] border border-cyan-200 bg-gradient-to-br from-white to-cyan-50 p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-cyan-700 text-lg font-black text-white">{user.initials}</div>
+            <div><p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Customer Service Workspace</p><h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">{user.name}</h2><p className="mt-1 text-sm font-semibold text-slate-600">Assigned Activations and Changes from the sales team.</p></div>
+          </div>
+          <div className="rounded-2xl bg-white px-5 py-4 text-center ring-1 ring-cyan-200"><p className="text-3xl font-black text-cyan-700">{activeWork.length}</p><p className="text-xs font-black uppercase tracking-wider text-slate-500">Open assignments</p></div>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6"><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-cyan-700"><BriefcaseBusiness className="h-4 w-4" /> Assigned Work</div><h3 className="mt-1 text-xl font-black">Activations and Changes needing attention</h3><p className="mt-1 text-sm text-slate-500">Accept each handoff, review the instructions and quote log, document your work, then mark it complete.</p></div>
+        <div className="p-5">
+          {activeWork.length ? (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {activeWork.map((item) => {
+                const sourceId = item.relatedQuoteSourceWorkItemId;
+                const notes = sourceId ? quoteNotesBySource.get(sourceId) || [] : [];
+                return (
+                  <div key={item.id} className="rounded-2xl border border-cyan-100 bg-cyan-50/30 p-5">
+                    <div className="flex items-start justify-between gap-3"><div><p className="font-black text-slate-950">{item.customer}</p><p className="mt-1 text-sm font-semibold text-slate-500">{workTypeLabels[item.workType]} · {item.dealer}</p><p className="mt-2 text-xs font-bold text-cyan-700">Assigned {formatDateTime(item.assignedAt)}</p></div><MethodBadge method={item.assignmentMethod} /></div>
+                    {item.note ? <div className="mt-4 rounded-xl bg-white p-3 text-sm font-semibold leading-6 text-slate-600 ring-1 ring-cyan-100"><strong>Handoff details:</strong><br />{item.note}</div> : null}
+                    {sourceId ? <PendingNotesPanel notes={notes} draft={noteDrafts[sourceId] || ""} onDraftChange={(value) => onDraftChange(sourceId, value)} onAdd={() => void onAddNote(sourceId)} /> : null}
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {sourceId ? <button onClick={() => onOpenLog(sourceId)} className="rounded-xl border border-[#c9d5e9] bg-white px-3 py-2.5 text-xs font-black text-[#223f7a]">Quote Log</button> : null}
+                      {!item.acceptedAt ? <button onClick={() => void onAccept(item)} className="rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-black text-white hover:bg-amber-600">Accept Assignment</button> : <button onClick={() => void onComplete(item)} className="rounded-xl bg-cyan-700 px-4 py-2.5 text-xs font-black text-white hover:bg-cyan-800">Mark Complete</button>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : <EmptyState title="No Customer Service assignments" note="Activations and Changes passed by agents will appear here." />}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6"><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Recent Activity</p><h3 className="mt-1 text-xl font-black">Completed Customer Service work</h3></div>
+        <div className="divide-y divide-slate-100">{recentActivity.length ? recentActivity.map((item) => <div key={item.id} className="flex items-center justify-between gap-4 px-6 py-4"><div><p className="font-black text-slate-800">{item.customer}</p><p className="mt-1 text-sm text-slate-500">{workTypeLabels[item.workType]} · {item.dealer}</p></div><div className="text-right"><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">Completed</span><p className="mt-2 text-xs font-semibold text-slate-400">{formatDateTime(item.completedAt || item.createdAt)}</p></div></div>) : <div className="p-5"><EmptyState title="No completed assignments yet" note="Finished Customer Service work will appear here." /></div>}</div>
+      </section>
+    </div>
+  );
+}
+
 export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: SessionProfile; initialData: DashboardData }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [agentList, setAgentList] = useState(initialData.agents);
+  const [customerServiceUsers, setCustomerServiceUsers] = useState<CustomerServiceUser[]>(initialData.customerServiceUsers);
   const [sourceList, setSourceList] = useState<SourceOption[]>(initialData.sources);
   const [workItems, setWorkItems] = useState<WorkItem[]>(initialData.workItems);
   const [pendingPricing, setPendingPricing] = useState<PendingPricingItem[]>(initialData.pendingPricing);
@@ -992,6 +1066,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   const [modal, setModal] = useState<ModalType>(null);
   const [quoteResultItemId, setQuoteResultItemId] = useState<string | null>(null);
   const [notSoldTarget, setNotSoldTarget] = useState<NotSoldTarget>(null);
+  const [reopenNotSoldRecord, setReopenNotSoldRecord] = useState<QuoteRecord | null>(null);
   const [takeRotation, setTakeRotation] = useState<"whatsapp" | "ringcentral" | null>(null);
   const [customerServicePassItemId, setCustomerServicePassItemId] = useState<string | null>(null);
   const [quoteLogSourceId, setQuoteLogSourceId] = useState<string | null>(null);
@@ -1006,20 +1081,23 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
 
   const currentUserId = sessionProfile.id;
   const isManager = sessionProfile.role === "manager";
+  const isCustomerService = sessionProfile.role === "customer_service";
   const currentUser = agentList.find((agent) => agent.id === currentUserId);
+  const currentCustomerServiceUser = customerServiceUsers.find((user) => user.id === currentUserId);
   const whatsappCurrent = whatsappCurrentId ? agentList.find((agent) => agent.id === whatsappCurrentId) ?? null : null;
   const ringCentralCurrent = ringCentralCurrentId ? agentList.find((agent) => agent.id === ringCentralCurrentId) ?? null : null;
   const workloadCurrent = workloadCurrentId ? agentList.find((agent) => agent.id === workloadCurrentId) ?? null : null;
   const whatsappTimer = quoteTakeTimers.find((timer) => timer.rotation === "whatsapp");
   const ringCentralTimer = quoteTakeTimers.find((timer) => timer.rotation === "ringcentral");
   const customerServicePassItem = workItems.find((item) => item.id === customerServicePassItemId) ?? null;
-  const myActiveWork = currentUser ? workItems.filter((item) => item.assignedAgent === currentUser.name && isActiveTask(item)) : [];
-  const myPendingPricing = currentUser ? pendingPricing.filter((item) => item.assignedAgent === currentUser.name) : [];
-  const myRecentActivity = currentUser ? workItems.filter((item) => item.assignedAgent === currentUser.name && item.status !== "active").slice(0, 8) : [];
+  const myActiveWork = workItems.filter((item) => item.assignedProfileId === currentUserId && isActiveTask(item));
+  const myPendingPricing = currentUser ? pendingPricing.filter((item) => item.assignedProfileId === currentUserId) : [];
+  const myRecentActivity = workItems.filter((item) => item.assignedProfileId === currentUserId && item.status !== "active").slice(0, 8);
   const quoteResultItem = workItems.find((item) => item.id === quoteResultItemId) ?? null;
   const unreadNotifications = notifications.filter((item) => !item.readAt);
 
   const allQuoteRecords = useMemo(() => buildQuoteRecords(workItems, pendingPricing, quoteOutcomes, quoteTakeEvents), [pendingPricing, quoteOutcomes, quoteTakeEvents, workItems]);
+  const workloadSelectableQuotes = useMemo(() => allQuoteRecords.filter((quote) => quote.status === "Sold" || quote.status === "Price Sent"), [allQuoteRecords]);
   const visibleAgentQuotes = useMemo(() => {
     const needle = quoteSearch.trim().toLowerCase();
     if (!needle) return allQuoteRecords;
@@ -1073,6 +1151,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
 
   const applyDashboardData = useCallback((data: DashboardData) => {
     setAgentList(data.agents);
+    setCustomerServiceUsers(data.customerServiceUsers);
     setSourceList(data.sources);
     setWorkItems(data.workItems);
     setPendingPricing(data.pendingPricing);
@@ -1226,6 +1305,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
   }
 
   async function handlePass(rotation: RotationKind) {
+    if (rotation === "workload") return showToast("Additional Workload turns cannot be passed. Take the task, then use Customer Service overflow when enabled.");
     const reason = window.prompt("Why are you passing this turn?", "Current workload");
     if (!reason?.trim()) return;
     await runRpc("pass_my_turn", { p_rotation: rotation, p_reason: reason.trim() }, `${rotationConfig[rotation].title} turn passed.`);
@@ -1259,6 +1339,26 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
 
   async function finalizePendingPricingSold(item: PendingPricingItem) {
     await runRpc("finalize_pending_pricing_quote", { p_pending_id: item.id, p_decision: "sold", p_not_sold_reason: null, p_not_sold_reason_other: null }, `${item.customer} marked Sold.`);
+  }
+
+  function requestReopenNotSold(record: QuoteRecord) {
+    setReopenNotSoldRecord(record);
+    setModal("reopen_not_sold");
+  }
+
+  async function submitReopenNotSold(formData: FormData) {
+    if (!reopenNotSoldRecord) return;
+    const note = String(formData.get("note") || "").trim();
+    if (!note) return showToast("Enter a note explaining why this previously Not Sold quote is now Sold.");
+    const success = await runRpc(
+      "convert_my_not_sold_quote_to_sold",
+      { p_outcome_id: reopenNotSoldRecord.id, p_note: note },
+      `${reopenNotSoldRecord.customer} changed from Not Sold to Sold and the activation was logged.`
+    );
+    if (success) {
+      setModal(null);
+      setReopenNotSoldRecord(null);
+    }
   }
 
   async function addQuoteNote(sourceWorkItemId: string) {
@@ -1532,14 +1632,27 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
                 </div>
               ) : null}
             </div>
-            <div className="hidden rounded-xl bg-slate-50 px-3 py-2 text-right sm:block"><p className="text-xs font-black text-slate-800">{sessionProfile.displayName}</p><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{sessionProfile.role === "manager" ? "Management" : `@${sessionProfile.username}`}</p></div>
+            <div className="hidden rounded-xl bg-slate-50 px-3 py-2 text-right sm:block"><p className="text-xs font-black text-slate-800">{sessionProfile.displayName}</p><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{sessionProfile.role === "manager" ? "Management" : sessionProfile.role === "customer_service" ? "Customer Service" : `@${sessionProfile.username}`}</p></div>
             <button onClick={handleSignOut} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-50" title="Sign out"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Sign out</span></button>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-[1700px] px-4 py-6 sm:px-6 lg:px-8">
-        {!isManager && currentUser ? (
+        {isCustomerService && currentCustomerServiceUser ? (
+          <CustomerServiceWorkspace
+            user={currentCustomerServiceUser}
+            activeWork={myActiveWork}
+            recentActivity={myRecentActivity}
+            quoteNotesBySource={quoteNotesBySource}
+            noteDrafts={noteDrafts}
+            onDraftChange={(sourceWorkItemId, value) => setNoteDrafts((current) => ({ ...current, [sourceWorkItemId]: value }))}
+            onAccept={acceptAssignedItem}
+            onComplete={completeWorkItem}
+            onOpenLog={openQuoteLog}
+            onAddNote={addQuoteNote}
+          />
+        ) : !isManager && currentUser ? (
           <div className="space-y-5">
             <section className="flex flex-col gap-4 rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-4"><Avatar agent={currentUser} size="lg" /><div><p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Working as</p><h2 className="mt-1 text-2xl font-black tracking-tight">{currentUser.name}</h2><p className="mt-1 text-sm font-semibold text-slate-500">{myActiveWork.length} active task{myActiveWork.length === 1 ? "" : "s"} · {myPendingPricing.length} awaiting source decision</p></div></div>
@@ -1651,12 +1764,12 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Source / Input</th><th className="px-5 py-3">Updated</th><th className="px-5 py-3">Log</th></tr></thead>
+                    <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Source / Input</th><th className="px-5 py-3">Updated</th><th className="px-5 py-3">Actions</th></tr></thead>
                     <tbody className="divide-y divide-slate-100">
                       {visibleAgentQuotes.map((quote) => {
                         const statusClass = quote.status === "Sold" ? "bg-emerald-50 text-emerald-700" : quote.status === "Not Sold" ? "bg-rose-50 text-rose-700" : quote.status === "Price Sent" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700";
                         const latestNote = (quoteNotesBySource.get(quote.sourceWorkItemId) || [])[0];
-                        return <tr key={`${quote.stage}-${quote.id}`} className="hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{quote.customer}</p><p className="mt-1 text-xs text-slate-400">{quote.source}</p>{quote.takeEvent ? <p className="mt-2 text-[11px] font-black text-amber-700">Taken by @{quote.takeEvent.takerUsername} after {formatElapsedSeconds(quote.takeEvent.elapsedSeconds)}</p> : null}{latestNote ? <p className="mt-2 max-w-md truncate text-xs font-semibold text-slate-500">Latest note: {latestNote.note}</p> : null}</td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", statusClass)}>{quote.status}</span></td><td className="px-5 py-4 font-bold text-slate-600">{workTypeLabels[quote.workType]}</td><td className="px-5 py-4 font-bold text-slate-700">{quote.agent}</td><td className="px-5 py-4"><p className="font-semibold text-slate-600">{quote.source}</p><p className="mt-1 text-xs text-slate-400">{quote.receivedThrough}</p></td><td className="px-5 py-4 text-xs font-semibold text-slate-500">{formatDateTime(quote.statusDate)}</td><td className="px-5 py-4"><button onClick={() => openQuoteLog(quote.sourceWorkItemId)} className="rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-3 py-2 text-xs font-black text-[#223f7a]">Log</button></td></tr>;
+                        return <tr key={`${quote.stage}-${quote.id}`} className="hover:bg-slate-50"><td className="px-5 py-4"><p className="font-black text-slate-900">{quote.customer}</p><p className="mt-1 text-xs text-slate-400">{quote.source}</p>{quote.takeEvent ? <p className="mt-2 text-[11px] font-black text-amber-700">Taken by @{quote.takeEvent.takerUsername} after {formatElapsedSeconds(quote.takeEvent.elapsedSeconds)}</p> : null}{latestNote ? <p className="mt-2 max-w-md truncate text-xs font-semibold text-slate-500">Latest note: {latestNote.note}</p> : null}</td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", statusClass)}>{quote.status}</span></td><td className="px-5 py-4 font-bold text-slate-600">{workTypeLabels[quote.workType]}</td><td className="px-5 py-4 font-bold text-slate-700">{quote.agent}</td><td className="px-5 py-4"><p className="font-semibold text-slate-600">{quote.source}</p><p className="mt-1 text-xs text-slate-400">{quote.receivedThrough}</p></td><td className="px-5 py-4 text-xs font-semibold text-slate-500">{formatDateTime(quote.statusDate)}</td><td className="px-5 py-4"><div className="flex flex-wrap gap-2"><button onClick={() => openQuoteLog(quote.sourceWorkItemId)} className="rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-3 py-2 text-xs font-black text-[#223f7a]">Log</button>{quote.status === "Not Sold" && quote.assignedProfileId === currentUserId ? <button onClick={() => requestReopenNotSold(quote)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700">Mark Sold</button> : null}</div></td></tr>;
                       })}
                     </tbody>
                   </table>
@@ -1694,6 +1807,7 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
         ) : (
           <ManagerView
             agentList={agentList}
+            customerServiceUsers={customerServiceUsers}
             sourceList={sourceList}
             workItems={workItems}
             pendingPricing={pendingPricing}
@@ -1750,8 +1864,21 @@ export function WorkDeskApp({ sessionProfile, initialData }: { sessionProfile: S
         {takeRotation ? <StartRescueTimerForm rotation={takeRotation} sourceList={sourceList} onSubmit={submitTakeQuote} /> : null}
       </Modal>
 
-      <Modal open={modal === "workload_turn"} title="Take Additional Workload" subtitle="Use an existing quote when possible, or enter older business that is not in Work Desk." onClose={() => setModal(null)}>
-        <WorkloadTurnForm quotes={allQuoteRecords} agents={agentList} sources={sourceList} onSubmit={submitWorkloadTurn} />
+      <Modal open={modal === "workload_turn"} title="Take Additional Workload" subtitle="Select a Sold or Pending Pricing quote, or enter older business that is not in Work Desk." onClose={() => setModal(null)}>
+        <WorkloadTurnForm quotes={workloadSelectableQuotes} agents={agentList} sources={sourceList} onSubmit={submitWorkloadTurn} />
+      </Modal>
+
+      <Modal open={modal === "reopen_not_sold" && reopenNotSoldRecord !== null} title="Change Not Sold to Sold" subtitle="Use this when a previous quote is sold later. The change and activation will be recorded in the quote log." onClose={() => { setModal(null); setReopenNotSoldRecord(null); }}>
+        {reopenNotSoldRecord ? (
+          <form action={submitReopenNotSold} className="space-y-4 p-6">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="font-black text-emerald-950">{reopenNotSoldRecord.customer}</p>
+              <p className="mt-1 text-sm font-semibold text-emerald-800">{reopenNotSoldRecord.source} · Previously Not Sold</p>
+            </div>
+            <Field label="Sale / activation note"><textarea name="note" required rows={4} className="field" placeholder="Explain what changed, when it sold, and any activation details." /></Field>
+            <button className="w-full rounded-xl bg-emerald-600 px-4 py-3 font-black text-white hover:bg-emerald-700">Confirm Sold</button>
+          </form>
+        ) : null}
       </Modal>
 
       <Modal open={modal === "customer_service_pass" && customerServicePassItem !== null} title="Pass Workload to Customer Service" subtitle="The workload turn stays counted to you, and this handoff is recorded as a pass with your explanation." onClose={() => { setModal(null); setCustomerServicePassItemId(null); }}>
@@ -1854,6 +1981,7 @@ function TeamPerformanceTable({ agentList, performance, currentUserId, efficienc
 
 function ManagerView({
   agentList,
+  customerServiceUsers,
   sourceList,
   workItems,
   pendingPricing,
@@ -1885,6 +2013,7 @@ function ManagerView({
   onUpdateCustomerServiceOverflow,
 }: {
   agentList: Agent[];
+  customerServiceUsers: CustomerServiceUser[];
   sourceList: SourceOption[];
   workItems: WorkItem[];
   pendingPricing: PendingPricingItem[];
@@ -2483,7 +2612,7 @@ function ManagerView({
                 {reportView === "agents" ? <AgentOperationsReport rows={reportData.byAgent} /> : null}
                 {reportView === "scorecard" ? <AgentScorecardReport rows={reportData.agentScorecards} /> : null}
                 {reportView === "workload" ? <WorkloadCapacityReport rows={reportData.workloadByAgent} /> : null}
-                {reportView === "queues" ? <QueueHealthReport rows={reportData.queueHealth} settings={settings} agents={agentList} onUpdate={onUpdateCustomerServiceOverflow} /> : null}
+                {reportView === "queues" ? <QueueHealthReport rows={reportData.queueHealth} settings={settings} customerServiceUsers={customerServiceUsers} onUpdate={onUpdateCustomerServiceOverflow} /> : null}
                 {reportView === "taken" ? <TakenQuotesReport rows={reportData.takenRows} byAgent={reportData.takenByAgent} summary={reportData.takenSummary} /> : null}
                 {reportView === "missed" ? <MissedTurnsReport rows={reportData.missedByAgent} /> : null}
                 {reportView === "passes" ? <PassBehaviorReport rows={reportData.passByAgent} /> : null}
@@ -2802,6 +2931,8 @@ function UserAdminPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const [resetTarget, setResetTarget] = useState<AdminUserAccount | null>(null);
+  const [temporaryPassword, setTemporaryPassword] = useState("");
   const [error, setError] = useState("");
   const [credential, setCredential] = useState<TemporaryCredential | null>(null);
 
@@ -2861,20 +2992,34 @@ function UserAdminPanel() {
     }
   }
 
-  async function resetPassword(user: AdminUserAccount) {
-    if (!window.confirm(`Reset ${user.display_name}'s password and require a new password at next sign-in?`)) return;
-    setResettingId(user.id);
+  function beginPasswordReset(user: AdminUserAccount) {
+    setResetTarget(user);
+    setTemporaryPassword("");
+    setError("");
+    setCredential(null);
+  }
+
+  async function resetPassword(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!resetTarget) return;
+    if (temporaryPassword.length < 8 || temporaryPassword.length > 72) {
+      setError("Temporary password must be between 8 and 72 characters.");
+      return;
+    }
+    setResettingId(resetTarget.id);
     setError("");
     setCredential(null);
     try {
       const response = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({ userId: resetTarget.id, temporaryPassword }),
       });
       const payload = await response.json() as { username?: string; displayName?: string; temporaryPassword?: string; error?: string };
       if (!response.ok || !payload.username || !payload.displayName || !payload.temporaryPassword) throw new Error(payload.error || "Unable to reset password.");
       setCredential({ username: payload.username, displayName: payload.displayName, temporaryPassword: payload.temporaryPassword });
+      setResetTarget(null);
+      setTemporaryPassword("");
       await loadUsers();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to reset password.");
@@ -2889,6 +3034,17 @@ function UserAdminPanel() {
 
   return (
     <div className="space-y-5">
+      <Modal open={resetTarget !== null} title="Set Temporary Password" subtitle="Choose the exact temporary password the employee will use at the next sign-in." onClose={() => { setResetTarget(null); setTemporaryPassword(""); }}>
+        <form onSubmit={resetPassword} className="space-y-4 p-6">
+          <div className="rounded-2xl bg-[#eef3fb] p-4">
+            <p className="font-black text-[#17305f]">{resetTarget?.display_name}</p>
+            <p className="mt-1 text-sm font-semibold text-slate-600">@{resetTarget?.username}</p>
+          </div>
+          <Field label="Temporary password"><input type="text" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} required minLength={8} maxLength={72} autoComplete="off" className="field" placeholder="Enter the temporary password" /></Field>
+          <p className="text-xs font-semibold leading-5 text-slate-500">The employee will be required to replace this with a private password after signing in.</p>
+          <button disabled={resettingId === resetTarget?.id} className="w-full rounded-xl bg-[#223f7a] px-4 py-3 font-black text-white disabled:opacity-50">{resettingId === resetTarget?.id ? "Resetting..." : "Reset Password"}</button>
+        </form>
+      </Modal>
       {credential ? (
         <section className="rounded-[28px] border border-[#b8c7e1] bg-[#eef3fb] p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -2907,18 +3063,18 @@ function UserAdminPanel() {
       <div className="grid gap-5 xl:grid-cols-[.72fr_1.28fr]">
         <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#eef3fb] text-[#223f7a]"><UserPlus className="h-5 w-5" /></div><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">User Administration</p><h3 className="mt-1 text-xl font-black">Create a new login</h3></div></div>
-          <p className="mt-3 text-sm text-slate-500">New agents are added at the end of all three queue orders and start as Unavailable. Managers never enter the rotations.</p>
+          <p className="mt-3 text-sm text-slate-500">Agents are added at the end of the three queue orders. Customer Service and Manager accounts never enter sales rotations.</p>
           <form onSubmit={createUser} className="mt-6 space-y-4">
             <Field label="Full name"><input name="displayName" required maxLength={80} className="field" placeholder="Example: Ana Lopez" /></Field>
             <div className="grid gap-4 sm:grid-cols-2"><Field label="Username"><input name="username" required minLength={3} maxLength={30} className="field" placeholder="analopez" /></Field><Field label="Initials"><input name="initials" maxLength={4} className="field uppercase" placeholder="AL" /></Field></div>
-            <Field label="Role"><select name="role" className="field"><option value="agent">Agent</option><option value="manager">Manager</option></select></Field>
+            <Field label="Role"><select name="role" className="field"><option value="agent">Agent</option><option value="customer_service">Customer Service</option><option value="manager">Manager / Admin</option></select></Field>
             <button disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#223f7a] px-4 py-3 font-black text-white transition hover:bg-[#17305f] disabled:opacity-60"><UserPlus className="h-5 w-5" />{saving ? "Creating..." : "Create User"}</button>
           </form>
         </section>
 
         <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 p-6"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Accounts</p><h3 className="mt-1 text-xl font-black">Usernames and password resets</h3><p className="mt-1 text-sm text-slate-500">Password resets create a new temporary password and force a private password change at the next sign-in.</p></div><button onClick={() => { setLoading(true); void loadUsers(); }} className="rounded-xl border border-slate-200 p-2.5 text-[#223f7a] hover:bg-[#f3f6fb]" aria-label="Refresh users"><RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /></button></div>
-          <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#f3f6fb] text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">User</th><th className="px-5 py-3">Username</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Password Status</th><th className="px-5 py-3">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{users.map((user) => <tr key={user.id}><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-[#223f7a] text-xs font-black text-white">{user.initials}</div><div><p className="font-black">{user.display_name}</p><p className="mt-1 text-xs text-slate-400">Created {formatDate(user.created_at)}</p></div></div></td><td className="px-5 py-4"><code className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-black text-[#223f7a]">{user.username}</code></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", user.role === "manager" ? "bg-[#eef3fb] text-[#223f7a]" : "bg-slate-100 text-slate-600")}>{user.role === "manager" ? "Manager" : "Agent"}</span></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", user.must_change_password ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700")}>{user.must_change_password ? "Temporary" : "Private password set"}</span></td><td className="px-5 py-4"><button disabled={resettingId === user.id} onClick={() => void resetPassword(user)} className="inline-flex items-center gap-2 rounded-xl border border-[#c9d5e9] bg-white px-3 py-2 text-xs font-black text-[#223f7a] hover:bg-[#f3f6fb] disabled:opacity-50"><KeyRound className="h-4 w-4" />{resettingId === user.id ? "Resetting..." : "Reset Password"}</button></td></tr>)}</tbody></table></div>
+          <div className="flex items-center justify-between border-b border-slate-100 p-6"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Accounts</p><h3 className="mt-1 text-xl font-black">Usernames and password resets</h3><p className="mt-1 text-sm text-slate-500">Choose the temporary password during a reset. The employee must create a private password at the next sign-in.</p></div><button onClick={() => { setLoading(true); void loadUsers(); }} className="rounded-xl border border-slate-200 p-2.5 text-[#223f7a] hover:bg-[#f3f6fb]" aria-label="Refresh users"><RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /></button></div>
+          <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#f3f6fb] text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">User</th><th className="px-5 py-3">Username</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Password Status</th><th className="px-5 py-3">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{users.map((user) => <tr key={user.id}><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-[#223f7a] text-xs font-black text-white">{user.initials}</div><div><p className="font-black">{user.display_name}</p><p className="mt-1 text-xs text-slate-400">Created {formatDate(user.created_at)}</p></div></div></td><td className="px-5 py-4"><code className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-black text-[#223f7a]">{user.username}</code></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", user.role === "manager" ? "bg-[#eef3fb] text-[#223f7a]" : user.role === "customer_service" ? "bg-cyan-50 text-cyan-700" : "bg-slate-100 text-slate-600")}>{user.role === "manager" ? "Manager / Admin" : user.role === "customer_service" ? "Customer Service" : "Agent"}</span></td><td className="px-5 py-4"><span className={cn("rounded-full px-2.5 py-1 text-xs font-black", user.must_change_password ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700")}>{user.must_change_password ? "Temporary" : "Private password set"}</span></td><td className="px-5 py-4"><button disabled={resettingId === user.id} onClick={() => beginPasswordReset(user)} className="inline-flex items-center gap-2 rounded-xl border border-[#c9d5e9] bg-white px-3 py-2 text-xs font-black text-[#223f7a] hover:bg-[#f3f6fb] disabled:opacity-50"><KeyRound className="h-4 w-4" />{resettingId === user.id ? "Resetting..." : "Reset Password"}</button></td></tr>)}</tbody></table></div>
           {loading && !users.length ? <div className="p-6 text-sm font-semibold text-slate-500">Loading users...</div> : null}
         </section>
       </div>
@@ -3077,12 +3233,12 @@ function WorkloadCapacityReport({ rows }: { rows: WorkloadRow[] }) {
 function QueueHealthReport({
   rows,
   settings,
-  agents,
+  customerServiceUsers,
   onUpdate,
 }: {
   rows: QueueHealthRow[];
   settings: WorkDeskSettings;
-  agents: Agent[];
+  customerServiceUsers: CustomerServiceUser[];
   onUpdate: (enabled: boolean, profileId: string | null) => Promise<void>;
 }) {
   const [selectedProfileId, setSelectedProfileId] = useState(settings.customerServiceProfileId || "");
@@ -3112,13 +3268,13 @@ function QueueHealthReport({
         <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
           <select value={selectedProfileId} onChange={(event) => setSelectedProfileId(event.target.value)} className="field" aria-label="Customer Service assignee">
             <option value="">Select Customer Service assignee</option>
-            {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name} · {agent.availability === "available" ? "Available" : agent.availability === "break" ? "Break / Lunch" : "Unavailable"}</option>)}
+            {customerServiceUsers.map((user) => <option key={user.id} value={user.id}>{user.name} · @{user.username} · {user.activeCount} open</option>)}
           </select>
           <button type="button" disabled={saving || !selectedProfileId} onClick={() => void save(true)} className="rounded-xl bg-cyan-700 px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? "Saving..." : settings.customerServiceOverflowEnabled ? "Save Assignee" : "Enable Overflow"}</button>
           <button type="button" disabled={saving || !settings.customerServiceOverflowEnabled} onClick={() => void save(false)} className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">Disable</button>
         </div>
         {settings.customerServiceProfileName ? <p className="mt-3 text-xs font-bold text-cyan-800">Current assignee: {settings.customerServiceProfileName}{settings.customerServiceProfileUsername ? ` · @${settings.customerServiceProfileUsername}` : ""}</p> : null}
-        <p className="mt-2 text-xs font-semibold text-slate-500">Operational recommendation: use a dedicated Customer Service agent profile and pause it from the three sales rotations unless that employee also participates in turns.</p>
+        <p className="mt-2 text-xs font-semibold text-slate-500">Only accounts created with the Customer Service role appear here. Customer Service users never enter the three sales rotations.</p>
       </section>
 
       <ReportShell eyebrow="Queue Health" title="Rotation health and queue behavior" note="Shows current owner, available coverage, claims, passes, and stolen-quote activity by queue.">
