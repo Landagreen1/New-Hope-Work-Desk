@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
 
-type AppRole = "agent" | "manager";
+type AppRole = "agent" | "manager" | "customer_service";
 
 function generateTemporaryPassword() {
   return `NH!${randomBytes(9).toString("base64url")}26`;
@@ -90,8 +90,8 @@ export async function POST(request: Request) {
   if (displayName.length < 2 || displayName.length > 80) {
     return Response.json({ error: "Display name must be between 2 and 80 characters." }, { status: 400 });
   }
-  if (role !== "agent" && role !== "manager") {
-    return Response.json({ error: "Role must be agent or manager." }, { status: 400 });
+  if (role !== "agent" && role !== "manager" && role !== "customer_service") {
+    return Response.json({ error: "Role must be agent, manager, or customer service." }, { status: 400 });
   }
 
   const initials = (requestedInitials || displayName.split(/\s+/).map((part) => part[0]).join("").slice(0, 3)).slice(0, 4);
