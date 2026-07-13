@@ -10,7 +10,8 @@ export type AssignmentMethod =
   | "update_log"
   | "manager_manual"
   | "manual_quote"
-  | "payment_log";
+  | "payment_log"
+  | "customer_service";
 export type WorkStatus = "active" | "completed" | "cancelled";
 export type QuoteDecision = "sold" | "not_sold";
 export type NotSoldReason = "price_too_high" | "chose_another_option" | "no_response" | "no_longer_needed" | "other";
@@ -137,6 +138,34 @@ export interface QuoteTakeEvent {
   elapsedSeconds: number;
 }
 
+
+export interface QuoteTakeTimer {
+  id: string;
+  rotation: "whatsapp" | "ringcentral";
+  currentProfileId: string;
+  currentAgentName: string;
+  currentAgentUsername: string;
+  startedByProfileId: string;
+  startedByName: string;
+  startedByUsername: string;
+  receivedAt: string;
+  deadlineAt: string;
+  customer: string;
+  dealer: string;
+  workType: "new_quote" | "requote";
+  note?: string;
+  status: "active" | "claimed" | "stolen" | "cancelled";
+  startedAt: string;
+  warningSentAt?: string;
+}
+
+export interface WorkDeskSettings {
+  customerServiceOverflowEnabled: boolean;
+  customerServiceProfileId?: string;
+  customerServiceProfileName?: string;
+  customerServiceProfileUsername?: string;
+}
+
 export interface AlertNotification {
   id: string;
   type: NotificationType;
@@ -180,6 +209,8 @@ export interface DashboardData {
   quoteNotes: QuoteNote[];
   quoteActivities: QuoteActivity[];
   quoteTakeEvents: QuoteTakeEvent[];
+  quoteTakeTimers: QuoteTakeTimer[];
+  settings: WorkDeskSettings;
   notifications: AlertNotification[];
   performance: PerformanceRow[];
   passEvents: PassEvent[];
