@@ -1,4 +1,33 @@
+# v0.9.2
+
+- Replaced multi-agent quote-stealing windows with one three-minute timer for the current queue agent.
+- Added immediate and 30-second rescue-timer alerts.
+- Preserved queue order when another eligible agent steals the quote.
+- Added manager-controlled Customer Service overflow in Queue Health.
+- Added required notes and pass tracking for Activation/Change Customer Service handoffs.
+- Preserved Additional Workload turn credit after Customer Service reassignment.
+
 # Changelog
+
+## v0.9.1
+
+- Redesigned Reports Center with grouped vertical navigation and a mobile selector.
+- Prioritized Command Center, Sales, People, Queues, Service, and Control reports.
+- Simplified report KPI header and export layout.
+- Simplified login screen and added Enter-to-sign-in behavior.
+
+## v0.8.0
+
+- Linked Activations automatically convert the related quote to **Sold** while still creating a workload task that must be taken and completed.
+- Added legacy/unlinked Change and Activation entry for older business not already stored in Work Desk.
+- Added a shared Quote Log for every quote with activities, notes, timestamps, display names, and `@username`.
+- Added a 3-minute **Take** action for overdue WhatsApp and RingCentral quote turns.
+- Take records the taker, skipped eligible agents, source-received time, taken time, and total elapsed time.
+- Replaced the WhatsApp Update quick action with **Payments**; payment activity does not require an existing quote or consume a turn.
+- Added notes to normal WhatsApp, RingCentral, manual, Take, workload, and manager-assignment workflows.
+- Manager reassignments now require a reason and preserve it in shared quote history when applicable.
+- Added `quote_take_events` and new v0.8.0 RPCs.
+- Requires `supabase/migrations/v0.8.0.sql`.
 
 ## v0.7.4
 
