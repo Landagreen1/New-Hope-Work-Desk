@@ -1,3 +1,22 @@
+# v0.9.4.1
+
+- Allowed quotes to proceed without a salesperson when the selected source has zero active salespeople.
+- Kept salesperson selection mandatory when the selected source has one or more active salespeople.
+- Added a safe follow-up SQL hotfix for databases where v0.9.4b was already applied.
+
+# v0.9.4
+
+- Added a one-minute automatic dashboard refresh fallback while preserving Supabase Realtime updates.
+- Added refresh-on-focus, refresh-on-tab-return, refresh-on-reconnect, and a visible Last Updated time.
+- Added safe manager-controlled user deletion that disables access and queue participation while preserving history.
+- Added dealer-specific salesperson administration. Salesperson selection is required when the selected source has active salespeople and optional when it has none.
+- Persisted salesperson ownership through Active, Pending Pricing, Sold/Not Sold, rescue timers, service work, logs, reports, and CSV data.
+- Renamed All Quotes / Quote Records to **Quotes Database** and removed quote-count navigation badges.
+- Added Quotes Database filters for day, status, update type, customer, source, salesperson, and agent.
+- Added the Agent **My Team** interaction view for reviewing the latest team quote activity and preventing duplicate entries.
+- Added Agent **Manual Workload** for Activations and Changes without moving the Additional Workload rotation.
+- Added v0.9.4 Supabase migrations and verification queries.
+
 # v0.9.3
 
 - Added a dedicated Customer Service user role and workspace.
