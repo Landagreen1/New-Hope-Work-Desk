@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
   Agent,
+  CustomerServiceUser,
   AlertNotification,
   AssignmentMethod,
   DashboardData,
@@ -27,7 +28,7 @@ type ProfileRow = {
   username: string;
   display_name: string;
   initials: string;
-  role: "agent" | "manager";
+  role: "agent" | "manager" | "customer_service";
   rotation_position: number;
   whatsapp_position: number;
   ringcentral_position: number;
@@ -213,6 +214,7 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
 
   const profiles = (profilesResult.data || []) as ProfileRow[];
   const agentProfiles = profiles.filter((profile) => profile.role === "agent");
+  const customerServiceProfiles = profiles.filter((profile) => profile.role === "customer_service");
   const dealers = (dealersResult.data || []) as DealerRow[];
   const nameByProfile = new Map(profiles.map((profile) => [profile.id, profile.display_name]));
   const usernameByProfile = new Map(profiles.map((profile) => [profile.id, profile.username]));
@@ -240,10 +242,19 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     activeCount: activeCountByAgent.get(profile.id) || 0,
   }));
 
+  const customerServiceUsers: CustomerServiceUser[] = customerServiceProfiles.map((profile) => ({
+    id: profile.id,
+    username: profile.username,
+    name: profile.display_name,
+    initials: profile.initials,
+    activeCount: activeCountByAgent.get(profile.id) || 0,
+  }));
+
   const sourceOptions: SourceOption[] = dealers.filter((dealer) => dealer.is_active).map((dealer) => ({ id: dealer.id, name: dealer.name }));
 
   const workItems: WorkItem[] = ((workResult.data || []) as WorkRow[]).map((row) => ({
     id: row.id,
+    assignedProfileId: row.assigned_profile_id,
     createdAt: row.created_at,
     assignedAt: row.assigned_at || row.created_at,
     acceptedAt: row.accepted_at || undefined,
@@ -263,6 +274,7 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
 
   const pendingPricing: PendingPricingItem[] = ((pendingResult.data || []) as PendingRow[]).map((row) => ({
     id: row.id,
+    assignedProfileId: row.assigned_profile_id,
     sourceWorkItemId: row.source_work_item_id,
     quoteCreatedAt: row.quote_created_at,
     assignedAt: row.assigned_at || row.quote_created_at,
@@ -280,6 +292,7 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
 
   const quoteOutcomes: QuoteOutcome[] = ((outcomesResult.data || []) as OutcomeRow[]).map((row) => ({
     id: row.id,
+    assignedProfileId: row.assigned_profile_id,
     sourceWorkItemId: row.source_work_item_id,
     quoteCreatedAt: row.quote_created_at,
     assignedAt: row.assigned_at || row.quote_created_at,
@@ -412,5 +425,5 @@ export async function loadDashboardData(supabase: SupabaseClient): Promise<Dashb
     rotations[kind] = row.current_profile_id || null;
   }
 
-  return { agents, sources: sourceOptions, workItems, pendingPricing, quoteOutcomes, quoteNotes, quoteActivities, quoteTakeEvents, quoteTakeTimers, settings, notifications, performance, passEvents, rotations };
+  return { agents, customerServiceUsers, sources: sourceOptions, workItems, pendingPricing, quoteOutcomes, quoteNotes, quoteActivities, quoteTakeEvents, quoteTakeTimers, settings, notifications, performance, passEvents, rotations };
 }

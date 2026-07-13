@@ -1,4 +1,4 @@
-export type AppRole = "agent" | "manager";
+export type AppRole = "agent" | "manager" | "customer_service";
 export type AvailabilityStatus = "available" | "break" | "unavailable";
 export type RotationKind = "whatsapp" | "ringcentral" | "workload";
 export type WorkType = "new_quote" | "requote" | "activation" | "change" | "whatsapp_update" | "payment";
@@ -48,6 +48,7 @@ export interface Agent {
 
 export interface WorkItem {
   id: string;
+  assignedProfileId: string;
   createdAt: string;
   assignedAt: string;
   acceptedAt?: string;
@@ -67,6 +68,7 @@ export interface WorkItem {
 
 export interface PendingPricingItem {
   id: string;
+  assignedProfileId: string;
   sourceWorkItemId: string;
   quoteCreatedAt: string;
   assignedAt: string;
@@ -84,6 +86,7 @@ export interface PendingPricingItem {
 
 export interface QuoteOutcome {
   id: string;
+  assignedProfileId: string;
   sourceWorkItemId: string;
   quoteCreatedAt: string;
   assignedAt: string;
@@ -159,6 +162,15 @@ export interface QuoteTakeTimer {
   warningSentAt?: string;
 }
 
+
+export interface CustomerServiceUser {
+  id: string;
+  username: string;
+  name: string;
+  initials: string;
+  activeCount: number;
+}
+
 export interface WorkDeskSettings {
   customerServiceOverflowEnabled: boolean;
   customerServiceProfileId?: string;
@@ -202,6 +214,7 @@ export interface PerformanceRow {
 
 export interface DashboardData {
   agents: Agent[];
+  customerServiceUsers: CustomerServiceUser[];
   sources: SourceOption[];
   workItems: WorkItem[];
   pendingPricing: PendingPricingItem[];
