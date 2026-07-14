@@ -6021,6 +6021,7 @@ function ManagerView({
           ...event,
           customer: quote?.customer || "Unknown quote",
           source: quote?.source || "Unknown source",
+          salesperson: quote?.salesperson || "Not recorded",
           quoteAgent: quote?.agent || "Unknown agent",
           quoteStatus: quote?.status || "Unknown",
           workType: quote?.workType || "new_quote",
@@ -6365,6 +6366,87 @@ function ManagerView({
               ? "Low value"
               : "Monitor",
     }));
+
+    const sourceSalespersonMap = new Map<
+      string,
+      {
+        source: string;
+        salesperson: string;
+        quotes: number;
+        sold: number;
+        notSold: number;
+        pending: number;
+        sourceWorkItemIds: string[];
+      }
+    >();
+
+    quotes.forEach((item) => {
+      const salesperson = item.salesperson || "Not recorded";
+      const key = `${item.dealer}\u0000${salesperson}`;
+      const row = sourceSalespersonMap.get(key) || {
+        source: item.dealer,
+        salesperson,
+        quotes: 0,
+        sold: 0,
+        notSold: 0,
+        pending: 0,
+        sourceWorkItemIds: [],
+      };
+
+      row.quotes += 1;
+      row.sourceWorkItemIds.push(item.sourceWorkItemId);
+      if (item.lifecycle === "Sold") row.sold += 1;
+      if (item.lifecycle === "Not Sold") row.notSold += 1;
+      if (item.lifecycle === "Price Sent") row.pending += 1;
+      sourceSalespersonMap.set(key, row);
+    });
+
+    const sourceSalespeople = Array.from(sourceSalespersonMap.values())
+      .map((row) => {
+        const finalized = row.sold + row.notSold;
+        const efficiency = row.quotes ? (finalized / row.quotes) * 100 : 0;
+        const conversion = finalized ? (row.sold / finalized) * 100 : 0;
+        const taken = takenRows.filter(
+          (event) =>
+            event.source === row.source &&
+            event.salesperson === row.salesperson,
+        ).length;
+        const notes = row.sourceWorkItemIds.reduce(
+          (sum, sourceWorkItemId) =>
+            sum + (quoteNotesBySource.get(sourceWorkItemId) || []).length,
+          0,
+        );
+
+        return {
+          source: row.source,
+          salesperson: row.salesperson,
+          quotes: row.quotes,
+          sold: row.sold,
+          notSold: row.notSold,
+          pending: row.pending,
+          finalized,
+          efficiency,
+          conversion,
+          taken,
+          notes,
+          category:
+            row.quotes >= 10 && conversion >= 60
+              ? "High value"
+              : row.quotes >= 10 && conversion < 50
+                ? "Needs attention"
+                : row.quotes < 5 && conversion < 40
+                  ? "Low value"
+                  : "Monitor",
+        };
+      })
+      .sort(
+        (left, right) =>
+          right.sold - left.sold ||
+          right.conversion - left.conversion ||
+          right.quotes - left.quotes ||
+          left.source.localeCompare(right.source) ||
+          left.salesperson.localeCompare(right.salesperson),
+      );
     const dailyMap = new Map<
       string,
       {
@@ -6517,6 +6599,7 @@ function ManagerView({
       queueHealth,
       agentScorecards,
       sourceRisk,
+      sourceSalespeople,
       paymentRows,
       activationRows,
       changeRows,
@@ -6653,9 +6736,10 @@ function ManagerView({
 
   function exportSourceReport() {
     downloadCsv(
-      `source-performance-${reportStart}-to-${reportEnd}.csv`,
-      reportData.bySource.map((row) => ({
-        Source: row.name,
+      `source-salesperson-performance-${reportStart}-to-${reportEnd}.csv`,
+      reportData.sourceSalespeople.map((row) => ({
+        Salesperson: row.salesperson,
+        Source: row.source,
         Quotes: row.quotes,
         "Finalized Quotes": row.finalized,
         Sold: row.sold,
@@ -6663,6 +6747,9 @@ function ManagerView({
         "Price Sent": row.pending,
         "Efficiency %": row.efficiency.toFixed(1),
         "Conversion %": row.conversion.toFixed(1),
+        "Quotes Taken": row.taken,
+        Notes: row.notes,
+        Category: row.category,
       })),
     );
   }
@@ -7654,7 +7741,10 @@ function ManagerView({
                   />
                 ) : null}
                 {reportView === "sources" ? (
-                  <SourceRiskReport rows={reportData.sourceRisk} />
+                  <SourceRiskReport
+                    rows={reportData.sourceRisk}
+                    salespersonRows={reportData.sourceSalespeople}
+                  />
                 ) : null}
                 {reportView === "service" ? (
                   <ServiceControlReport
@@ -9181,6 +9271,828 @@ function ExecutiveReport({
   );
 }
 
+function AgentOperationsReport({
+  rows,
+}: {
+  rows: Array<{
+    agent: string;
+    quotes: number;
+    whatsapp: number;
+    ringcentral: number;
+    manual: number;
+    workload: number;
+    updates: number;
+    passes: number;
+    sold: number;
+    notSold: number;
+    finalized: number;
+    pending: number;
+    efficiency: number;
+    conversion: number;
+  }>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 p-6">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+          Agent Distribution
+        </p>
+        <h3 className="mt-1 text-xl font-black">
+          Sales and operational activity
+        </h3>
+        <p className="mt-1 text-sm text-slate-500">
+          Efficiency = final Sold/Not Sold decisions ÷ all quotes. Pending
+          Pricing is not counted as completed.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+            <tr>
+              <th className="px-5 py-3">Agent</th>
+              <th className="px-5 py-3">WA</th>
+              <th className="px-5 py-3">RC</th>
+              <th className="px-5 py-3">Manual</th>
+              <th className="px-5 py-3">Workload</th>
+              <th className="px-5 py-3">Payments</th>
+              <th className="px-5 py-3">Passes</th>
+              <th className="px-5 py-3">Finalized</th>
+              <th className="px-5 py-3">Sold</th>
+              <th className="px-5 py-3">Pending</th>
+              <th className="px-5 py-3">Efficiency</th>
+              <th className="px-5 py-3">Conversion</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((row) => (
+              <tr key={row.agent}>
+                <td className="px-5 py-4 font-black">{row.agent}</td>
+                <td className="px-5 py-4 font-black text-emerald-700">
+                  {row.whatsapp}
+                </td>
+                <td className="px-5 py-4 font-black text-blue-700">
+                  {row.ringcentral}
+                </td>
+                <td className="px-5 py-4 font-black">{row.manual}</td>
+                <td className="px-5 py-4 font-black text-violet-700">
+                  {row.workload}
+                </td>
+                <td className="px-5 py-4 font-black text-amber-700">
+                  {row.updates}
+                </td>
+                <td className="px-5 py-4 font-black text-rose-700">
+                  {row.passes}
+                </td>
+                <td className="px-5 py-4 font-black text-cyan-700">
+                  {row.finalized}
+                </td>
+                <td className="px-5 py-4 font-black text-emerald-700">
+                  {row.sold}
+                </td>
+                <td className="px-5 py-4 font-black text-blue-700">
+                  {row.pending}
+                </td>
+                <td className="px-5 py-4">
+                  <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">
+                    {row.efficiency.toFixed(1)}%
+                  </span>
+                </td>
+                <td className="px-5 py-4">
+                  <span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-xs font-black text-[#223f7a]">
+                    {row.conversion.toFixed(1)}%
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function QuoteTimingReport({
+  rows,
+  details,
+}: {
+  rows: Array<{
+    agent: string;
+    quotes: number;
+    accepted: number;
+    avgAccept: number | null;
+    avgPrice: number | null;
+    avgFinal: number | null;
+    avgPriceDecision: number | null;
+    avgTotalCycle: number | null;
+  }>;
+  details: Array<{
+    id: string;
+    customer: string;
+    dealer: string;
+    agent: string;
+    lifecycle: string;
+    createdAt: string;
+    assignedAt: string;
+    acceptedAt?: string;
+    priceSentAt?: string;
+    finalizedAt?: string;
+    timeToAccept: number | null;
+    timeToPrice: number | null;
+    timeToFinal: number | null;
+    priceToDecision: number | null;
+    totalCycle: number | null;
+    notSoldReason?: string;
+  }>;
+}) {
+  const finalizedDetails = details
+    .filter((item) => item.finalizedAt)
+    .sort(
+      (a, b) =>
+        new Date(b.finalizedAt || 0).getTime() -
+        new Date(a.finalizedAt || 0).getTime(),
+    );
+  return (
+    <div className="space-y-5">
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+            Quote Cycle Timing
+          </p>
+          <h3 className="mt-1 text-xl font-black">Average speed by agent</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Measures assignment → quote taken, quote taken → price sent, and
+            quote taken → final Sold/Not Sold decision.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+              <tr>
+                <th className="px-5 py-3">Agent</th>
+                <th className="px-5 py-3">Quotes</th>
+                <th className="px-5 py-3">Taken</th>
+                <th className="px-5 py-3">Assign → Take</th>
+                <th className="px-5 py-3">Take → Price</th>
+                <th className="px-5 py-3">Take → Final</th>
+                <th className="px-5 py-3">Price → Decision</th>
+                <th className="px-5 py-3">Total Cycle</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((row) => (
+                <tr key={row.agent}>
+                  <td className="px-5 py-4 font-black">{row.agent}</td>
+                  <td className="px-5 py-4 font-black">{row.quotes}</td>
+                  <td className="px-5 py-4 font-black text-emerald-700">
+                    {row.accepted}
+                  </td>
+                  <td className="px-5 py-4 font-black text-amber-700">
+                    {formatDuration(row.avgAccept)}
+                  </td>
+                  <td className="px-5 py-4 font-black text-blue-700">
+                    {formatDuration(row.avgPrice)}
+                  </td>
+                  <td className="px-5 py-4 font-black text-cyan-700">
+                    {formatDuration(row.avgFinal)}
+                  </td>
+                  <td className="px-5 py-4 font-black text-violet-700">
+                    {formatDuration(row.avgPriceDecision)}
+                  </td>
+                  <td className="px-5 py-4 font-black text-[#223f7a]">
+                    {formatDuration(row.avgTotalCycle)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+            Detailed Timeline
+          </p>
+          <h3 className="mt-1 text-xl font-black">Recent finalized quotes</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Every lifecycle timestamp is preserved for audit and coaching.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+              <tr>
+                <th className="px-5 py-3">Customer</th>
+                <th className="px-5 py-3">Agent</th>
+                <th className="px-5 py-3">Assigned</th>
+                <th className="px-5 py-3">Taken by Agent</th>
+                <th className="px-5 py-3">Price Sent</th>
+                <th className="px-5 py-3">Final Decision</th>
+                <th className="px-5 py-3">Outcome</th>
+                <th className="px-5 py-3">Cycle</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {finalizedDetails.slice(0, 100).map((item) => (
+                <tr key={item.id}>
+                  <td className="px-5 py-4">
+                    <p className="font-black">{item.customer}</p>
+                    <p className="mt-1 text-xs text-slate-400">{item.dealer}</p>
+                  </td>
+                  <td className="px-5 py-4 font-bold">{item.agent}</td>
+                  <td className="px-5 py-4 text-xs text-slate-600">
+                    {formatDateTime(item.assignedAt)}
+                  </td>
+                  <td className="px-5 py-4 text-xs text-slate-600">
+                    {item.acceptedAt ? formatDateTime(item.acceptedAt) : "—"}
+                  </td>
+                  <td className="px-5 py-4 text-xs text-slate-600">
+                    {item.priceSentAt ? formatDateTime(item.priceSentAt) : "—"}
+                  </td>
+                  <td className="px-5 py-4 text-xs text-slate-600">
+                    {item.finalizedAt ? formatDateTime(item.finalizedAt) : "—"}
+                  </td>
+                  <td className="px-5 py-4">
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-xs font-black",
+                        item.lifecycle === "Sold"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-rose-50 text-rose-700",
+                      )}
+                    >
+                      {item.lifecycle}
+                    </span>
+                    {item.notSoldReason ? (
+                      <p className="mt-2 max-w-48 text-[10px] font-semibold text-slate-400">
+                        {item.notSoldReason}
+                      </p>
+                    ) : null}
+                  </td>
+                  <td className="px-5 py-4 font-black text-[#223f7a]">
+                    {formatDuration(item.totalCycle)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function RankedReportTable({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: Array<{
+    name: string;
+    quotes: number;
+    sold: number;
+    notSold: number;
+    finalized: number;
+    pending: number;
+    efficiency: number;
+    conversion: number;
+  }>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 p-6">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+          Comparative Report
+        </p>
+        <h3 className="mt-1 text-xl font-black">{title}</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          Efficiency counts only Sold and Not Sold as completed; Price Sent
+          remains pending.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+            <tr>
+              <th className="px-5 py-3">Rank</th>
+              <th className="px-5 py-3">Name</th>
+              <th className="px-5 py-3">Quotes</th>
+              <th className="px-5 py-3">Finalized</th>
+              <th className="px-5 py-3">Sold</th>
+              <th className="px-5 py-3">Not Sold</th>
+              <th className="px-5 py-3">Price Sent</th>
+              <th className="px-5 py-3">Efficiency</th>
+              <th className="px-5 py-3">Conversion</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((row, index) => (
+              <tr key={row.name}>
+                <td className="px-5 py-4 font-black text-slate-400">
+                  #{index + 1}
+                </td>
+                <td className="px-5 py-4 font-black">{row.name}</td>
+                <td className="px-5 py-4 font-black">{row.quotes}</td>
+                <td className="px-5 py-4 font-black text-cyan-700">
+                  {row.finalized}
+                </td>
+                <td className="px-5 py-4 font-black text-emerald-700">
+                  {row.sold}
+                </td>
+                <td className="px-5 py-4 font-black text-rose-700">
+                  {row.notSold}
+                </td>
+                <td className="px-5 py-4 font-black text-blue-700">
+                  {row.pending}
+                </td>
+                <td className="px-5 py-4">
+                  <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">
+                    {row.efficiency.toFixed(1)}%
+                  </span>
+                </td>
+                <td className="px-5 py-4">
+                  <span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-xs font-black text-[#223f7a]">
+                    {row.conversion.toFixed(1)}%
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function TakenQuotesReport({
+  rows,
+  byAgent,
+  summary,
+}: {
+  rows: Array<
+    QuoteTakeEvent & {
+      customer: string;
+      source: string;
+      quoteAgent: string;
+      quoteStatus: string;
+      workType: WorkType;
+      receivedThrough: string;
+    }
+  >;
+  byAgent: Array<{
+    agent: string;
+    username: string;
+    total: number;
+    whatsapp: number;
+    ringcentral: number;
+    skippedAgents: number;
+    avgElapsedSeconds: number;
+  }>;
+  summary: {
+    total: number;
+    whatsapp: number;
+    ringcentral: number;
+    skippedAgents: number;
+    avgElapsedSeconds: number;
+  };
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <SummaryCard
+          label="Taken Quotes"
+          value={summary.total}
+          note="Overdue quotes taken"
+          icon={<Zap className="h-5 w-5 text-amber-700" />}
+          tone="bg-amber-50"
+        />
+        <SummaryCard
+          label="Avg Elapsed"
+          value={formatElapsedSeconds(summary.avgElapsedSeconds)}
+          note="Received → Take"
+          icon={<Clock3 className="h-5 w-5 text-blue-700" />}
+          tone="bg-blue-50"
+        />
+        <SummaryCard
+          label="Missed Turns"
+          value={summary.skippedAgents}
+          note="Current-agent timers expired"
+          icon={<SkipForward className="h-5 w-5 text-rose-700" />}
+          tone="bg-rose-50"
+        />
+        <SummaryCard
+          label="WhatsApp"
+          value={summary.whatsapp}
+          note="Taken from WA queue"
+          icon={<MessageCircleMore className="h-5 w-5 text-emerald-700" />}
+          tone="bg-emerald-50"
+        />
+        <SummaryCard
+          label="RingCentral"
+          value={summary.ringcentral}
+          note="Taken from RC queue"
+          icon={<PhoneCall className="h-5 w-5 text-blue-700" />}
+          tone="bg-blue-50"
+        />
+      </div>
+
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+            Taken Performance
+          </p>
+          <h3 className="mt-1 text-xl font-black">Who takes overdue quotes</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Counts only successful Take actions. Lower elapsed time means the
+            agent acted sooner after becoming eligible.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-amber-50/60 text-[11px] font-black uppercase tracking-wider text-slate-400">
+              <tr>
+                <th className="px-5 py-3">Agent</th>
+                <th className="px-5 py-3">Taken</th>
+                <th className="px-5 py-3">WhatsApp</th>
+                <th className="px-5 py-3">RingCentral</th>
+                <th className="px-5 py-3">Avg Elapsed</th>
+                <th className="px-5 py-3">Missed Turns</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {byAgent.map((row) => (
+                <tr key={row.agent}>
+                  <td className="px-5 py-4">
+                    <p className="font-black">{row.agent}</p>
+                    {row.username ? (
+                      <p className="mt-1 text-xs font-bold text-slate-400">
+                        @{row.username}
+                      </p>
+                    ) : null}
+                  </td>
+                  <td className="px-5 py-4 font-black text-amber-700">
+                    {row.total}
+                  </td>
+                  <td className="px-5 py-4 font-black text-emerald-700">
+                    {row.whatsapp}
+                  </td>
+                  <td className="px-5 py-4 font-black text-blue-700">
+                    {row.ringcentral}
+                  </td>
+                  <td className="px-5 py-4 font-black">
+                    {formatElapsedSeconds(row.avgElapsedSeconds)}
+                  </td>
+                  <td className="px-5 py-4 font-black text-rose-700">
+                    {row.skippedAgents}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!byAgent.length ? (
+          <div className="p-8 text-center text-sm font-semibold text-slate-500">
+            No successful Take actions in this date range.
+          </div>
+        ) : null}
+      </section>
+
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+            Taken Quote Detail
+          </p>
+          <h3 className="mt-1 text-xl font-black">
+            Every successful Take action
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Shows the exact quote, taker, missed current agent, queue, and
+            elapsed time.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+              <tr>
+                <th className="px-5 py-3">Taken</th>
+                <th className="px-5 py-3">Customer</th>
+                <th className="px-5 py-3">Queue</th>
+                <th className="px-5 py-3">Taken By</th>
+                <th className="px-5 py-3">Missed Agent</th>
+                <th className="px-5 py-3">Elapsed</th>
+                <th className="px-5 py-3">Quote Agent</th>
+                <th className="px-5 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td className="px-5 py-4">
+                    <p className="text-xs font-bold text-slate-600">
+                      {formatDateTime(row.takenAt)}
+                    </p>
+                    <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                      Received {formatDateTime(row.receivedAt)}
+                    </p>
+                  </td>
+                  <td className="px-5 py-4">
+                    <p className="font-black">{row.customer}</p>
+                    <p className="mt-1 text-xs text-slate-400">{row.source}</p>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-xs font-black",
+                        row.rotation === "whatsapp"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-blue-50 text-blue-700",
+                      )}
+                    >
+                      {row.rotation === "whatsapp" ? "WhatsApp" : "RingCentral"}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <p className="font-black">{row.takerName}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-400">
+                      @{row.takerUsername}
+                    </p>
+                  </td>
+                  <td className="px-5 py-4 text-xs font-semibold text-slate-600">
+                    {row.skippedAgents.length
+                      ? row.skippedAgents
+                          .map((agent) => `@${agent.username}`)
+                          .join(", ")
+                      : "None"}
+                  </td>
+                  <td className="px-5 py-4 font-black text-amber-700">
+                    {formatElapsedSeconds(row.elapsedSeconds)}
+                  </td>
+                  <td className="px-5 py-4 font-bold text-slate-700">
+                    {row.quoteAgent}
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-700">
+                      {row.quoteStatus}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!rows.length ? (
+          <div className="p-8 text-center text-sm font-semibold text-slate-500">
+            No taken quotes in this date range.
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function FollowUpReport({
+  pendingPricing,
+}: {
+  pendingPricing: PendingPricingItem[];
+}) {
+  const buckets = [
+    {
+      label: "Sent today",
+      count: pendingPricing.filter((item) => daysSince(item.priceSentAt) === 0)
+        .length,
+      tone: "bg-blue-50 text-blue-700",
+    },
+    {
+      label: "1 day waiting",
+      count: pendingPricing.filter((item) => daysSince(item.priceSentAt) === 1)
+        .length,
+      tone: "bg-amber-50 text-amber-700",
+    },
+    {
+      label: "2+ days waiting",
+      count: pendingPricing.filter((item) => daysSince(item.priceSentAt) >= 2)
+        .length,
+      tone: "bg-rose-50 text-rose-700",
+    },
+  ];
+  return (
+    <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+        Aging Analysis
+      </p>
+      <h3 className="mt-1 text-xl font-black">
+        Pending pricing follow-up priority
+      </h3>
+      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+        {buckets.map((bucket) => (
+          <div
+            key={bucket.label}
+            className={cn("rounded-2xl p-5", bucket.tone)}
+          >
+            <p className="text-3xl font-black">{bucket.count}</p>
+            <p className="mt-1 text-sm font-black">{bucket.label}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+            <tr>
+              <th className="py-3">Customer</th>
+              <th className="py-3">Source</th>
+              <th className="py-3">Agent</th>
+              <th className="py-3">Sent</th>
+              <th className="py-3">Age</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {[...pendingPricing]
+              .sort(
+                (a, b) =>
+                  new Date(a.priceSentAt).getTime() -
+                  new Date(b.priceSentAt).getTime(),
+              )
+              .map((item) => (
+                <tr key={item.id}>
+                  <td className="py-4 font-black">{item.customer}</td>
+                  <td className="py-4 text-slate-600">{item.dealer}</td>
+                  <td className="py-4 font-bold">{item.assignedAgent}</td>
+                  <td className="py-4 text-slate-600">
+                    {formatDateTime(item.priceSentAt)}
+                  </td>
+                  <td className="py-4 font-black text-amber-700">
+                    {daysSince(item.priceSentAt)} days
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ServiceActivityReport({ items }: { items: WorkItem[] }) {
+  return (
+    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 p-6">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+          Non-Quote Activity
+        </p>
+        <h3 className="mt-1 text-xl font-black">
+          Updates, activations, and changes
+        </h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+            <tr>
+              <th className="px-5 py-3">Date</th>
+              <th className="px-5 py-3">Customer</th>
+              <th className="px-5 py-3">Type</th>
+              <th className="px-5 py-3">Agent</th>
+              <th className="px-5 py-3">Method</th>
+              <th className="px-5 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.map((item) => (
+              <tr key={item.id}>
+                <td className="px-5 py-4 text-xs text-slate-500">
+                  {formatDateTime(item.createdAt)}
+                </td>
+                <td className="px-5 py-4">
+                  <p className="font-black">{item.customer}</p>
+                  <p className="mt-1 text-xs text-slate-400">{item.dealer}</p>
+                </td>
+                <td className="px-5 py-4 font-bold">
+                  {workTypeLabels[item.workType]}
+                </td>
+                <td className="px-5 py-4 font-bold">{item.assignedAgent}</td>
+                <td className="px-5 py-4">
+                  <MethodBadge method={item.assignmentMethod} />
+                </td>
+                <td className="px-5 py-4 capitalize text-slate-600">
+                  {item.status}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+type ExceptionRow = {
+  severity: "warning" | "critical";
+  area: string;
+  issue: string;
+  owner: string;
+  age: string;
+};
+type DailyRow = {
+  date: string;
+  quotes: number;
+  sold: number;
+  notSold: number;
+  pending: number;
+  taken: number;
+  passes: number;
+  service: number;
+};
+type AgentScoreRow = {
+  agent: string;
+  score: number;
+  quotes: number;
+  sold: number;
+  conversion: number;
+  efficiency: number;
+  avgPrice: number | null;
+  docCoverage: number;
+  taken: number;
+  workload: number;
+  passes: number;
+};
+type WorkloadRow = {
+  agent: string;
+  status: AvailabilityStatus;
+  activeQuotes: number;
+  activations: number;
+  changes: number;
+  payments: number;
+  pending: number;
+  unaccepted: number;
+  total: number;
+};
+type QueueHealthRow = {
+  rotation: string;
+  current: string;
+  eligible: number;
+  available: number;
+  claims: number;
+  passes: number;
+  taken: number;
+  health: string;
+};
+type MissedTurnRow = {
+  agent: string;
+  missed: number;
+  whatsapp: number;
+  ringcentral: number;
+  sold: number;
+  pending: number;
+};
+type PassBehaviorRow = {
+  agent: string;
+  total: number;
+  whatsapp: number;
+  ringcentral: number;
+  workload: number;
+  reasons: string[];
+};
+type DocumentationRow = {
+  agent: string;
+  notes: number;
+  quotes: number;
+  withNotes: number;
+  coverage: number;
+};
+type SourceRiskRow = {
+  name: string;
+  quotes: number;
+  sold: number;
+  notSold: number;
+  pending: number;
+  finalized: number;
+  efficiency: number;
+  conversion: number;
+  taken: number;
+  notes: number;
+  category: string;
+};
+
+type SourceSalespersonRow = {
+  source: string;
+  salesperson: string;
+  quotes: number;
+  sold: number;
+  notSold: number;
+  pending: number;
+  finalized: number;
+  efficiency: number;
+  conversion: number;
+  taken: number;
+  notes: number;
+  category: string;
+};
+type IntegrityIssue = {
+  severity: "warning" | "critical";
+  issue: string;
+  detail: string;
+};
+type SystemCheck = { check: string; status: boolean; detail: string };
+
 type ManagerActivityRow = QuoteActivity;
 
 function ReportShell({
@@ -9910,55 +10822,268 @@ function DocumentationQualityReport({ rows }: { rows: DocumentationRow[] }) {
   );
 }
 
-function SourceRiskReport({ rows }: { rows: SourceRiskRow[] }) {
+function SourceRiskReport({
+  rows,
+  salespersonRows,
+}: {
+  rows: SourceRiskRow[];
+  salespersonRows: SourceSalespersonRow[];
+}) {
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [salespersonFilter, setSalespersonFilter] = useState("all");
+
+  const sourceOptions = useMemo(
+    () =>
+      Array.from(new Set(salespersonRows.map((row) => row.source))).sort(
+        (left, right) => left.localeCompare(right),
+      ),
+    [salespersonRows],
+  );
+
+  const salespersonOptions = useMemo(() => {
+    if (sourceFilter === "all") return [];
+
+    return Array.from(
+      new Set(
+        salespersonRows
+          .filter((row) => row.source === sourceFilter)
+          .map((row) => row.salesperson),
+      ),
+    ).sort((left, right) => left.localeCompare(right));
+  }, [salespersonRows, sourceFilter]);
+
+  const filteredSalespersonRows = useMemo(
+    () =>
+      salespersonRows
+        .filter(
+          (row) =>
+            (sourceFilter === "all" || row.source === sourceFilter) &&
+            (salespersonFilter === "all" ||
+              row.salesperson === salespersonFilter),
+        )
+        .sort(
+          (left, right) =>
+            right.sold - left.sold ||
+            right.conversion - left.conversion ||
+            right.quotes - left.quotes ||
+            left.source.localeCompare(right.source) ||
+            left.salesperson.localeCompare(right.salesperson),
+        ),
+    [salespersonFilter, salespersonRows, sourceFilter],
+  );
+
+  const filteredSourceRows = useMemo(() => {
+    if (salespersonFilter === "all") {
+      return rows.filter(
+        (row) => sourceFilter === "all" || row.name === sourceFilter,
+      );
+    }
+
+    const grouped = new Map<
+      string,
+      {
+        name: string;
+        quotes: number;
+        sold: number;
+        notSold: number;
+        pending: number;
+      }
+    >();
+
+    filteredSalespersonRows.forEach((row) => {
+      const current = grouped.get(row.source) || {
+        name: row.source,
+        quotes: 0,
+        sold: 0,
+        notSold: 0,
+        pending: 0,
+      };
+
+      current.quotes += row.quotes;
+      current.sold += row.sold;
+      current.notSold += row.notSold;
+      current.pending += row.pending;
+      grouped.set(row.source, current);
+    });
+
+    return Array.from(grouped.values()).map((row) => {
+      const finalized = row.sold + row.notSold;
+
+      return {
+        ...row,
+        finalized,
+        efficiency: row.quotes ? (finalized / row.quotes) * 100 : 0,
+        conversion: finalized ? (row.sold / finalized) * 100 : 0,
+      };
+    });
+  }, [
+    filteredSalespersonRows,
+    rows,
+    salespersonFilter,
+    sourceFilter,
+  ]);
+
+  const topSeller = filteredSalespersonRows[0];
+  const activeFilterLabel =
+    sourceFilter === "all"
+      ? "all sources"
+      : salespersonFilter === "all"
+        ? sourceFilter
+        : `${sourceFilter} · ${salespersonFilter}`;
+
   return (
     <div className="space-y-5">
-      <RankedReportTable title="Source Performance" rows={rows} />
       <ReportShell
-        eyebrow="Source Risk"
-        title="Opportunity and risk by source"
-        note="Classifies sources by quote volume, conversion, and performance."
+        eyebrow="Source Intelligence Filters"
+        title="Dealer and salesperson performance"
+        note="Select the dealer first, then narrow the report to one salesperson. Salespeople are ranked by Sold quotes, conversion, and quote volume."
       >
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-              <tr>
-                <th className="py-3">Source</th>
-                <th className="py-3">Category</th>
-                <th className="py-3">Quotes</th>
-                <th className="py-3">Sold</th>
-                <th className="py-3">Conversion</th>
-                <th className="py-3">Taken</th>
-                <th className="py-3">Notes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.map((row) => (
-                <tr key={row.name}>
-                  <td className="py-4 font-black">{row.name}</td>
-                  <td className="py-4">
-                    <span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-xs font-black text-[#223f7a]">
-                      {row.category}
-                    </span>
-                  </td>
-                  <td className="py-4 font-black">{row.quotes}</td>
-                  <td className="py-4 font-black text-emerald-700">
-                    {row.sold}
-                  </td>
-                  <td className="py-4 font-black">
-                    {row.conversion.toFixed(1)}%
-                  </td>
-                  <td className="py-4 font-black text-amber-700">
-                    {row.taken}
-                  </td>
-                  <td className="py-4 font-black text-slate-600">
-                    {row.notes}
-                  </td>
-                </tr>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(240px,0.8fr)]">
+          <label className="block">
+            <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
+              1. Dealer / Source
+            </span>
+            <select
+              value={sourceFilter}
+              onChange={(event) => {
+                setSourceFilter(event.target.value);
+                setSalespersonFilter("all");
+              }}
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 outline-none focus:border-[#6b84b5] focus:ring-4 focus:ring-[#eef3fb]"
+            >
+              <option value="all">All dealers / sources</option>
+              {sourceOptions.map((source) => (
+                <option key={source} value={source}>
+                  {source}
+                </option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
+              2. Salesperson
+            </span>
+            <select
+              value={salespersonFilter}
+              onChange={(event) => setSalespersonFilter(event.target.value)}
+              disabled={sourceFilter === "all"}
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 focus:border-[#6b84b5] focus:ring-4 focus:ring-[#eef3fb]"
+            >
+              <option value="all">
+                {sourceFilter === "all"
+                  ? "Select a dealer first"
+                  : "All salespeople"}
+              </option>
+              {salespersonOptions.map((salesperson) => (
+                <option key={salesperson} value={salesperson}>
+                  {salesperson}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="rounded-2xl border border-[#c9d5e9] bg-[#f3f6fb] p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#4d6aa8]">
+              Top salesperson
+            </p>
+            {topSeller ? (
+              <>
+                <p className="mt-2 text-lg font-black text-[#17305f]">
+                  {topSeller.salesperson}
+                </p>
+                <p className="mt-1 text-xs font-bold text-slate-500">
+                  {topSeller.source}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs font-black">
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">
+                    {topSeller.sold} Sold
+                  </span>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[#223f7a]">
+                    {topSeller.conversion.toFixed(1)}% conversion
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="mt-2 text-sm font-semibold text-slate-500">
+                No salesperson activity for this selection.
+              </p>
+            )}
+          </div>
         </div>
+      </ReportShell>
+
+      <RankedReportTable
+        title={`Source Performance · ${activeFilterLabel}`}
+        rows={filteredSourceRows}
+      />
+
+      <ReportShell
+        eyebrow="Salesperson by Dealer"
+        title="Who is selling more for each source"
+        note="The table starts with the salesperson and can be narrowed by dealer and salesperson using the controls above."
+      >
+        {filteredSalespersonRows.length ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th className="py-3 pr-5">Salesperson</th>
+                  <th className="py-3 pr-5">Dealer / Source</th>
+                  <th className="py-3 pr-5">Category</th>
+                  <th className="py-3 pr-5">Quotes</th>
+                  <th className="py-3 pr-5">Sold</th>
+                  <th className="py-3 pr-5">Not Sold</th>
+                  <th className="py-3 pr-5">Price Sent</th>
+                  <th className="py-3 pr-5">Conversion</th>
+                  <th className="py-3 pr-5">Taken</th>
+                  <th className="py-3">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredSalespersonRows.map((row) => (
+                  <tr key={`${row.source}-${row.salesperson}`}>
+                    <td className="py-4 pr-5">
+                      <p className="font-black text-[#17305f]">
+                        {row.salesperson}
+                      </p>
+                    </td>
+                    <td className="py-4 pr-5 font-bold">{row.source}</td>
+                    <td className="py-4 pr-5">
+                      <span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-xs font-black text-[#223f7a]">
+                        {row.category}
+                      </span>
+                    </td>
+                    <td className="py-4 pr-5 font-black">{row.quotes}</td>
+                    <td className="py-4 pr-5 font-black text-emerald-700">
+                      {row.sold}
+                    </td>
+                    <td className="py-4 pr-5 font-black text-rose-700">
+                      {row.notSold}
+                    </td>
+                    <td className="py-4 pr-5 font-black text-amber-700">
+                      {row.pending}
+                    </td>
+                    <td className="py-4 pr-5 font-black">
+                      {row.conversion.toFixed(1)}%
+                    </td>
+                    <td className="py-4 pr-5 font-black text-amber-700">
+                      {row.taken}
+                    </td>
+                    <td className="py-4 font-black text-slate-600">
+                      {row.notes}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyReport
+            title="No salesperson activity"
+            note="No quotes match the selected dealer and salesperson filters."
+          />
+        )}
       </ReportShell>
     </div>
   );
