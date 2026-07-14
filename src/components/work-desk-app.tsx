@@ -206,13 +206,11 @@ type ModalType =
 type AgentTab = "desk" | "pricing" | "quotes" | "team" | "performance";
 type ManagerTab =
   | "overview"
-  | "tasks"
-  | "pricing"
+  | "work"
   | "quotes"
   | "reports"
   | "team"
-  | "sources"
-  | "users";
+  | "administration";
 type ReportView =
   | "executive"
   | "exceptions"
@@ -2543,9 +2541,13 @@ function CustomerServiceWorkspace({
 export function WorkDeskApp({
   sessionProfile,
   initialData,
+  workspaceTabs,
+  externalWorkspaceContent,
 }: {
   sessionProfile: SessionProfile;
   initialData: DashboardData;
+  workspaceTabs?: React.ReactNode;
+  externalWorkspaceContent?: React.ReactNode;
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -3889,8 +3891,16 @@ export function WorkDeskApp({
         </div>
       </header>
 
+      {workspaceTabs ? (
+        <div className="sticky top-[65px] z-20 border-b border-[#dbe3f0] bg-[#f3f5f9]/95 backdrop-blur-xl">
+          {workspaceTabs}
+        </div>
+      ) : null}
+
       <main className="mx-auto max-w-[1700px] px-4 py-6 sm:px-6 lg:px-8">
-        {isCustomerService && currentCustomerServiceUser ? (
+        {externalWorkspaceContent !== undefined ? (
+          externalWorkspaceContent
+        ) : isCustomerService && currentCustomerServiceUser ? (
           <CustomerServiceWorkspace
             user={currentCustomerServiceUser}
             activeWork={myActiveWork}
@@ -5535,6 +5545,10 @@ function ManagerView({
   ) => Promise<void>;
 }) {
   const [reportView, setReportView] = useState<ReportView>("executive");
+  const [workView, setWorkView] = useState<"tasks" | "pricing">("tasks");
+  const [administrationView, setAdministrationView] = useState<
+    "users" | "sources"
+  >("users");
   const selectedReport =
     reportNavigationItems.find((item) => item.id === reportView) ??
     reportNavigationItems[0];
@@ -5592,7 +5606,7 @@ function ManagerView({
         ]
       : []),
     ...(pendingPricing.length
-      ? [`${pendingPricing.length} quotes are waiting on source confirmation.`]
+      ? [`${pendingPricing.length} quotes are awaiting a final customer or source decision after pricing was sent.`]
       : []),
     ...(stalePricing.length
       ? [
@@ -5701,16 +5715,10 @@ function ManagerView({
       icon: <ShieldCheck className="h-4 w-4" />,
     },
     {
-      id: "tasks",
-      label: "Open Tasks",
+      id: "work",
+      label: "Work & Pricing",
       icon: <ClipboardList className="h-4 w-4" />,
-      badge: activeTasks.length,
-    },
-    {
-      id: "pricing",
-      label: "Pending Pricing",
-      icon: <Clock3 className="h-4 w-4" />,
-      badge: pendingPricing.length,
+      badge: activeTasks.length + pendingPricing.length,
     },
     {
       id: "quotes",
@@ -5728,12 +5736,10 @@ function ManagerView({
       icon: <Settings2 className="h-4 w-4" />,
     },
     {
-      id: "sources",
-      label: "Sources",
-      icon: <Store className="h-4 w-4" />,
-      badge: sourceList.length,
+      id: "administration",
+      label: "Users & Sources",
+      icon: <UsersRound className="h-4 w-4" />,
     },
-    { id: "users", label: "Users", icon: <UserPlus className="h-4 w-4" /> },
   ];
 
   function setPreset(kind: "today" | "yesterday" | "week" | "month") {
@@ -6658,6 +6664,84 @@ function ManagerView({
     <div className="space-y-5">
       <TabBar tabs={tabs} value={managerTab} onChange={setManagerTab} />
 
+      {managerTab === "work" ? (
+        <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+              Work Management
+            </p>
+            <p className="mt-1 text-sm font-semibold text-slate-500">
+              Keep active assignments and pricing follow-up together without showing both tables at once.
+            </p>
+          </div>
+          <div className="flex gap-1 rounded-2xl bg-slate-100 p-1.5">
+            <button
+              type="button"
+              onClick={() => setWorkView("tasks")}
+              className={cn(
+                "rounded-xl px-4 py-2.5 text-xs font-black transition",
+                workView === "tasks"
+                  ? "bg-[#223f7a] text-white shadow-sm"
+                  : "text-slate-500 hover:bg-white",
+              )}
+            >
+              Open Tasks · {activeTasks.length}
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkView("pricing")}
+              className={cn(
+                "rounded-xl px-4 py-2.5 text-xs font-black transition",
+                workView === "pricing"
+                  ? "bg-[#223f7a] text-white shadow-sm"
+                  : "text-slate-500 hover:bg-white",
+              )}
+            >
+              Pending Pricing · {pendingPricing.length}
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {managerTab === "administration" ? (
+        <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+              Administration
+            </p>
+            <p className="mt-1 text-sm font-semibold text-slate-500">
+              Users, permissions, sources and dealer salespeople are grouped in one place.
+            </p>
+          </div>
+          <div className="flex gap-1 rounded-2xl bg-slate-100 p-1.5">
+            <button
+              type="button"
+              onClick={() => setAdministrationView("users")}
+              className={cn(
+                "rounded-xl px-4 py-2.5 text-xs font-black transition",
+                administrationView === "users"
+                  ? "bg-[#223f7a] text-white shadow-sm"
+                  : "text-slate-500 hover:bg-white",
+              )}
+            >
+              Users & Access
+            </button>
+            <button
+              type="button"
+              onClick={() => setAdministrationView("sources")}
+              className={cn(
+                "rounded-xl px-4 py-2.5 text-xs font-black transition",
+                administrationView === "sources"
+                  ? "bg-[#223f7a] text-white shadow-sm"
+                  : "text-slate-500 hover:bg-white",
+              )}
+            >
+              Sources & Salespeople
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       {managerTab === "overview" ? (
         <div className="space-y-5">
           <section className="flex flex-col gap-4 rounded-[28px] border border-[#c9d5e9] bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -6681,43 +6765,43 @@ function ManagerView({
             </button>
           </section>
 
-          <section className="rounded-[28px] border border-amber-200 bg-amber-50 p-6 shadow-sm">
-            <div className="flex items-start gap-3">
-              <Bell className="mt-0.5 h-5 w-5 text-amber-700" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-3">
+          <details className="rounded-[28px] border border-amber-200 bg-amber-50 shadow-sm">
+            <summary className="cursor-pointer list-none p-5 [&::-webkit-details-marker]:hidden">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <Bell className="mt-0.5 h-5 w-5 text-amber-700" />
                   <div>
                     <p className="font-black text-amber-950">Manager alerts</p>
                     <p className="mt-1 text-xs font-semibold text-amber-700">
-                      Updates automatically when live work, availability, or
-                      pricing follow-up changes.
+                      {managerAlerts.length
+                        ? `${managerAlerts.length} item${managerAlerts.length === 1 ? "" : "s"} need review. Click to expand.`
+                        : "No operational alerts right now."}
                     </p>
                   </div>
-                  <span className="inline-flex items-center gap-2 rounded-full bg-white/70 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 ring-1 ring-amber-200">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />{" "}
-                    Live
-                  </span>
                 </div>
-                {managerAlerts.length ? (
-                  <ul className="mt-4 grid gap-3 md:grid-cols-2 text-sm font-semibold text-amber-900">
-                    {managerAlerts.map((alert) => (
-                      <li
-                        key={alert}
-                        className="flex gap-2 rounded-2xl bg-white/55 p-3"
-                      >
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                        {alert}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-4 rounded-2xl bg-white/55 p-4 text-sm font-bold text-emerald-700">
-                    No operational alerts right now.
-                  </p>
-                )}
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/70 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 ring-1 ring-amber-200">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                  Live
+                </span>
               </div>
+            </summary>
+            <div className="border-t border-amber-200 px-5 pb-5">
+              {managerAlerts.length ? (
+                <ul className="mt-4 grid gap-3 text-sm font-semibold text-amber-900 md:grid-cols-2">
+                  {managerAlerts.map((alert) => (
+                    <li key={alert} className="flex gap-2 rounded-2xl bg-white/65 p-3">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                      {alert}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-4 rounded-2xl bg-white/65 p-4 text-sm font-bold text-emerald-700">
+                  No operational alerts right now.
+                </p>
+              )}
             </div>
-          </section>
+          </details>
 
           <section>
             <div className="mb-4">
@@ -6802,7 +6886,7 @@ function ManagerView({
         </div>
       ) : null}
 
-      {managerTab === "tasks" ? (
+      {managerTab === "work" && workView === "tasks" ? (
         <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-4 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -6915,7 +6999,7 @@ function ManagerView({
         </section>
       ) : null}
 
-      {managerTab === "pricing" ? (
+      {managerTab === "work" && workView === "pricing" ? (
         <section className="overflow-hidden rounded-[28px] border border-blue-200 bg-white shadow-sm">
           <div className="flex flex-col gap-4 border-b border-slate-100 p-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -7594,9 +7678,9 @@ function ManagerView({
         </section>
       ) : null}
 
-      {managerTab === "sources" ? <SourceAdminPanel /> : null}
+      {managerTab === "administration" && administrationView === "sources" ? <SourceAdminPanel /> : null}
 
-      {managerTab === "users" ? <UserAdminPanel /> : null}
+      {managerTab === "administration" && administrationView === "users" ? <UserAdminPanel /> : null}
 
       {managerTab === "team" ? (
         <div className="space-y-5">
