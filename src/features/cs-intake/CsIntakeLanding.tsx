@@ -36,7 +36,13 @@ function IntakeModal({ open, onClose, children }: { open: boolean; onClose: () =
   );
 }
 
-export default function CsIntakeLanding({ initialProfile: profile }: { initialProfile: ProfileLite }) {
+export default function CsIntakeLanding({
+  initialProfile: profile,
+  embedded = false,
+}: {
+  initialProfile: ProfileLite;
+  embedded?: boolean;
+}) {
   const searchParams = useSearchParams();
   const [rows, setRows] = useState<CsIntakeSubmission[]>([]);
   const [selected, setSelected] = useState<LoadedIntake | null>(null);
@@ -144,6 +150,7 @@ export default function CsIntakeLanding({ initialProfile: profile }: { initialPr
       role={profile.role}
       lastUpdated={lastUpdated}
       onRefresh={() => void refresh()}
+      embedded={embedded}
     >
       {error ? <div className={`${ui.error} mb-5`}>{error}</div> : null}
 

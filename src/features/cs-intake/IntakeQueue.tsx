@@ -39,7 +39,13 @@ function QueueModal({ open, onClose, children }: { open: boolean; onClose: () =>
   );
 }
 
-export default function IntakeQueue({ initialProfile: profile }: { initialProfile: ProfileLite }) {
+export default function IntakeQueue({
+  initialProfile: profile,
+  embedded = false,
+}: {
+  initialProfile: ProfileLite;
+  embedded?: boolean;
+}) {
   const [agents, setAgents] = useState<ProfileLite[]>([]);
   const [rows, setRows] = useState<CsIntakeSubmission[]>([]);
   const [selected, setSelected] = useState<LoadedIntake | null>(null);
@@ -154,6 +160,7 @@ export default function IntakeQueue({ initialProfile: profile }: { initialProfil
       role={profile.role}
       lastUpdated={lastUpdated}
       onRefresh={() => void refresh()}
+      embedded={embedded}
     >
       {error ? <div className={`${ui.error} mb-5`}>{error}</div> : null}
       {notice ? <div className={`${ui.success} mb-5`}>{notice}</div> : null}
