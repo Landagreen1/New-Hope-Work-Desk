@@ -14,6 +14,15 @@ export type AppModuleDefinition = {
  * Future modules should register here instead of adding hard-coded navigation
  * in multiple places.
  */
+
+ts
+{ id: 'cs-intake',  name: 'Quote Intake', path: '/tools/cs-intake',
+  roles: ['customer_service', 'manager'] },
+{ id: 'cs-intake-queue', name: 'Intake Queue', path: '/tools/cs-intake/queue',
+  roles: ['agent', 'manager'] },
+{ id: 'renewals', name: 'Renewals', path: '/tools/renewals',
+  roles: ['agent', 'manager'] },
+
 export const appModules: AppModuleDefinition[] = [
   {
     id: "work-desk",
