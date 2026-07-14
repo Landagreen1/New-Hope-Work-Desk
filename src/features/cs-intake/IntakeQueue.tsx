@@ -1,190 +1,231 @@
-// src/features/cs-intake/IntakeQueue.tsx
-// Agent queue: claim submitted intakes, review details, convert to a quote.
-// Managers additionally can return an intake to the CSR or reject it.
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { getCurrentProfile, getSupabase, ProfileLite } from '../nhwd-shared/client';
+import { CheckCircle2, Eye, RefreshCw, Search, UserCheck, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+import { getCurrentProfile, getSupabase, listActiveAgents, type ProfileLite } from '../nhwd-shared/client';
+import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { csIntakeStatusTone, statusLabel, ui } from '../nhwd-shared/ui';
 import IntakeForm from './IntakeForm';
 import {
-  CsIntakeDriver, CsIntakeSubmission, CsIntakeVehicle,
-  claimIntake, convertIntake, getIntake, listQueue, rejectIntake, returnIntake,
+  claimIntake,
+  convertIntake,
+  getIntake,
+  listQueue,
+  managerAssignIntake,
+  profileName,
+  returnIntake,
+  type CsIntakeDriver,
+  type CsIntakeSubmission,
+  type CsIntakeVehicle,
 } from './api';
 
-type Loaded = { submission: CsIntakeSubmission; drivers: CsIntakeDriver[]; vehicles: CsIntakeVehicle[] };
+type LoadedIntake = {
+  submission: CsIntakeSubmission;
+  drivers: CsIntakeDriver[];
+  vehicles: CsIntakeVehicle[];
+};
+
+function QueueModal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6" onMouseDown={onClose}>
+      <div className="mx-auto max-w-6xl rounded-[30px] bg-[#f3f5f9] p-3 shadow-2xl sm:p-5" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="mb-3 flex justify-end"><button className={ui.btnGhost} onClick={onClose}><X className="h-4 w-4" />Close</button></div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function IntakeQueue() {
   const [profile, setProfile] = useState<ProfileLite | null>(null);
+  const [agents, setAgents] = useState<ProfileLite[]>([]);
   const [rows, setRows] = useState<CsIntakeSubmission[]>([]);
-  const [open, setOpen] = useState<Loaded | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState<LoadedIntake | null>(null);
+  const [search, setSearch] = useState('');
+  const [coverage, setCoverage] = useState('all');
+  const [priority, setPriority] = useState('all');
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const refresh = useCallback(async () => {
-    setRows(await listQueue());
+    try {
+      setError(null);
+      const [activeProfile, queueRows, activeAgents] = await Promise.all([
+        getCurrentProfile(),
+        listQueue(),
+        listActiveAgents(),
+      ]);
+      setProfile(activeProfile);
+      setRows(queueRows);
+      setAgents(activeAgents);
+      setLastUpdated(new Date());
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to load the Sales Intake Queue.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => {
-    getCurrentProfile().then(setProfile);
-    refresh();
-  }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
     const supabase = getSupabase();
     const channel = supabase
-      .channel('cs-intake-queue')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'cs_intake_submissions' },
-        () => refresh())
+      .channel('sales-intake-queue-v097')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cs_intake_submissions' }, () => void refresh())
       .subscribe();
-    const interval = setInterval(refresh, 60_000);
-    const onFocus = () => refresh();
+    const interval = window.setInterval(() => void refresh(), 60_000);
+    const onFocus = () => void refresh();
     window.addEventListener('focus', onFocus);
     window.addEventListener('online', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
     return () => {
-      supabase.removeChannel(channel);
-      clearInterval(interval);
+      void supabase.removeChannel(channel);
+      window.clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('online', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
     };
   }, [refresh]);
 
-  async function run(fn: () => Promise<unknown>, okMsg: string) {
-    setBusy(true); setError(null); setNotice(null);
+  const visible = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      const matchesSearch = !needle || [row.insured_first_name, row.insured_last_name, row.business_name, row.insured_phone_primary, row.dot_number].some((value) => value?.toLowerCase().includes(needle));
+      const matchesCoverage = coverage === 'all'
+        || (coverage === 'personal_auto' && ['auto', 'personal_auto'].includes(row.line_of_business))
+        || row.line_of_business === coverage;
+      return matchesSearch && matchesCoverage && (priority === 'all' || row.priority === priority);
+    });
+  }, [coverage, priority, rows, search]);
+
+  async function show(row: CsIntakeSubmission) {
     try {
-      await fn();
-      setNotice(okMsg);
-      await refresh();
-      if (open) {
-        const reloaded = await getIntake(open.submission.id);
-        setOpen(reloaded);
-      }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Action failed.');
-    } finally {
-      setBusy(false);
+      const detail = await getIntake(row.id);
+      if (detail) setSelected({ submission: detail.submission, drivers: detail.drivers, vehicles: detail.vehicles });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to open the intake.');
     }
   }
 
-  if (!profile) return <div className={ui.page}><div className={ui.empty}>Loading…</div></div>;
-  if (!['agent', 'manager'].includes(profile.role)) {
-    return <div className={ui.page}><div className={ui.empty}>The Intake Queue is for Agents and Managers.</div></div>;
+  async function action(id: string, task: () => Promise<void>, success: string) {
+    setBusyId(id);
+    setError(null);
+    setNotice(null);
+    try {
+      await task();
+      setNotice(success);
+      setSelected(null);
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The action could not be completed. Another agent may have claimed the intake first.');
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
   }
 
-  const isManager = profile.role === 'manager';
-  const mine = rows.filter((r) => r.status === 'claimed' && r.claimed_by === profile.id);
-  const available = rows.filter((r) => r.status === 'submitted');
-  const othersClaimed = rows.filter((r) => r.status === 'claimed' && r.claimed_by !== profile.id);
-
-  if (open) {
-    const s = open.submission;
-    const canConvert = s.status === 'claimed' && s.claimed_by === profile.id;
-    const canClaim = s.status === 'submitted';
-    return (
-      <div className={ui.page}>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className={ui.pageTitle}>{s.insured_first_name} {s.insured_last_name}</h1>
-            <p className={ui.pageSubtitle}>
-              <span className={`${ui.badge} ${ui.badgeTone[csIntakeStatusTone[s.status]]}`}>{statusLabel(s.status)}</span>
-              <span className="ml-2">{s.line_of_business.replace(/_/g, ' ')} · priority {s.priority}</span>
-            </p>
-          </div>
-          <button className={ui.btnGhost} onClick={() => { setOpen(null); setError(null); setNotice(null); }}>
-            ← Back to queue
-          </button>
-        </div>
-
-        {error && <div className={`${ui.error} mb-3`}>{error}</div>}
-        {notice && <div className={`${ui.success} mb-3`}>{notice}</div>}
-
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          {canClaim && (
-            <button className={ui.btnPrimary} disabled={busy}
-              onClick={() => run(() => claimIntake(s.id), 'Intake claimed. It\u2019s yours.')}>
-              Claim intake
-            </button>
-          )}
-          {canConvert && (
-            <button className={ui.btnPrimary} disabled={busy}
-              onClick={() => run(() => convertIntake(s.id), 'Quote created in the Quotes Database.')}>
-              Convert to quote
-            </button>
-          )}
-          {(canConvert || isManager) && s.status !== 'converted' && (
-            <>
-              <input className={`${ui.input} !mt-0 w-64`} placeholder="Reason (required to return/reject)"
-                value={reason} onChange={(e) => setReason(e.target.value)} />
-              <button className={ui.btnSecondary} disabled={busy || !reason.trim()}
-                onClick={() => run(() => returnIntake(s.id, profile.id, reason.trim()), 'Returned to the CSR with your reason.')}>
-                Return to CSR
-              </button>
-              {isManager && (
-                <button className={ui.btnDanger} disabled={busy || !reason.trim()}
-                  onClick={() => run(() => rejectIntake(s.id, profile.id, reason.trim()), 'Intake rejected.')}>
-                  Reject
-                </button>
-              )}
-            </>
-          )}
-        </div>
-
-        <IntakeForm profileId={profile.id} initial={open} readOnly onDone={() => setOpen(null)} />
-      </div>
-    );
+  async function assign(row: CsIntakeSubmission, agentId: string) {
+    if (!agentId) return;
+    await action(row.id, () => managerAssignIntake(row.id, agentId), `Intake assigned to ${profileName(agents, agentId)}.`);
   }
 
-  const Section = ({ title, data, emptyText }: { title: string; data: CsIntakeSubmission[]; emptyText: string }) => (
-    <div className={`${ui.card} mb-4`}>
-      <div className={ui.cardHeader}><h3 className={ui.sectionTitle}>{title} ({data.length})</h3></div>
-      <table className={ui.table}>
-        <thead>
-          <tr>
-            <th className={ui.th}>Customer</th>
-            <th className={ui.th}>Line</th>
-            <th className={ui.th}>Priority</th>
-            <th className={ui.th}>Waiting since</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((r) => (
-            <tr key={r.id} className={ui.trHover}
-              onClick={async () => setOpen(await getIntake(r.id))}>
-              <td className={ui.td}><span className="font-medium">{r.insured_first_name} {r.insured_last_name}</span></td>
-              <td className={ui.td}>{r.line_of_business.replace(/_/g, ' ')}</td>
-              <td className={ui.td}>
-                <span className={`${ui.badge} ${r.priority === 'urgent' ? ui.badgeTone.danger : r.priority === 'high' ? ui.badgeTone.progress : ui.badgeTone.neutral}`}>
-                  {r.priority}
-                </span>
-              </td>
-              <td className={ui.td}>{r.submitted_at ? new Date(r.submitted_at).toLocaleString() : '—'}</td>
-            </tr>
-          ))}
-          {!data.length && <tr><td colSpan={4} className={ui.empty}>{emptyText}</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  );
+  async function requestReturn(row: CsIntakeSubmission) {
+    if (!profile) return;
+    const reason = window.prompt('What information must Customer Service correct or complete?');
+    if (!reason?.trim()) return;
+    await action(row.id, () => returnIntake(row.id, profile.id, reason.trim()), 'Intake returned to Customer Service.');
+  }
+
+  if (loading) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9] font-black text-slate-500">Loading Sales Intake Queue…</div>;
+  if (!profile) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9]"><div className={ui.error}>Sign in through Work Desk to use the Intake Queue.</div></div>;
+  if (!['agent', 'manager'].includes(profile.role)) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9]"><div className={ui.error}>The Sales Intake Queue is available to Agents and Managers.</div></div>;
+
+  const submittedCount = rows.filter((row) => row.status === 'submitted').length;
+  const claimedCount = rows.filter((row) => row.status === 'claimed').length;
+  const mine = rows.filter((row) => row.claimed_by === profile.id).length;
 
   return (
-    <div className={ui.page}>
-      <div className="mb-4">
-        <h1 className={ui.pageTitle}>Intake Queue</h1>
-        <p className={ui.pageSubtitle}>Quote opportunities collected by Customer Service, ready to claim.</p>
-      </div>
-      {error && <div className={`${ui.error} mb-3`}>{error}</div>}
-      {notice && <div className={`${ui.success} mb-3`}>{notice}</div>}
-      <Section title="My claimed intakes" data={mine}
-        emptyText="Nothing claimed. Claim an available intake below." />
-      <Section title="Available to claim" data={available}
-        emptyText="The queue is clear." />
-      {isManager && (
-        <Section title="Claimed by other agents" data={othersClaimed}
-          emptyText="No intakes are being worked right now." />
-      )}
-    </div>
+    <ModuleShell
+      title="Sales Intake Queue"
+      subtitle="Claim a complete Customer Service intake or let a Manager assign it directly. Converting the intake creates the quote and makes the Sales Agent the owner."
+      role={profile.role}
+      lastUpdated={lastUpdated}
+      onRefresh={() => void refresh()}
+    >
+      {error ? <div className={`${ui.error} mb-5`}>{error}</div> : null}
+      {notice ? <div className={`${ui.success} mb-5`}>{notice}</div> : null}
+
+      <section className="grid gap-4 sm:grid-cols-3">
+        <div className={ui.stat}><p className={ui.statLabel}>Unclaimed</p><p className={ui.statValue}>{submittedCount}</p><p className="mt-1 text-xs font-semibold text-slate-500">Available to eligible Sales Agents</p></div>
+        <div className={ui.stat}><p className={ui.statLabel}>Claimed</p><p className={ui.statValue}>{claimedCount}</p><p className="mt-1 text-xs font-semibold text-slate-500">Waiting to convert into Quotes Database</p></div>
+        <div className={ui.stat}><p className={ui.statLabel}>Assigned to Me</p><p className={ui.statValue}>{mine}</p><p className="mt-1 text-xs font-semibold text-slate-500">You become Sales owner after conversion</p></div>
+      </section>
+
+      <section className={`${ui.card} mt-5 overflow-hidden`}>
+        <div className={ui.cardHeader}>
+          <div><p className={ui.sectionTitle}>Shared Queue</p><h2 className="mt-1 text-xl font-black">Customer Service submissions</h2><p className="mt-1 text-sm font-semibold text-slate-500">Claiming is atomic—only one Agent can win when multiple people click at the same time.</p></div>
+          <button type="button" className={ui.btnSecondary} onClick={() => void refresh()}><RefreshCw className="h-4 w-4" />Refresh</button>
+        </div>
+        <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-[1fr_210px_180px]">
+          <label className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm font-semibold outline-none focus:border-[#7890bc]" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer, business, phone or DOT" /></label>
+          <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={coverage} onChange={(event) => setCoverage(event.target.value)}><option value="all">All coverage types</option><option value="personal_auto">Personal Auto</option><option value="commercial_auto">Commercial Auto</option></select>
+          <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={priority} onChange={(event) => setPriority(event.target.value)}><option value="all">All priorities</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option></select>
+        </div>
+        <div className="overflow-x-auto">
+          <table className={ui.table}>
+            <thead><tr><th className={ui.th}>Customer</th><th className={ui.th}>Coverage</th><th className={ui.th}>Status</th><th className={ui.th}>Waiting</th><th className={ui.th}>Sales owner</th><th className={ui.th}>Actions</th></tr></thead>
+            <tbody>
+              {visible.map((row) => {
+                const customer = row.business_name || `${row.insured_first_name} ${row.insured_last_name}`.trim();
+                const isMine = row.claimed_by === profile.id;
+                const canConvert = isMine || profile.role === 'manager';
+                return (
+                  <tr key={row.id} className="hover:bg-[#f8faff]">
+                    <td className={ui.td}><p className="font-black text-slate-900">{customer || 'Unnamed intake'}</p><p className="mt-1 text-xs font-semibold text-slate-400">{row.insured_phone_primary || 'No phone'}{row.dot_number ? ` · DOT ${row.dot_number}` : ''}</p></td>
+                    <td className={ui.td}><p className="font-bold">{row.line_of_business === 'commercial_auto' ? 'Commercial Auto' : 'Personal Auto'}</p><p className="mt-1 text-xs text-slate-400">{row.desired_coverage ? statusLabel(row.desired_coverage) : 'Coverage to review'}</p></td>
+                    <td className={ui.td}><div className="flex flex-wrap gap-2"><span className={`${ui.badge} ${ui.badgeTone[csIntakeStatusTone[row.status] || 'neutral']}`}>{statusLabel(row.status)}</span><span className={`${ui.badge} ${row.priority === 'urgent' ? ui.badgeTone.danger : row.priority === 'high' ? ui.badgeTone.progress : ui.badgeTone.neutral}`}>{statusLabel(row.priority)}</span></div></td>
+                    <td className={ui.td}><p className="text-xs font-bold text-slate-500">{row.submitted_at ? new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(-Math.max(0, Math.round((Date.now() - new Date(row.submitted_at).getTime()) / 3_600_000)), 'hour') : 'Not submitted'}</p></td>
+                    <td className={ui.td}><p className="font-bold text-slate-700">{profileName(agents, row.claimed_by)}</p></td>
+                    <td className={ui.td}>
+                      <div className="flex min-w-[260px] flex-wrap gap-2">
+                        <button type="button" className={ui.btnSecondary} onClick={() => void show(row)}><Eye className="h-4 w-4" />View</button>
+                        {row.status === 'submitted' && profile.role === 'agent' ? <button type="button" className={ui.btnPrimary} disabled={busyId === row.id} onClick={() => void action(row.id, () => claimIntake(row.id), 'Intake claimed. Review and convert it to create the quote.')}><UserCheck className="h-4 w-4" />Claim</button> : null}
+                        {canConvert && row.status === 'claimed' ? <button type="button" className={ui.btnPrimary} disabled={busyId === row.id} onClick={() => void action(row.id, async () => { await convertIntake(row.id); }, 'Quote created in Quotes Database.')}><CheckCircle2 className="h-4 w-4" />Create Quote</button> : null}
+                        {profile.role === 'manager' && row.status === 'submitted' ? (
+                          <select className="rounded-xl border border-[#c9d5e9] bg-white px-3 py-2 text-xs font-black text-[#223f7a]" defaultValue="" onChange={(event) => void assign(row, event.target.value)}>
+                            <option value="" disabled>Assign to…</option>
+                            {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.display_name}</option>)}
+                          </select>
+                        ) : null}
+                        {(row.status === 'submitted' || canConvert) ? <button type="button" className={ui.btnDanger} disabled={busyId === row.id} onClick={() => void requestReturn(row)}>Return</button> : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!visible.length ? <div className={ui.empty}>No intakes match the current filters.</div> : null}
+        </div>
+      </section>
+
+      <QueueModal open={Boolean(selected)} onClose={() => setSelected(null)}>
+        {selected ? (
+          <div className="space-y-4">
+            <IntakeForm profileId={profile.id} initial={selected} readOnly onDone={() => setSelected(null)} />
+            <div className="sticky bottom-4 flex flex-wrap justify-end gap-2 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
+              {selected.submission.status === 'submitted' && profile.role === 'agent' ? <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void action(selected.submission.id, () => claimIntake(selected.submission.id), 'Intake claimed.')}><UserCheck className="h-4 w-4" />Claim Intake</button> : null}
+              {(selected.submission.claimed_by === profile.id || profile.role === 'manager') && selected.submission.status === 'claimed' ? <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void action(selected.submission.id, async () => { await convertIntake(selected.submission.id); }, 'Quote created in Quotes Database.')}><CheckCircle2 className="h-4 w-4" />Create Quote</button> : null}
+            </div>
+          </div>
+        ) : null}
+      </QueueModal>
+    </ModuleShell>
   );
 }
