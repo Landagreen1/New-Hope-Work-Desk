@@ -59,17 +59,23 @@ import {
 
 const OPEN_STATUSES: RenewalStatus[] = ['imported', 'assigned', 'in_progress', 'monitoring', 'requote_sent'];
 const CLOSED_STATUSES: RenewalStatus[] = ['renewed', 'lost', 'cancelled'];
-const IMPORT_FIELDS: Array<{ key: keyof NormalizedImportRow; label: string; required?: boolean }> = [
-  { key: 'policy_number', label: 'Policy number', required: true },
-  { key: 'renewal_date', label: 'Renewal / expiration date', required: true },
-  { key: 'customer_name', label: 'Customer name', required: true },
-  { key: 'customer_phone', label: 'Phone' },
-  { key: 'customer_email', label: 'Email' },
-  { key: 'carrier', label: 'Carrier' },
-  { key: 'line_of_business', label: 'Line of business' },
-  { key: 'hawksoft_client_id', label: 'HawkSoft client ID' },
-  { key: 'premium_current', label: 'Current premium' },
-  { key: 'premium_renewal', label: 'Renewal premium' },
+const IMPORT_FIELDS: Array<{ key: keyof NormalizedImportRow; label: string; required?: boolean; group: 'required' | 'contact' | 'powerbi' | 'premium' }> = [
+  { key: 'policy_number', label: 'Policy', required: true, group: 'required' },
+  { key: 'renewal_date', label: 'Renewal Date', required: true, group: 'required' },
+  { key: 'customer_name', label: 'Named Insured', required: true, group: 'required' },
+  { key: 'carrier', label: 'Company / Carrier', group: 'required' },
+  { key: 'line_of_business', label: 'Lobs / Line of Business', group: 'required' },
+  { key: 'notice_call_date', label: 'Aviso Call', group: 'powerbi' },
+  { key: 'notes', label: 'Notes', group: 'powerbi' },
+  { key: 'eft', label: 'EFT', group: 'powerbi' },
+  { key: 'requote', label: 'REQUOTE', group: 'powerbi' },
+  { key: 'requote_note', label: 'NOTA REQUOTE', group: 'powerbi' },
+  { key: 'assigned_name', label: 'ASIGNADO', group: 'powerbi' },
+  { key: 'customer_phone', label: 'Phone', group: 'contact' },
+  { key: 'customer_email', label: 'Email', group: 'contact' },
+  { key: 'hawksoft_client_id', label: 'HawkSoft client ID', group: 'contact' },
+  { key: 'premium_current', label: 'Current premium', group: 'premium' },
+  { key: 'premium_renewal', label: 'Renewal premium', group: 'premium' },
 ];
 
 function daysUntil(date: string): number {
@@ -270,6 +276,22 @@ function RenewalDrawer({
           <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-black uppercase text-slate-400">Change</p><p className={`mt-1 font-black ${premiumDelta(record).startsWith('+') ? 'text-rose-700' : 'text-emerald-700'}`}>{premiumDelta(record)}</p></div>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2"><p className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold"><Phone className="mr-2 inline h-4 w-4 text-[#223f7a]" />{record.customer_phone || 'No phone recorded'}</p><p className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold"><Mail className="mr-2 inline h-4 w-4 text-[#223f7a]" />{record.customer_email || 'No email recorded'}</p></div>
+
+        {(record.notice_call_at || record.import_notes || record.assigned_import_label || record.requote_requested || record.requote_note || record.eft_enabled !== null) ? (
+          <details className="mt-4 rounded-2xl border border-[#c9d5e9] bg-[#f8faff]">
+            <summary className="cursor-pointer list-none p-4 [&::-webkit-details-marker]:hidden">
+              <p className="font-black text-[#223f7a]">Imported Power BI information</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Click to review Aviso Call, Notes, EFT, REQUOTE and the imported assignment.</p>
+            </summary>
+            <div className="grid gap-3 border-t border-[#dbe3f0] bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-black uppercase text-slate-400">Aviso Call</p><p className="mt-1 font-black">{record.notice_call_at ? new Date(`${record.notice_call_at}T00:00:00`).toLocaleDateString() : '—'}</p></div>
+              <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-black uppercase text-slate-400">EFT</p><p className="mt-1 font-black">{record.eft_enabled === null ? 'Not provided' : record.eft_enabled ? 'Yes' : 'No'}</p></div>
+              <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-black uppercase text-slate-400">Imported assignment</p><p className="mt-1 font-black">{record.assigned_import_label || '—'}</p></div>
+              <div className="rounded-xl bg-slate-50 p-3 sm:col-span-2"><p className="text-[10px] font-black uppercase text-slate-400">Notes</p><p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-700">{record.import_notes || '—'}</p></div>
+              <div className={`rounded-xl p-3 ${record.requote_requested ? 'bg-amber-50 text-amber-900' : 'bg-slate-50'}`}><p className="text-[10px] font-black uppercase opacity-60">REQUOTE</p><p className="mt-1 font-black">{record.requote_requested ? 'Requested' : 'Not flagged'}</p><p className="mt-1 text-xs font-semibold">{record.requote_note || ''}</p></div>
+            </div>
+          </details>
+        ) : null}
       </section>
 
       <div className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5">
@@ -422,31 +444,109 @@ function ImportWizard({ onComplete }: { onComplete: () => Promise<void> }) {
         <label className="mt-5 block rounded-2xl border-2 border-dashed border-[#b5c4df] bg-[#f8faff] p-8 text-center"><FileUp className="mx-auto h-8 w-8 text-[#223f7a]" /><p className="mt-3 font-black text-slate-900">Choose CSV export</p><p className="mt-1 text-sm font-semibold text-slate-500">The file is previewed before anything is committed.</p><input type="file" accept=".csv,text/csv" className="mt-4 block w-full text-sm font-semibold" onChange={(event) => void loadFile(event.target.files?.[0] || null)} /></label>
       </section>
       {error ? <div className={ui.error}>{error}</div> : null}
-      {result ? <div className={ui.success}>Import complete: {result.rows_inserted} new, {result.rows_updated} updated, {result.rows_skipped} skipped{result.rows_closed_preserved ? `, ${result.rows_closed_preserved} closed records preserved` : ''}.</div> : null}
+      {result ? (
+        <div className={ui.success}>
+          <p className="font-black">
+            Import complete: {result.rows_inserted} new, {result.rows_updated} updated, {result.rows_skipped} skipped
+            {result.rows_closed_preserved ? `, ${result.rows_closed_preserved} closed records preserved` : ''}.
+          </p>
+          <p className="mt-1 text-xs font-bold">
+            {result.rows_assigned || 0} rows matched to an active employee · {result.rows_requote_flagged || 0} rows flagged for re-quote.
+          </p>
+          {result.unmatched_assignees?.length ? (
+            <p className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-amber-800">
+              Assignee names not matched automatically: {result.unmatched_assignees.join(', ')}. The imported name is preserved for Manager review.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {headers.length ? (
         <section className={`${ui.card} ${ui.cardPad}`}>
-          <p className={ui.sectionTitle}>Column mapping</p><h3 className="mt-1 text-xl font-black">Confirm how the file maps to Renewals</h3>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {IMPORT_FIELDS.map((field) => <label key={field.key}><span className={ui.label}>{field.label}{field.required ? ' *' : ''}</span><select className={ui.select} value={mapping[field.key] || ''} onChange={(event) => changeMapping(field.key, event.target.value)}><option value="">Do not import</option>{headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>)}
-          </div>
+          <p className={ui.sectionTitle}>Column mapping</p>
+          <h3 className="mt-1 text-xl font-black">Confirm the Power BI columns before importing</h3>
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            Your standard report headings are detected automatically. Optional information stays hidden below until you open its group.
+          </p>
+
+          {([
+            ['required', 'Required policy information', 'Named Insured, Company, Lobs, Policy and Renewal Date.', true],
+            ['powerbi', 'Current Power BI workflow fields', 'Aviso Call, Notes, EFT, REQUOTE, NOTA REQUOTE and ASIGNADO.', true],
+            ['contact', 'Helpful customer contact fields', 'Phone, email and HawkSoft client ID improve follow-up and matching.', false],
+            ['premium', 'Optional premium comparison', 'Current and renewal premiums support increase alerts and reporting.', false],
+          ] as const).map(([group, title, description, open]) => (
+            <details key={group} open={open} className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70">
+              <summary className="cursor-pointer list-none px-4 py-4 [&::-webkit-details-marker]:hidden">
+                <p className="font-black text-slate-900">{title}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">{description}</p>
+              </summary>
+              <div className="grid gap-4 border-t border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
+                {IMPORT_FIELDS.filter((field) => field.group === group).map((field) => (
+                  <label key={field.key}>
+                    <span className={ui.label}>{field.label}{field.required ? ' *' : ''}</span>
+                    <select className={ui.select} value={mapping[field.key] || ''} onChange={(event) => changeMapping(field.key, event.target.value)}>
+                      <option value="">Do not import</option>
+                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </details>
+          ))}
         </section>
       ) : null}
 
       {preview.length ? (
         <section className={`${ui.card} overflow-hidden`}>
           <div className={ui.cardHeader}><div><p className={ui.sectionTitle}>Preview</p><h3 className="mt-1 text-xl font-black">First {preview.length} valid rows</h3></div><button type="button" className={ui.btnPrimary} disabled={busy} onClick={() => void commit()}><UploadCloud className="h-4 w-4" />Commit {buildNormalizedRows(headers, rawRows, mapping).length} Rows</button></div>
-          <div className="overflow-x-auto"><table className={ui.table}><thead><tr><th className={ui.th}>Customer</th><th className={ui.th}>Policy</th><th className={ui.th}>Renewal</th><th className={ui.th}>Carrier</th><th className={ui.th}>Premium</th></tr></thead><tbody>{preview.map((row, index) => <tr key={`${row.policy_number}-${index}`}><td className={ui.td}>{row.customer_name}</td><td className={ui.td}>{row.policy_number}</td><td className={ui.td}>{row.renewal_date}</td><td className={ui.td}>{row.carrier || '—'}</td><td className={ui.td}>{row.premium_renewal || row.premium_current || '—'}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto">
+            <table className={ui.table}>
+              <thead>
+                <tr>
+                  <th className={ui.th}>Named Insured</th>
+                  <th className={ui.th}>Company / LOB</th>
+                  <th className={ui.th}>Policy / Renewal</th>
+                  <th className={ui.th}>Aviso / Notes</th>
+                  <th className={ui.th}>Requote</th>
+                  <th className={ui.th}>Assigned</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.map((row, index) => (
+                  <tr key={`${row.policy_number}-${index}`}>
+                    <td className={ui.td}>{row.customer_name}</td>
+                    <td className={ui.td}><p className="font-bold">{row.carrier || '—'}</p><p className="mt-1 text-xs text-slate-400">{row.line_of_business || '—'}</p></td>
+                    <td className={ui.td}><p className="font-bold">{row.policy_number}</p><p className="mt-1 text-xs text-slate-400">{row.renewal_date}</p></td>
+                    <td className={ui.td}><p className="font-bold">{row.notice_call_date || '—'}</p><p className="mt-1 max-w-xs truncate text-xs text-slate-500">{row.notes || 'No imported note'}</p></td>
+                    <td className={ui.td}><p className="font-bold">{row.requote || '—'}</p><p className="mt-1 max-w-xs truncate text-xs text-slate-500">{row.requote_note || ''}</p></td>
+                    <td className={ui.td}>{row.assigned_name || 'Unassigned'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : null}
     </div>
   );
 }
 
-export default function RenewalsPage({ initialProfile: profile }: { initialProfile: ProfileLite }) {
+export default function RenewalsPage({
+  initialProfile: profile,
+  embedded = false,
+  initialTab = 'overview',
+  showImportTab = true,
+  importOnly = false,
+}: {
+  initialProfile: ProfileLite;
+  embedded?: boolean;
+  initialTab?: 'overview' | 'pipeline' | 'import';
+  showImportTab?: boolean;
+  importOnly?: boolean;
+}) {
   const [assignees, setAssignees] = useState<ProfileLite[]>([]);
   const [rows, setRows] = useState<RenewalRecord[]>([]);
-  const [tab, setTab] = useState<'overview' | 'pipeline' | 'import'>('overview');
+  const [tab, setTab] = useState<'overview' | 'pipeline' | 'import'>(importOnly ? 'import' : initialTab);
   const [statusFilter, setStatusFilter] = useState<'open' | 'all' | RenewalStatus>('open');
   const [assignedFilter, setAssignedFilter] = useState('all');
   const [dueFilter, setDueFilter] = useState<'all' | 'active30' | 'overdue'>('active30');
@@ -517,20 +617,25 @@ export default function RenewalsPage({ initialProfile: profile }: { initialProfi
 
   return (
     <ModuleShell
-      title="Renewals Management"
-      subtitle="Start 30 days before expiration, document every contact with proof, schedule follow-up, and send customers to the shared Sales Intake Queue when a re-quote is needed."
+      title={importOnly ? 'Power BI Renewal Import' : 'Renewals Management'}
+      subtitle={importOnly
+        ? 'Upload the Power BI renewal report, confirm its columns, update open records, preserve closed records, and match ASIGNADO names to active employees.'
+        : 'Start 30 days before expiration, document every contact with proof, schedule follow-up, and send customers to the shared Sales Intake Queue when a re-quote is needed.'}
       role={profile.role}
       lastUpdated={lastUpdated}
       onRefresh={() => void refresh()}
+      embedded={embedded}
     >
       {error ? <div className={`${ui.error} mb-5`}>{error}</div> : null}
       {notice ? <div className={`${ui.success} mb-5`}>{notice}</div> : null}
 
-      <div className="mb-5 flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
-        <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabButton>
-        <TabButton active={tab === 'pipeline'} onClick={() => setTab('pipeline')}>Renewal Pipeline</TabButton>
-        {profile.role === 'manager' ? <TabButton active={tab === 'import'} onClick={() => setTab('import')}>Import & Update Data</TabButton> : null}
-      </div>
+      {!importOnly ? (
+        <div className="mb-5 flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
+          <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabButton>
+          <TabButton active={tab === 'pipeline'} onClick={() => setTab('pipeline')}>Renewal Pipeline</TabButton>
+          {profile.role === 'manager' && showImportTab ? <TabButton active={tab === 'import'} onClick={() => setTab('import')}>Import & Update Data</TabButton> : null}
+        </div>
+      ) : null}
 
       {tab === 'overview' ? (
         <div className="space-y-5">
@@ -559,11 +664,11 @@ export default function RenewalsPage({ initialProfile: profile }: { initialProfi
             <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={dueFilter} onChange={(event) => setDueFilter(event.target.value as typeof dueFilter)}><option value="active30">Active 30-day window</option><option value="overdue">Overdue</option><option value="all">All dates</option></select>
             {profile.role === 'manager' ? <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={assignedFilter} onChange={(event) => setAssignedFilter(event.target.value)}><option value="all">All assignees</option><option value="unassigned">Unassigned</option>{assignees.map((person) => <option key={person.id} value={person.id}>{person.display_name}</option>)}</select> : <div className="rounded-xl bg-[#eef3fb] px-3 py-2.5 text-sm font-black text-[#223f7a]">Assigned to {profile.display_name}</div>}
           </div>
-          <div className="overflow-x-auto"><table className={ui.table}><thead><tr><th className={ui.th}>Deadline</th><th className={ui.th}>Customer / Policy</th><th className={ui.th}>Carrier</th><th className={ui.th}>Premium</th><th className={ui.th}>Status</th><th className={ui.th}>Assigned</th><th className={ui.th}>Next follow-up</th><th className={ui.th}>Action</th></tr></thead><tbody>{rows.map((row) => { const warning = warningLabel(row); return <tr key={row.id} className={ui.trHover} onClick={() => setSelectedId(row.id)}><td className={ui.td}><span className={`${ui.badge} ${ui.badgeTone[warning.tone]}`}>{warning.label}</span><p className="mt-2 text-xs font-semibold text-slate-400">{new Date(`${row.renewal_date}T00:00:00`).toLocaleDateString()}</p></td><td className={ui.td}><p className="font-black text-slate-900">{row.customer_name}</p><p className="mt-1 text-xs font-semibold text-slate-500">{row.policy_number}</p></td><td className={ui.td}><p className="font-bold">{row.carrier || '—'}</p><p className="mt-1 text-xs text-slate-400">{row.line_of_business || 'Line not recorded'}</p></td><td className={ui.td}><p className="font-black">{money(row.premium_renewal)}</p><p className={`mt-1 text-xs font-black ${premiumDelta(row).startsWith('+') ? 'text-rose-700' : 'text-emerald-700'}`}>{premiumDelta(row)}</p></td><td className={ui.td}><span className={`${ui.badge} ${ui.badgeTone[renewalStatusTone[row.status] || 'neutral']}`}>{statusLabel(row.status)}</span></td><td className={ui.td}><p className="font-bold">{assigneeName(assignees, row.assigned_to)}</p></td><td className={ui.td}><p className="text-xs font-semibold text-slate-500">{row.next_follow_up_at ? new Date(row.next_follow_up_at).toLocaleString() : 'Not scheduled'}</p></td><td className={ui.td}><button className={ui.btnSecondary} onClick={(event) => { event.stopPropagation(); setSelectedId(row.id); }}>Open</button></td></tr>})}</tbody></table>{!rows.length ? <div className={ui.empty}>No renewals match these filters.</div> : null}</div>
+          <div className="overflow-x-auto"><table className={ui.table}><thead><tr><th className={ui.th}>Deadline</th><th className={ui.th}>Customer / Policy</th><th className={ui.th}>Carrier</th><th className={ui.th}>Premium</th><th className={ui.th}>Status</th><th className={ui.th}>Assigned</th><th className={ui.th}>Next follow-up</th><th className={ui.th}>Action</th></tr></thead><tbody>{rows.map((row) => { const warning = warningLabel(row); return <tr key={row.id} className={ui.trHover} onClick={() => setSelectedId(row.id)}><td className={ui.td}><span className={`${ui.badge} ${ui.badgeTone[warning.tone]}`}>{warning.label}</span><p className="mt-2 text-xs font-semibold text-slate-400">{new Date(`${row.renewal_date}T00:00:00`).toLocaleDateString()}</p></td><td className={ui.td}><p className="font-black text-slate-900">{row.customer_name}</p><div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-xs font-semibold text-slate-500">{row.policy_number}</p>{row.requote_requested ? <span className={`${ui.badge} ${ui.badgeTone.progress}`}>Requote flagged</span> : null}</div></td><td className={ui.td}><p className="font-bold">{row.carrier || '—'}</p><p className="mt-1 text-xs text-slate-400">{row.line_of_business || 'Line not recorded'}</p></td><td className={ui.td}><p className="font-black">{money(row.premium_renewal)}</p><p className={`mt-1 text-xs font-black ${premiumDelta(row).startsWith('+') ? 'text-rose-700' : 'text-emerald-700'}`}>{premiumDelta(row)}</p></td><td className={ui.td}><span className={`${ui.badge} ${ui.badgeTone[renewalStatusTone[row.status] || 'neutral']}`}>{statusLabel(row.status)}</span></td><td className={ui.td}><p className="font-bold">{assigneeName(assignees, row.assigned_to)}</p></td><td className={ui.td}><p className="text-xs font-semibold text-slate-500">{row.next_follow_up_at ? new Date(row.next_follow_up_at).toLocaleString() : 'Not scheduled'}</p></td><td className={ui.td}><button className={ui.btnSecondary} onClick={(event) => { event.stopPropagation(); setSelectedId(row.id); }}>Open</button></td></tr>})}</tbody></table>{!rows.length ? <div className={ui.empty}>No renewals match these filters.</div> : null}</div>
         </section>
       ) : null}
 
-      {tab === 'import' && profile.role === 'manager' ? <ImportWizard onComplete={async () => { setNotice('Renewal data imported/updated. Closed records remained unchanged.'); await refresh(); }} /> : null}
+      {(tab === 'import' || importOnly) && profile.role === 'manager' ? <ImportWizard onComplete={async () => { setNotice('Renewal data imported/updated. Closed records remained unchanged.'); await refresh(); }} /> : null}
 
       <Drawer open={Boolean(selected)} onClose={() => setSelectedId(null)}>
         {selected ? <RenewalDrawer record={selected} profile={profile} assignees={assignees} onChanged={async () => { await refresh(); }} onClose={() => setSelectedId(null)} /> : null}

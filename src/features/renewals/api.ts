@@ -28,6 +28,13 @@ export interface RenewalRecord {
   renewal_date: string;
   premium_current: number | null;
   premium_renewal: number | null;
+  notice_call_at: string | null;
+  import_notes: string | null;
+  eft_enabled: boolean | null;
+  requote_requested: boolean;
+  requote_note: string | null;
+  assigned_import_label: string | null;
+  powerbi_raw: Record<string, string> | null;
   assigned_to: string | null;
   assigned_at: string | null;
   dealer_id: string | null;
@@ -78,6 +85,9 @@ export interface ImportBatchResult {
   rows_updated: number;
   rows_skipped: number;
   rows_closed_preserved?: number;
+  rows_assigned?: number;
+  rows_requote_flagged?: number;
+  unmatched_assignees?: string[];
 }
 
 export interface NormalizedImportRow {
@@ -91,6 +101,12 @@ export interface NormalizedImportRow {
   hawksoft_client_id?: string;
   premium_current?: string;
   premium_renewal?: string;
+  notice_call_date?: string;
+  notes?: string;
+  eft?: string;
+  requote?: string;
+  requote_note?: string;
+  assigned_name?: string;
   raw?: Record<string, string>;
 }
 
@@ -344,6 +360,12 @@ const GUESSES: Record<string, RegExp> = {
   hawksoft_client_id: /client\s*(id|no|#)|cms/i,
   premium_current: /current.*prem|prem.*current|old.*prem/i,
   premium_renewal: /renew.*prem|prem.*renew|new.*prem/i,
+  notice_call_date: /aviso\s*call|notice\s*call|last\s*call|contact\s*date/i,
+  notes: /^notes?$|status\s*note|contact\s*note/i,
+  eft: /^eft$|electronic\s*fund/i,
+  requote: /^requote$|re[-\s]?quote\s*(needed|flag)?/i,
+  requote_note: /nota\s*requote|requote\s*note/i,
+  assigned_name: /^asignado$|assigned\s*(to|agent)?|assignee/i,
 };
 
 export function guessMapping(headers: string[]): Record<string, string> {
@@ -374,6 +396,12 @@ export function buildNormalizedRows(headers: string[], rawRows: string[][], mapp
     hawksoft_client_id: value(row, 'hawksoft_client_id'),
     premium_current: value(row, 'premium_current').replace(/[$,]/g, ''),
     premium_renewal: value(row, 'premium_renewal').replace(/[$,]/g, ''),
+    notice_call_date: normalizeDate(value(row, 'notice_call_date')) || '',
+    notes: value(row, 'notes'),
+    eft: value(row, 'eft'),
+    requote: value(row, 'requote'),
+    requote_note: value(row, 'requote_note'),
+    assigned_name: value(row, 'assigned_name'),
     raw: Object.fromEntries(headers.map((header, index) => [header, row[index] || ''])),
   })).filter((row) => row.policy_number && row.renewal_date && row.customer_name);
 }
