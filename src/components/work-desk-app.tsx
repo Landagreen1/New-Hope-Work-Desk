@@ -213,6 +213,7 @@ type ManagerTab =
   | "administration";
 type ReportView =
   | "executive"
+  | "not_sold"
   | "exceptions"
   | "funnel"
   | "trends"
@@ -261,11 +262,11 @@ const reportNavigationGroups: ReportNavigationGroup[] = [
         icon: Gauge,
       },
       {
-        id: "exceptions",
-        label: "Needs Attention",
+        id: "not_sold",
+        label: "Not Sold Quotes",
         description:
-          "Urgent exceptions, stalled work, and manager action items.",
-        icon: AlertTriangle,
+          "Review every lost quote, its reason, timing, source, agent, and documentation.",
+        icon: XCircle,
       },
       {
         id: "trends",
@@ -413,6 +414,13 @@ const reportNavigationGroups: ReportNavigationGroup[] = [
     label: "Control",
     description: "Management oversight, accuracy, and system integrity.",
     items: [
+      {
+        id: "exceptions",
+        label: "Needs Attention",
+        description:
+          "Urgent exceptions, stalled work, and manager action items.",
+        icon: AlertTriangle,
+      },
       {
         id: "manager",
         label: "Manager Actions",
@@ -5764,6 +5772,7 @@ function ManagerView({
       )
       .map((item) => ({
         id: item.id,
+        sourceWorkItemId: item.id,
         createdAt: item.createdAt,
         assignedAt: item.assignedAt,
         acceptedAt: item.acceptedAt,
@@ -5774,6 +5783,7 @@ function ManagerView({
         salesperson: item.salesperson || "Not recorded",
         workType: item.workType as "new_quote" | "requote",
         agent: item.assignedAgent,
+        originalOwner: item.originalOwner || "Not recorded",
         method: item.assignmentMethod,
         channel: item.receivedThrough || "Unknown",
         lifecycle: "Active",
@@ -5786,6 +5796,7 @@ function ManagerView({
       )
       .map((item) => ({
         id: item.id,
+        sourceWorkItemId: item.sourceWorkItemId,
         createdAt: item.quoteCreatedAt,
         assignedAt: item.assignedAt,
         acceptedAt: item.acceptedAt,
@@ -5796,6 +5807,7 @@ function ManagerView({
         salesperson: item.salesperson || "Not recorded",
         workType: item.workType,
         agent: item.assignedAgent,
+        originalOwner: item.originalOwner || "Not recorded",
         method: item.assignmentMethod,
         channel: item.receivedThrough || "Unknown",
         lifecycle: "Price Sent",
@@ -5808,6 +5820,7 @@ function ManagerView({
       )
       .map((item) => ({
         id: item.id,
+        sourceWorkItemId: item.sourceWorkItemId,
         createdAt: item.quoteCreatedAt,
         assignedAt: item.assignedAt,
         acceptedAt: item.acceptedAt,
@@ -5818,6 +5831,7 @@ function ManagerView({
         salesperson: item.salesperson || "Not recorded",
         workType: item.workType,
         agent: item.assignedAgent,
+        originalOwner: item.originalOwner || "Not recorded",
         method: item.assignmentMethod,
         channel: item.receivedThrough || "Unknown",
         lifecycle: item.decision === "sold" ? "Sold" : "Not Sold",
@@ -5853,6 +5867,25 @@ function ManagerView({
       priceToDecision: durationMinutes(item.priceSentAt, item.finalizedAt),
       totalCycle: durationMinutes(item.createdAt, item.finalizedAt),
     }));
+
+    const notSoldRows = timingRows
+      .filter((item) => item.lifecycle === "Not Sold")
+      .map((item) => {
+        const notes = quoteNotesBySource.get(item.sourceWorkItemId) || [];
+        const latestNote = notes[0];
+        return {
+          ...item,
+          noteCount: notes.length,
+          latestNote: latestNote?.note || "",
+          latestNoteAt: latestNote?.createdAt,
+          latestNoteBy: latestNote?.authorName || "",
+        };
+      })
+      .sort(
+        (left, right) =>
+          new Date(right.finalizedAt || right.createdAt).getTime() -
+          new Date(left.finalizedAt || left.createdAt).getTime(),
+      );
 
     const averageDuration = (values: Array<number | null>) => {
       const valid = values.filter((value): value is number => value !== null);
@@ -6460,6 +6493,7 @@ function ManagerView({
       quotes,
       timingRows,
       timingByAgent,
+      notSoldRows,
       notSoldReasons,
       service,
       sold,
@@ -6547,6 +6581,34 @@ function ManagerView({
           row.priceToDecision === null ? "" : Math.round(row.priceToDecision),
         "Total Cycle Minutes":
           row.totalCycle === null ? "" : Math.round(row.totalCycle),
+      })),
+    );
+  }
+
+  function exportNotSoldQuotes() {
+    downloadCsv(
+      `not-sold-quotes-${reportStart}-to-${reportEnd}.csv`,
+      reportData.notSoldRows.map((row) => ({
+        "Final Decision At": row.finalizedAt ? formatDateTime(row.finalizedAt) : "",
+        "Quote Created": formatDateTime(row.createdAt),
+        "Price Sent At": row.priceSentAt ? formatDateTime(row.priceSentAt) : "",
+        Customer: row.customer,
+        Source: row.dealer,
+        Salesperson: row.salesperson,
+        "Assigned Agent": row.agent,
+        "Original Owner": row.originalOwner,
+        "Quote Type": workTypeLabels[row.workType],
+        "Input Method": row.channel,
+        "Assignment Method": methodStyles[row.method].label,
+        "Not Sold Reason": row.notSoldReason || "Unknown",
+        "Minutes Assign to Take": row.timeToAccept === null ? "" : Math.round(row.timeToAccept),
+        "Minutes Take to Price": row.timeToPrice === null ? "" : Math.round(row.timeToPrice),
+        "Minutes Price to Decision": row.priceToDecision === null ? "" : Math.round(row.priceToDecision),
+        "Total Cycle Minutes": row.totalCycle === null ? "" : Math.round(row.totalCycle),
+        "Note Count": row.noteCount,
+        "Latest Note": row.latestNote,
+        "Latest Note By": row.latestNoteBy,
+        "Latest Note At": row.latestNoteAt ? formatDateTime(row.latestNoteAt) : "",
       })),
     );
   }
@@ -7528,10 +7590,10 @@ function ManagerView({
 
               <div className="min-w-0">
                 {reportView === "executive" ? (
-                  <ExecutiveReport
-                    reportData={reportData}
-                    pendingPricing={pendingPricing}
-                  />
+                  <ExecutiveReport reportData={reportData} />
+                ) : null}
+                {reportView === "not_sold" ? (
+                  <NotSoldReport rows={reportData.notSoldRows} onExport={exportNotSoldQuotes} />
                 ) : null}
                 {reportView === "exceptions" ? (
                   <ExceptionCenterReport items={reportData.exceptionItems} />
@@ -7646,6 +7708,10 @@ function ManagerView({
                   <ExportButton
                     label="All Quote Data"
                     onClick={exportAllQuotes}
+                  />
+                  <ExportButton
+                    label="Not Sold Quotes"
+                    onClick={exportNotSoldQuotes}
                   />
                   <ExportButton
                     label="Quote Timing"
@@ -9034,7 +9100,6 @@ function UserAdminPanel() {
 
 function ExecutiveReport({
   reportData,
-  pendingPricing,
 }: {
   reportData: {
     quotes: Array<{ lifecycle: string }>;
@@ -9053,136 +9118,61 @@ function ExecutiveReport({
       conversion: number;
     }>;
     notSoldReasons: Array<{ name: string; count: number }>;
+    notSoldRows: Array<{
+      id: string;
+      customer: string;
+      dealer: string;
+      agent: string;
+      finalizedAt?: string;
+      notSoldReason?: string;
+    }>;
   };
-  pendingPricing: PendingPricingItem[];
 }) {
-  const maxChannel = Math.max(
-    1,
-    ...reportData.byChannel.map((row) => row.quotes),
-  );
-  const oldest = [...pendingPricing]
-    .sort(
-      (a, b) =>
-        new Date(a.priceSentAt).getTime() - new Date(b.priceSentAt).getTime(),
-    )
-    .slice(0, 5);
+  const maxChannel = Math.max(1, ...reportData.byChannel.map((row) => row.quotes));
+  const recentNotSold = reportData.notSoldRows.slice(0, 5);
   return (
     <div className="grid gap-5 xl:grid-cols-2">
       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-          Quote Mix
-        </p>
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Quote Mix</p>
         <h3 className="mt-1 text-xl font-black">Volume by channel</h3>
         <div className="mt-5 space-y-4">
           {reportData.byChannel.slice(0, 6).map((row) => (
             <div key={row.name}>
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-black text-slate-700">{row.name}</span>
-                <span className="font-black">{row.quotes}</span>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-[#4d6aa8]"
-                  style={{ width: `${(row.quotes / maxChannel) * 100}%` }}
-                />
-              </div>
+              <div className="flex items-center justify-between text-sm"><span className="font-black text-slate-700">{row.name}</span><span className="font-black">{row.quotes}</span></div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[#4d6aa8]" style={{ width: `${(row.quotes / maxChannel) * 100}%` }} /></div>
             </div>
           ))}
         </div>
       </section>
       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-          Follow-Up Risk
-        </p>
-        <h3 className="mt-1 text-xl font-black">Oldest pending pricing</h3>
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Lost Quotes</p>
+        <h3 className="mt-1 text-xl font-black">Most recent Not Sold decisions</h3>
         <div className="mt-5 space-y-3">
-          {oldest.length ? (
-            oldest.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between rounded-2xl bg-slate-50 p-4"
-              >
-                <div>
-                  <p className="font-black">{item.customer}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {item.assignedAgent} · {item.dealer}
-                  </p>
-                </div>
-                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
-                  {daysSince(item.priceSentAt)} days
-                </span>
-              </div>
-            ))
-          ) : (
-            <EmptyState
-              title="No pending pricing"
-              note="Nothing is waiting for source confirmation."
-            />
-          )}
+          {recentNotSold.length ? recentNotSold.map((item) => (
+            <div key={item.id} className="flex items-center justify-between gap-4 rounded-2xl bg-rose-50 p-4">
+              <div className="min-w-0"><p className="truncate font-black text-slate-900">{item.customer}</p><p className="mt-1 truncate text-xs font-semibold text-slate-500">{item.agent} · {item.dealer}</p><p className="mt-1 truncate text-xs font-black text-rose-700">{item.notSoldReason || 'Reason not recorded'}</p></div>
+              <span className="shrink-0 text-xs font-bold text-slate-500">{item.finalizedAt ? formatDate(item.finalizedAt) : '—'}</span>
+            </div>
+          )) : <EmptyState title="No Not Sold decisions" note="Lost quotes will appear here with their reasons and documentation." />}
         </div>
       </section>
       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-          Lost Opportunity Analysis
-        </p>
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Lost Opportunity Analysis</p>
         <h3 className="mt-1 text-xl font-black">Top Not Sold reasons</h3>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {reportData.notSoldReasons.length ? (
-            reportData.notSoldReasons.slice(0, 5).map((row) => (
-              <div key={row.name} className="rounded-2xl bg-rose-50 p-4">
-                <p className="text-2xl font-black text-rose-700">{row.count}</p>
-                <p className="mt-1 text-xs font-bold text-rose-900">
-                  {row.name}
-                </p>
-              </div>
-            ))
-          ) : (
-            <div className="sm:col-span-2 xl:col-span-5">
-              <EmptyState
-                title="No Not Sold decisions"
-                note="Reasons will appear here once agents close lost quotes."
-              />
-            </div>
-          )}
+          {reportData.notSoldReasons.length ? reportData.notSoldReasons.slice(0, 5).map((row) => (
+            <div key={row.name} className="rounded-2xl bg-rose-50 p-4"><p className="text-2xl font-black text-rose-700">{row.count}</p><p className="mt-1 text-xs font-bold text-rose-900">{row.name}</p></div>
+          )) : <div className="sm:col-span-2 xl:col-span-5"><EmptyState title="No Not Sold decisions" note="Reasons will appear here once agents close lost quotes." /></div>}
         </div>
       </section>
       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-          Top Agents
-        </p>
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Top Agents</p>
         <h3 className="mt-1 text-xl font-black">Quote volume and conversion</h3>
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           {reportData.byAgent.slice(0, 3).map((row, index) => (
-            <div
-              key={row.agent}
-              className="rounded-2xl border border-slate-200 p-4"
-            >
-              <span className="text-xs font-black text-slate-400">
-                #{index + 1}
-              </span>
-              <p className="mt-1 text-lg font-black">{row.agent}</p>
-              <div className="mt-4 grid grid-cols-4 gap-2 text-center">
-                <div>
-                  <p className="font-black">{row.quotes}</p>
-                  <p className="text-[10px] font-bold text-slate-400">Quotes</p>
-                </div>
-                <div>
-                  <p className="font-black text-emerald-700">{row.sold}</p>
-                  <p className="text-[10px] font-bold text-slate-400">Sold</p>
-                </div>
-                <div>
-                  <p className="font-black text-cyan-700">
-                    {row.efficiency.toFixed(0)}%
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-400">Eff.</p>
-                </div>
-                <div>
-                  <p className="font-black text-blue-700">
-                    {row.conversion.toFixed(0)}%
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-400">Conv.</p>
-                </div>
-              </div>
+            <div key={row.agent} className="rounded-2xl border border-slate-200 p-4">
+              <span className="text-xs font-black text-slate-400">#{index + 1}</span><p className="mt-1 text-lg font-black">{row.agent}</p>
+              <div className="mt-4 grid grid-cols-4 gap-2 text-center"><div><p className="font-black">{row.quotes}</p><p className="text-[10px] font-bold text-slate-400">Quotes</p></div><div><p className="font-black text-emerald-700">{row.sold}</p><p className="text-[10px] font-bold text-slate-400">Sold</p></div><div><p className="font-black text-cyan-700">{row.efficiency.toFixed(0)}%</p><p className="text-[10px] font-bold text-slate-400">Eff.</p></div><div><p className="font-black text-blue-700">{row.conversion.toFixed(0)}%</p><p className="text-[10px] font-bold text-slate-400">Conv.</p></div></div>
             </div>
           ))}
         </div>
@@ -9190,813 +9180,6 @@ function ExecutiveReport({
     </div>
   );
 }
-
-function AgentOperationsReport({
-  rows,
-}: {
-  rows: Array<{
-    agent: string;
-    quotes: number;
-    whatsapp: number;
-    ringcentral: number;
-    manual: number;
-    workload: number;
-    updates: number;
-    passes: number;
-    sold: number;
-    notSold: number;
-    finalized: number;
-    pending: number;
-    efficiency: number;
-    conversion: number;
-  }>;
-}) {
-  return (
-    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 p-6">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-          Agent Distribution
-        </p>
-        <h3 className="mt-1 text-xl font-black">
-          Sales and operational activity
-        </h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Efficiency = final Sold/Not Sold decisions ÷ all quotes. Pending
-          Pricing is not counted as completed.
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
-            <tr>
-              <th className="px-5 py-3">Agent</th>
-              <th className="px-5 py-3">WA</th>
-              <th className="px-5 py-3">RC</th>
-              <th className="px-5 py-3">Manual</th>
-              <th className="px-5 py-3">Workload</th>
-              <th className="px-5 py-3">Payments</th>
-              <th className="px-5 py-3">Passes</th>
-              <th className="px-5 py-3">Finalized</th>
-              <th className="px-5 py-3">Sold</th>
-              <th className="px-5 py-3">Pending</th>
-              <th className="px-5 py-3">Efficiency</th>
-              <th className="px-5 py-3">Conversion</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((row) => (
-              <tr key={row.agent}>
-                <td className="px-5 py-4 font-black">{row.agent}</td>
-                <td className="px-5 py-4 font-black text-emerald-700">
-                  {row.whatsapp}
-                </td>
-                <td className="px-5 py-4 font-black text-blue-700">
-                  {row.ringcentral}
-                </td>
-                <td className="px-5 py-4 font-black">{row.manual}</td>
-                <td className="px-5 py-4 font-black text-violet-700">
-                  {row.workload}
-                </td>
-                <td className="px-5 py-4 font-black text-amber-700">
-                  {row.updates}
-                </td>
-                <td className="px-5 py-4 font-black text-rose-700">
-                  {row.passes}
-                </td>
-                <td className="px-5 py-4 font-black text-cyan-700">
-                  {row.finalized}
-                </td>
-                <td className="px-5 py-4 font-black text-emerald-700">
-                  {row.sold}
-                </td>
-                <td className="px-5 py-4 font-black text-blue-700">
-                  {row.pending}
-                </td>
-                <td className="px-5 py-4">
-                  <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">
-                    {row.efficiency.toFixed(1)}%
-                  </span>
-                </td>
-                <td className="px-5 py-4">
-                  <span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-xs font-black text-[#223f7a]">
-                    {row.conversion.toFixed(1)}%
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function QuoteTimingReport({
-  rows,
-  details,
-}: {
-  rows: Array<{
-    agent: string;
-    quotes: number;
-    accepted: number;
-    avgAccept: number | null;
-    avgPrice: number | null;
-    avgFinal: number | null;
-    avgPriceDecision: number | null;
-    avgTotalCycle: number | null;
-  }>;
-  details: Array<{
-    id: string;
-    customer: string;
-    dealer: string;
-    agent: string;
-    lifecycle: string;
-    createdAt: string;
-    assignedAt: string;
-    acceptedAt?: string;
-    priceSentAt?: string;
-    finalizedAt?: string;
-    timeToAccept: number | null;
-    timeToPrice: number | null;
-    timeToFinal: number | null;
-    priceToDecision: number | null;
-    totalCycle: number | null;
-    notSoldReason?: string;
-  }>;
-}) {
-  const finalizedDetails = details
-    .filter((item) => item.finalizedAt)
-    .sort(
-      (a, b) =>
-        new Date(b.finalizedAt || 0).getTime() -
-        new Date(a.finalizedAt || 0).getTime(),
-    );
-  return (
-    <div className="space-y-5">
-      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 p-6">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-            Quote Cycle Timing
-          </p>
-          <h3 className="mt-1 text-xl font-black">Average speed by agent</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Measures assignment → quote taken, quote taken → price sent, and
-            quote taken → final Sold/Not Sold decision.
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
-              <tr>
-                <th className="px-5 py-3">Agent</th>
-                <th className="px-5 py-3">Quotes</th>
-                <th className="px-5 py-3">Taken</th>
-                <th className="px-5 py-3">Assign → Take</th>
-                <th className="px-5 py-3">Take → Price</th>
-                <th className="px-5 py-3">Take → Final</th>
-                <th className="px-5 py-3">Price → Decision</th>
-                <th className="px-5 py-3">Total Cycle</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.map((row) => (
-                <tr key={row.agent}>
-                  <td className="px-5 py-4 font-black">{row.agent}</td>
-                  <td className="px-5 py-4 font-black">{row.quotes}</td>
-                  <td className="px-5 py-4 font-black text-emerald-700">
-                    {row.accepted}
-                  </td>
-                  <td className="px-5 py-4 font-black text-amber-700">
-                    {formatDuration(row.avgAccept)}
-                  </td>
-                  <td className="px-5 py-4 font-black text-blue-700">
-                    {formatDuration(row.avgPrice)}
-                  </td>
-                  <td className="px-5 py-4 font-black text-cyan-700">
-                    {formatDuration(row.avgFinal)}
-                  </td>
-                  <td className="px-5 py-4 font-black text-violet-700">
-                    {formatDuration(row.avgPriceDecision)}
-                  </td>
-                  <td className="px-5 py-4 font-black text-[#223f7a]">
-                    {formatDuration(row.avgTotalCycle)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 p-6">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-            Detailed Timeline
-          </p>
-          <h3 className="mt-1 text-xl font-black">Recent finalized quotes</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Every lifecycle timestamp is preserved for audit and coaching.
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
-              <tr>
-                <th className="px-5 py-3">Customer</th>
-                <th className="px-5 py-3">Agent</th>
-                <th className="px-5 py-3">Assigned</th>
-                <th className="px-5 py-3">Taken by Agent</th>
-                <th className="px-5 py-3">Price Sent</th>
-                <th className="px-5 py-3">Final Decision</th>
-                <th className="px-5 py-3">Outcome</th>
-                <th className="px-5 py-3">Cycle</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {finalizedDetails.slice(0, 100).map((item) => (
-                <tr key={item.id}>
-                  <td className="px-5 py-4">
-                    <p className="font-black">{item.customer}</p>
-                    <p className="mt-1 text-xs text-slate-400">{item.dealer}</p>
-                  </td>
-                  <td className="px-5 py-4 font-bold">{item.agent}</td>
-                  <td className="px-5 py-4 text-xs text-slate-600">
-                    {formatDateTime(item.assignedAt)}
-                  </td>
-                  <td className="px-5 py-4 text-xs text-slate-600">
-                    {item.acceptedAt ? formatDateTime(item.acceptedAt) : "—"}
-                  </td>
-                  <td className="px-5 py-4 text-xs text-slate-600">
-                    {item.priceSentAt ? formatDateTime(item.priceSentAt) : "—"}
-                  </td>
-                  <td className="px-5 py-4 text-xs text-slate-600">
-                    {item.finalizedAt ? formatDateTime(item.finalizedAt) : "—"}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={cn(
-                        "rounded-full px-2.5 py-1 text-xs font-black",
-                        item.lifecycle === "Sold"
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-rose-50 text-rose-700",
-                      )}
-                    >
-                      {item.lifecycle}
-                    </span>
-                    {item.notSoldReason ? (
-                      <p className="mt-2 max-w-48 text-[10px] font-semibold text-slate-400">
-                        {item.notSoldReason}
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className="px-5 py-4 font-black text-[#223f7a]">
-                    {formatDuration(item.totalCycle)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function RankedReportTable({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: Array<{
-    name: string;
-    quotes: number;
-    sold: number;
-    notSold: number;
-    finalized: number;
-    pending: number;
-    efficiency: number;
-    conversion: number;
-  }>;
-}) {
-  return (
-    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 p-6">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-          Comparative Report
-        </p>
-        <h3 className="mt-1 text-xl font-black">{title}</h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Efficiency counts only Sold and Not Sold as completed; Price Sent
-          remains pending.
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
-            <tr>
-              <th className="px-5 py-3">Rank</th>
-              <th className="px-5 py-3">Name</th>
-              <th className="px-5 py-3">Quotes</th>
-              <th className="px-5 py-3">Finalized</th>
-              <th className="px-5 py-3">Sold</th>
-              <th className="px-5 py-3">Not Sold</th>
-              <th className="px-5 py-3">Price Sent</th>
-              <th className="px-5 py-3">Efficiency</th>
-              <th className="px-5 py-3">Conversion</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((row, index) => (
-              <tr key={row.name}>
-                <td className="px-5 py-4 font-black text-slate-400">
-                  #{index + 1}
-                </td>
-                <td className="px-5 py-4 font-black">{row.name}</td>
-                <td className="px-5 py-4 font-black">{row.quotes}</td>
-                <td className="px-5 py-4 font-black text-cyan-700">
-                  {row.finalized}
-                </td>
-                <td className="px-5 py-4 font-black text-emerald-700">
-                  {row.sold}
-                </td>
-                <td className="px-5 py-4 font-black text-rose-700">
-                  {row.notSold}
-                </td>
-                <td className="px-5 py-4 font-black text-blue-700">
-                  {row.pending}
-                </td>
-                <td className="px-5 py-4">
-                  <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">
-                    {row.efficiency.toFixed(1)}%
-                  </span>
-                </td>
-                <td className="px-5 py-4">
-                  <span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-xs font-black text-[#223f7a]">
-                    {row.conversion.toFixed(1)}%
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function TakenQuotesReport({
-  rows,
-  byAgent,
-  summary,
-}: {
-  rows: Array<
-    QuoteTakeEvent & {
-      customer: string;
-      source: string;
-      quoteAgent: string;
-      quoteStatus: string;
-      workType: WorkType;
-      receivedThrough: string;
-    }
-  >;
-  byAgent: Array<{
-    agent: string;
-    username: string;
-    total: number;
-    whatsapp: number;
-    ringcentral: number;
-    skippedAgents: number;
-    avgElapsedSeconds: number;
-  }>;
-  summary: {
-    total: number;
-    whatsapp: number;
-    ringcentral: number;
-    skippedAgents: number;
-    avgElapsedSeconds: number;
-  };
-}) {
-  return (
-    <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard
-          label="Taken Quotes"
-          value={summary.total}
-          note="Overdue quotes taken"
-          icon={<Zap className="h-5 w-5 text-amber-700" />}
-          tone="bg-amber-50"
-        />
-        <SummaryCard
-          label="Avg Elapsed"
-          value={formatElapsedSeconds(summary.avgElapsedSeconds)}
-          note="Received → Take"
-          icon={<Clock3 className="h-5 w-5 text-blue-700" />}
-          tone="bg-blue-50"
-        />
-        <SummaryCard
-          label="Missed Turns"
-          value={summary.skippedAgents}
-          note="Current-agent timers expired"
-          icon={<SkipForward className="h-5 w-5 text-rose-700" />}
-          tone="bg-rose-50"
-        />
-        <SummaryCard
-          label="WhatsApp"
-          value={summary.whatsapp}
-          note="Taken from WA queue"
-          icon={<MessageCircleMore className="h-5 w-5 text-emerald-700" />}
-          tone="bg-emerald-50"
-        />
-        <SummaryCard
-          label="RingCentral"
-          value={summary.ringcentral}
-          note="Taken from RC queue"
-          icon={<PhoneCall className="h-5 w-5 text-blue-700" />}
-          tone="bg-blue-50"
-        />
-      </div>
-
-      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 p-6">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
-            Taken Performance
-          </p>
-          <h3 className="mt-1 text-xl font-black">Who takes overdue quotes</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Counts only successful Take actions. Lower elapsed time means the
-            agent acted sooner after becoming eligible.
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-amber-50/60 text-[11px] font-black uppercase tracking-wider text-slate-400">
-              <tr>
-                <th className="px-5 py-3">Agent</th>
-                <th className="px-5 py-3">Taken</th>
-                <th className="px-5 py-3">WhatsApp</th>
-                <th className="px-5 py-3">RingCentral</th>
-                <th className="px-5 py-3">Avg Elapsed</th>
-                <th className="px-5 py-3">Missed Turns</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {byAgent.map((row) => (
-                <tr key={row.agent}>
-                  <td className="px-5 py-4">
-                    <p className="font-black">{row.agent}</p>
-                    {row.username ? (
-                      <p className="mt-1 text-xs font-bold text-slate-400">
-                        @{row.username}
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className="px-5 py-4 font-black text-amber-700">
-                    {row.total}
-                  </td>
-                  <td className="px-5 py-4 font-black text-emerald-700">
-                    {row.whatsapp}
-                  </td>
-                  <td className="px-5 py-4 font-black text-blue-700">
-                    {row.ringcentral}
-                  </td>
-                  <td className="px-5 py-4 font-black">
-                    {formatElapsedSeconds(row.avgElapsedSeconds)}
-                  </td>
-                  <td className="px-5 py-4 font-black text-rose-700">
-                    {row.skippedAgents}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!byAgent.length ? (
-          <div className="p-8 text-center text-sm font-semibold text-slate-500">
-            No successful Take actions in this date range.
-          </div>
-        ) : null}
-      </section>
-
-      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 p-6">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-            Taken Quote Detail
-          </p>
-          <h3 className="mt-1 text-xl font-black">
-            Every successful Take action
-          </h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Shows the exact quote, taker, missed current agent, queue, and
-            elapsed time.
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
-              <tr>
-                <th className="px-5 py-3">Taken</th>
-                <th className="px-5 py-3">Customer</th>
-                <th className="px-5 py-3">Queue</th>
-                <th className="px-5 py-3">Taken By</th>
-                <th className="px-5 py-3">Missed Agent</th>
-                <th className="px-5 py-3">Elapsed</th>
-                <th className="px-5 py-3">Quote Agent</th>
-                <th className="px-5 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td className="px-5 py-4">
-                    <p className="text-xs font-bold text-slate-600">
-                      {formatDateTime(row.takenAt)}
-                    </p>
-                    <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                      Received {formatDateTime(row.receivedAt)}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4">
-                    <p className="font-black">{row.customer}</p>
-                    <p className="mt-1 text-xs text-slate-400">{row.source}</p>
-                  </td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={cn(
-                        "rounded-full px-2.5 py-1 text-xs font-black",
-                        row.rotation === "whatsapp"
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-blue-50 text-blue-700",
-                      )}
-                    >
-                      {row.rotation === "whatsapp" ? "WhatsApp" : "RingCentral"}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <p className="font-black">{row.takerName}</p>
-                    <p className="mt-1 text-xs font-bold text-slate-400">
-                      @{row.takerUsername}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 text-xs font-semibold text-slate-600">
-                    {row.skippedAgents.length
-                      ? row.skippedAgents
-                          .map((agent) => `@${agent.username}`)
-                          .join(", ")
-                      : "None"}
-                  </td>
-                  <td className="px-5 py-4 font-black text-amber-700">
-                    {formatElapsedSeconds(row.elapsedSeconds)}
-                  </td>
-                  <td className="px-5 py-4 font-bold text-slate-700">
-                    {row.quoteAgent}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-700">
-                      {row.quoteStatus}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!rows.length ? (
-          <div className="p-8 text-center text-sm font-semibold text-slate-500">
-            No taken quotes in this date range.
-          </div>
-        ) : null}
-      </section>
-    </div>
-  );
-}
-
-function FollowUpReport({
-  pendingPricing,
-}: {
-  pendingPricing: PendingPricingItem[];
-}) {
-  const buckets = [
-    {
-      label: "Sent today",
-      count: pendingPricing.filter((item) => daysSince(item.priceSentAt) === 0)
-        .length,
-      tone: "bg-blue-50 text-blue-700",
-    },
-    {
-      label: "1 day waiting",
-      count: pendingPricing.filter((item) => daysSince(item.priceSentAt) === 1)
-        .length,
-      tone: "bg-amber-50 text-amber-700",
-    },
-    {
-      label: "2+ days waiting",
-      count: pendingPricing.filter((item) => daysSince(item.priceSentAt) >= 2)
-        .length,
-      tone: "bg-rose-50 text-rose-700",
-    },
-  ];
-  return (
-    <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-      <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-        Aging Analysis
-      </p>
-      <h3 className="mt-1 text-xl font-black">
-        Pending pricing follow-up priority
-      </h3>
-      <div className="mt-5 grid gap-4 sm:grid-cols-3">
-        {buckets.map((bucket) => (
-          <div
-            key={bucket.label}
-            className={cn("rounded-2xl p-5", bucket.tone)}
-          >
-            <p className="text-3xl font-black">{bucket.count}</p>
-            <p className="mt-1 text-sm font-black">{bucket.label}</p>
-          </div>
-        ))}
-      </div>
-      <div className="mt-6 overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
-          <thead className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-            <tr>
-              <th className="py-3">Customer</th>
-              <th className="py-3">Source</th>
-              <th className="py-3">Agent</th>
-              <th className="py-3">Sent</th>
-              <th className="py-3">Age</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {[...pendingPricing]
-              .sort(
-                (a, b) =>
-                  new Date(a.priceSentAt).getTime() -
-                  new Date(b.priceSentAt).getTime(),
-              )
-              .map((item) => (
-                <tr key={item.id}>
-                  <td className="py-4 font-black">{item.customer}</td>
-                  <td className="py-4 text-slate-600">{item.dealer}</td>
-                  <td className="py-4 font-bold">{item.assignedAgent}</td>
-                  <td className="py-4 text-slate-600">
-                    {formatDateTime(item.priceSentAt)}
-                  </td>
-                  <td className="py-4 font-black text-amber-700">
-                    {daysSince(item.priceSentAt)} days
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function ServiceActivityReport({ items }: { items: WorkItem[] }) {
-  return (
-    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 p-6">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-          Non-Quote Activity
-        </p>
-        <h3 className="mt-1 text-xl font-black">
-          Updates, activations, and changes
-        </h3>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
-            <tr>
-              <th className="px-5 py-3">Date</th>
-              <th className="px-5 py-3">Customer</th>
-              <th className="px-5 py-3">Type</th>
-              <th className="px-5 py-3">Agent</th>
-              <th className="px-5 py-3">Method</th>
-              <th className="px-5 py-3">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td className="px-5 py-4 text-xs text-slate-500">
-                  {formatDateTime(item.createdAt)}
-                </td>
-                <td className="px-5 py-4">
-                  <p className="font-black">{item.customer}</p>
-                  <p className="mt-1 text-xs text-slate-400">{item.dealer}</p>
-                </td>
-                <td className="px-5 py-4 font-bold">
-                  {workTypeLabels[item.workType]}
-                </td>
-                <td className="px-5 py-4 font-bold">{item.assignedAgent}</td>
-                <td className="px-5 py-4">
-                  <MethodBadge method={item.assignmentMethod} />
-                </td>
-                <td className="px-5 py-4 capitalize text-slate-600">
-                  {item.status}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-type ExceptionRow = {
-  severity: "warning" | "critical";
-  area: string;
-  issue: string;
-  owner: string;
-  age: string;
-};
-type DailyRow = {
-  date: string;
-  quotes: number;
-  sold: number;
-  notSold: number;
-  pending: number;
-  taken: number;
-  passes: number;
-  service: number;
-};
-type AgentScoreRow = {
-  agent: string;
-  score: number;
-  quotes: number;
-  sold: number;
-  conversion: number;
-  efficiency: number;
-  avgPrice: number | null;
-  docCoverage: number;
-  taken: number;
-  workload: number;
-  passes: number;
-};
-type WorkloadRow = {
-  agent: string;
-  status: AvailabilityStatus;
-  activeQuotes: number;
-  activations: number;
-  changes: number;
-  payments: number;
-  pending: number;
-  unaccepted: number;
-  total: number;
-};
-type QueueHealthRow = {
-  rotation: string;
-  current: string;
-  eligible: number;
-  available: number;
-  claims: number;
-  passes: number;
-  taken: number;
-  health: string;
-};
-type MissedTurnRow = {
-  agent: string;
-  missed: number;
-  whatsapp: number;
-  ringcentral: number;
-  sold: number;
-  pending: number;
-};
-type PassBehaviorRow = {
-  agent: string;
-  total: number;
-  whatsapp: number;
-  ringcentral: number;
-  workload: number;
-  reasons: string[];
-};
-type DocumentationRow = {
-  agent: string;
-  notes: number;
-  quotes: number;
-  withNotes: number;
-  coverage: number;
-};
-type SourceRiskRow = {
-  name: string;
-  quotes: number;
-  sold: number;
-  notSold: number;
-  pending: number;
-  finalized: number;
-  efficiency: number;
-  conversion: number;
-  taken: number;
-  notes: number;
-  category: string;
-};
-type IntegrityIssue = {
-  severity: "warning" | "critical";
-  issue: string;
-  detail: string;
-};
-type SystemCheck = { check: string; status: boolean; detail: string };
 
 type ManagerActivityRow = QuoteActivity;
 
@@ -10025,6 +9208,60 @@ function ReportShell({
 
 function EmptyReport({ title, note }: { title: string; note: string }) {
   return <EmptyState title={title} note={note} />;
+}
+
+function NotSoldReport({
+  rows,
+  onExport,
+}: {
+  rows: Array<{
+    id: string;
+    finalizedAt?: string;
+    createdAt: string;
+    priceSentAt?: string;
+    customer: string;
+    dealer: string;
+    salesperson: string;
+    agent: string;
+    originalOwner: string;
+    workType: "new_quote" | "requote";
+    channel: string;
+    notSoldReason?: string;
+    timeToPrice: number | null;
+    priceToDecision: number | null;
+    totalCycle: number | null;
+    noteCount: number;
+    latestNote: string;
+    latestNoteBy: string;
+    latestNoteAt?: string;
+  }>;
+  onExport: () => void;
+}) {
+  const topReason = Array.from(
+    rows.reduce((map, row) => {
+      const reason = row.notSoldReason || "Unknown";
+      map.set(reason, (map.get(reason) || 0) + 1);
+      return map;
+    }, new Map<string, number>()),
+  ).sort((left, right) => right[1] - left[1])[0];
+  const noResponse = rows.filter((row) => row.notSoldReason === "No Response").length;
+  const decisionTimes = rows.map((row) => row.priceToDecision).filter((value): value is number => value !== null);
+  const averageDecision = decisionTimes.length ? decisionTimes.reduce((sum, value) => sum + value, 0) / decisionTimes.length : null;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard label="Not Sold" value={rows.length} note="Selected date range" icon={<XCircle className="h-5 w-5 text-rose-700" />} tone="bg-rose-50" />
+        <SummaryCard label="Top Reason" value={topReason?.[0] || "—"} note={topReason ? `${topReason[1]} quotes` : "No decisions"} icon={<AlertTriangle className="h-5 w-5 text-amber-700" />} tone="bg-amber-50" />
+        <SummaryCard label="No Response" value={noResponse} note="Follow-up opportunity" icon={<PhoneCall className="h-5 w-5 text-blue-700" />} tone="bg-blue-50" />
+        <SummaryCard label="Avg Price to Decision" value={formatDuration(averageDecision)} note="After pricing was sent" icon={<Clock3 className="h-5 w-5 text-violet-700" />} tone="bg-violet-50" />
+      </div>
+      <ReportShell eyebrow="Not Sold Report" title="Lost quote details" note="Customer, source, salesperson, agent, timing, reason, and documentation for every Not Sold decision.">
+        <div className="mb-4 flex justify-end"><button type="button" onClick={onExport} disabled={!rows.length} className="inline-flex items-center gap-2 rounded-xl bg-[#223f7a] px-4 py-2.5 text-xs font-black text-white disabled:opacity-50"><Download className="h-4 w-4" />Export Not Sold CSV</button></div>
+        {rows.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3 pr-5">Decision</th><th className="py-3 pr-5">Customer</th><th className="py-3 pr-5">Source / Salesperson</th><th className="py-3 pr-5">Agent / Input</th><th className="py-3 pr-5">Reason</th><th className="py-3 pr-5">Timing</th><th className="py-3">Documentation</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.id}><td className="py-4 pr-5"><p className="font-black">{row.finalizedAt ? formatDate(row.finalizedAt) : '—'}</p><p className="mt-1 text-xs font-semibold text-slate-400">Created {formatDate(row.createdAt)}</p></td><td className="py-4 pr-5"><p className="font-black text-slate-900">{row.customer}</p><p className="mt-1 text-xs font-semibold text-slate-500">{workTypeLabels[row.workType]}</p></td><td className="py-4 pr-5"><p className="font-bold">{row.dealer}</p><p className="mt-1 text-xs text-slate-500">{row.salesperson}</p></td><td className="py-4 pr-5"><p className="font-bold">{row.agent}</p><p className="mt-1 text-xs text-slate-500">{row.channel}</p></td><td className="py-4 pr-5"><span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-700">{row.notSoldReason || 'Unknown'}</span></td><td className="py-4 pr-5 text-xs font-semibold text-slate-600"><p>Take → Price: {formatDuration(row.timeToPrice)}</p><p className="mt-1">Price → Decision: {formatDuration(row.priceToDecision)}</p><p className="mt-1">Total: {formatDuration(row.totalCycle)}</p></td><td className="max-w-sm py-4"><p className="font-black">{row.noteCount} note{row.noteCount === 1 ? '' : 's'}</p><p className="mt-1 line-clamp-2 text-xs font-semibold text-slate-500">{row.latestNote || 'No quote note recorded'}</p>{row.latestNoteBy ? <p className="mt-1 text-[11px] font-bold text-slate-400">{row.latestNoteBy}{row.latestNoteAt ? ` · ${formatDateTime(row.latestNoteAt)}` : ''}</p> : null}</td></tr>)}</tbody></table></div> : <EmptyReport title="No Not Sold quotes" note="No quotes were marked Not Sold in the selected date range." />}
+      </ReportShell>
+    </div>
+  );
 }
 
 function ExceptionCenterReport({ items }: { items: ExceptionRow[] }) {
