@@ -34,6 +34,7 @@ export interface ProfileLite {
 
 export async function getCurrentProfile(): Promise<ProfileLite | null> {
   const supabase = getSupabase();
+
   const { data: authData, error: authError } = await supabase.auth.getUser();
 
   if (authError || !authData.user) {
@@ -64,6 +65,29 @@ export async function listActiveAgents(): Promise<ProfileLite[]> {
 
   if (error) {
     throw new Error(`Unable to load active agents: ${error.message}`);
+  }
+
+  return (data ?? []) as ProfileLite[];
+}
+
+/**
+ * Return the active employees who can be assigned renewal records.
+ *
+ * Managers control assignment but are not included as renewal assignees.
+ * Renewal work may be assigned to either a Sales Agent or Customer Service.
+ */
+export async function listRenewalAssignees(): Promise<ProfileLite[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,display_name,initials,role,is_active")
+    .eq("is_active", true)
+    .in("role", ["agent", "customer_service"])
+    .order("role")
+    .order("display_name");
+
+  if (error) {
+    throw new Error(`Unable to load renewal assignees: ${error.message}`);
   }
 
   return (data ?? []) as ProfileLite[];
