@@ -12,10 +12,48 @@ interface ModuleShellProps {
   role?: AppRole;
   lastUpdated?: Date | null;
   onRefresh?: () => void;
+  embedded?: boolean;
   children: ReactNode;
 }
 
-export function ModuleShell({ title, subtitle, role, lastUpdated, onRefresh, children }: ModuleShellProps) {
+export function ModuleShell({
+  title,
+  subtitle,
+  role,
+  lastUpdated,
+  onRefresh,
+  embedded = false,
+  children,
+}: ModuleShellProps) {
+  if (embedded) {
+    return (
+      <section className="text-slate-950">
+        <div className="mb-6 flex flex-col gap-3 rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#526b9a]">
+              {role === 'manager' ? 'Management workspace' : role === 'customer_service' ? 'Customer Service workspace' : 'Sales workspace'}
+            </p>
+            <h1 className={ui.pageTitle}>{title}</h1>
+            <p className={ui.pageSubtitle}>{subtitle}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {lastUpdated && (
+              <p className="text-xs font-bold text-slate-400">
+                Last updated {lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              </p>
+            )}
+            {onRefresh && (
+              <button type="button" onClick={onRefresh} className={ui.btnSecondary}>
+                <RefreshCw className="h-4 w-4" />Refresh
+              </button>
+            )}
+          </div>
+        </div>
+        {children}
+      </section>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f3f5f9] text-slate-950">
       <header className="sticky top-0 z-30 border-b border-[#dbe3f0] bg-white/95 backdrop-blur-xl">
