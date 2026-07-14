@@ -25,7 +25,10 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { getSupabase } from '../nhwd-shared/client';
+import {
+  getSupabase,
+  listRenewalAssignees,
+} from '../nhwd-shared/client';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { renewalStatusTone, statusLabel, ui } from '../nhwd-shared/ui';
@@ -33,28 +36,20 @@ import {
   addContact,
   assignRenewal,
   buildNormalizedRows,
-  deleteRenewalAssignmentAlias,
-  extractDistinctAssignmentLabels,
   generateDueNotifications,
   getEvidenceUrl,
   guessMapping,
   importBatch,
   listContacts,
-  listRenewalAssignees,
-  listRenewalAssignmentAliases,
   listRenewalEvents,
   listRenewals,
   managerUpdateRecord,
-  normalizeAssignmentLabel,
   normalizeDate,
   parseCsv,
   sendToRequote,
   updateWorkflow,
-  upsertRenewalAssignmentAlias,
   type ImportBatchResult,
   type NormalizedImportRow,
-  type RenewalAssignee,
-  type RenewalAssignmentAlias,
   type RenewalChannel,
   type RenewalContact,
   type RenewalEvent,
@@ -75,7 +70,7 @@ const IMPORT_FIELDS: Array<{ key: keyof NormalizedImportRow; label: string; requ
   { key: 'eft', label: 'EFT', group: 'powerbi' },
   { key: 'requote', label: 'REQUOTE', group: 'powerbi' },
   { key: 'requote_note', label: 'NOTA REQUOTE', group: 'powerbi' },
-  { key: 'assigned_name', label: 'ASIGNACIONTXT / Responsible', group: 'powerbi' },
+  { key: 'assigned_name', label: 'ASIGNADO', group: 'powerbi' },
   { key: 'customer_phone', label: 'Phone', group: 'contact' },
   { key: 'customer_email', label: 'Email', group: 'contact' },
   { key: 'hawksoft_client_id', label: 'HawkSoft client ID', group: 'contact' },
@@ -110,7 +105,7 @@ function premiumDelta(row: RenewalRecord): string {
   return `${percent > 0 ? '+' : ''}${percent.toFixed(1)}%`;
 }
 
-function assigneeName(assignees: RenewalAssignee[], id: string | null): string {
+function assigneeName(assignees: ProfileLite[], id: string | null): string {
   return assignees.find((profile) => profile.id === id)?.display_name || 'Unassigned';
 }
 
@@ -142,7 +137,7 @@ function RenewalDrawer({
 }: {
   record: RenewalRecord;
   profile: ProfileLite;
-  assignees: RenewalAssignee[];
+  assignees: ProfileLite[];
   onChanged: () => Promise<void>;
   onClose: () => void;
 }) {
@@ -394,79 +389,20 @@ function RenewalDrawer({
   );
 }
 
-function ImportWizard({
-  assignees,
-  onComplete,
-  onRefreshAssignees,
-}: {
-  assignees: RenewalAssignee[];
-  onComplete: () => Promise<void>;
-  onRefreshAssignees: () => Promise<void>;
-}) {
+function ImportWizard({ onComplete }: { onComplete: () => Promise<void> }) {
   const [fileName, setFileName] = useState('');
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [aliases, setAliases] = useState<RenewalAssignmentAlias[]>([]);
-  const [assignmentSelections, setAssignmentSelections] = useState<Record<string, string>>({});
-  const [savingLabel, setSavingLabel] = useState<string | null>(null);
-  const [aliasNotice, setAliasNotice] = useState<string | null>(null);
+  const [preview, setPreview] = useState<NormalizedImportRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportBatchResult | null>(null);
-
-  const normalizedRows = useMemo(
-    () => buildNormalizedRows(headers, rawRows, mapping),
-    [headers, rawRows, mapping],
-  );
-  const preview = normalizedRows.slice(0, 15);
-  const assignmentLabels = useMemo(
-    () => extractDistinctAssignmentLabels(normalizedRows),
-    [normalizedRows],
-  );
-  const aliasByLabel = useMemo(
-    () => new Map(aliases.map((alias) => [alias.normalized_label, alias])),
-    [aliases],
-  );
-  const assignmentCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const row of normalizedRows) {
-      if (!row.assigned_name?.trim()) continue;
-      const key = normalizeAssignmentLabel(row.assigned_name);
-      counts.set(key, (counts.get(key) || 0) + 1);
-    }
-    return counts;
-  }, [normalizedRows]);
-
-  const refreshAliases = useCallback(async () => {
-    try {
-      setAliases(await listRenewalAssignmentAliases());
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Assignment links could not be loaded.');
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshAliases();
-  }, [refreshAliases]);
-
-  useEffect(() => {
-    setAssignmentSelections((current) => {
-      const next = { ...current };
-      for (const label of assignmentLabels) {
-        const key = normalizeAssignmentLabel(label);
-        const alias = aliasByLabel.get(key);
-        if (!next[key] && alias) next[key] = alias.profile_id;
-      }
-      return next;
-    });
-  }, [aliasByLabel, assignmentLabels]);
 
   async function loadFile(file: File | null) {
     if (!file) return;
     setError(null);
     setResult(null);
-    setAliasNotice(null);
     const parsed = parseCsv(await file.text());
     if (!parsed.headers.length) return setError('The CSV did not contain headers.');
     const guessed = guessMapping(parsed.headers);
@@ -474,59 +410,24 @@ function ImportWizard({
     setHeaders(parsed.headers);
     setRawRows(parsed.rows);
     setMapping(guessed);
+    setPreview(buildNormalizedRows(parsed.headers, parsed.rows, guessed).slice(0, 15));
   }
 
   function changeMapping(field: string, header: string) {
     const next = { ...mapping, [field]: header };
     if (!header) delete next[field];
     setMapping(next);
-  }
-
-  async function saveAssignmentLink(label: string) {
-    const key = normalizeAssignmentLabel(label);
-    const profileId = assignmentSelections[key];
-    if (!profileId) return setError(`Choose a Work Desk username for ${label}.`);
-    setSavingLabel(key);
-    setError(null);
-    setAliasNotice(null);
-    try {
-      const saved = await upsertRenewalAssignmentAlias(label, profileId);
-      const person = assignees.find((item) => item.id === profileId);
-      setAliasNotice(
-        `${label} is now linked to @${person?.username || person?.display_name || 'selected user'}. ${saved.rows_assigned} existing open renewal${saved.rows_assigned === 1 ? '' : 's'} were assigned.`,
-      );
-      await refreshAliases();
-      await onComplete();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The assignment link could not be saved.');
-    } finally {
-      setSavingLabel(null);
-    }
-  }
-
-  async function removeAssignmentLink(alias: RenewalAssignmentAlias) {
-    setSavingLabel(alias.normalized_label);
-    setError(null);
-    setAliasNotice(null);
-    try {
-      await deleteRenewalAssignmentAlias(alias.id);
-      setAssignmentSelections((current) => ({ ...current, [alias.normalized_label]: '' }));
-      setAliasNotice(`${alias.import_label} is no longer linked automatically. Existing assigned records were not changed.`);
-      await refreshAliases();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The assignment link could not be removed.');
-    } finally {
-      setSavingLabel(null);
-    }
+    setPreview(buildNormalizedRows(headers, rawRows, next).slice(0, 15));
   }
 
   async function commit() {
+    const rows = buildNormalizedRows(headers, rawRows, mapping);
     if (!mapping.policy_number || !mapping.renewal_date || !mapping.customer_name) return setError('Map Policy number, Renewal date, and Customer name before importing.');
-    if (!normalizedRows.length) return setError('No valid rows were found after mapping.');
+    if (!rows.length) return setError('No valid rows were found after mapping.');
     setBusy(true);
     setError(null);
     try {
-      const imported = await importBatch(fileName, mapping, normalizedRows);
+      const imported = await importBatch(fileName, mapping, rows);
       setResult(imported);
       await onComplete();
     } catch (caught) {
@@ -536,18 +437,13 @@ function ImportWizard({
     }
   }
 
-  const aliasesOutsideFile = aliases.filter(
-    (alias) => !assignmentLabels.some((label) => normalizeAssignmentLabel(label) === alias.normalized_label),
-  );
-
   return (
     <div className="space-y-5">
       <section className={`${ui.card} ${ui.cardPad}`}>
         <div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-2xl bg-[#eef3fb] text-[#223f7a]"><UploadCloud className="h-5 w-5" /></div><div><h2 className="text-xl font-black">Upload or update HawkSoft / Power BI renewal data</h2><p className="mt-1 text-sm font-semibold leading-6 text-slate-500">Open records are matched by policy number + renewal date and updated with a full change log. Closed records are never overwritten.</p></div></div>
-        <label className="mt-5 block rounded-2xl border-2 border-dashed border-[#b5c4df] bg-[#f8faff] p-8 text-center"><FileUp className="mx-auto h-8 w-8 text-[#223f7a]" /><p className="mt-3 font-black text-slate-900">Choose weekly CSV export</p><p className="mt-1 text-sm font-semibold text-slate-500">ASIGNACIONTXT names are extracted automatically before the import is committed.</p><input type="file" accept=".csv,text/csv" className="mt-4 block w-full text-sm font-semibold" onChange={(event) => void loadFile(event.target.files?.[0] || null)} /></label>
+        <label className="mt-5 block rounded-2xl border-2 border-dashed border-[#b5c4df] bg-[#f8faff] p-8 text-center"><FileUp className="mx-auto h-8 w-8 text-[#223f7a]" /><p className="mt-3 font-black text-slate-900">Choose CSV export</p><p className="mt-1 text-sm font-semibold text-slate-500">The file is previewed before anything is committed.</p><input type="file" accept=".csv,text/csv" className="mt-4 block w-full text-sm font-semibold" onChange={(event) => void loadFile(event.target.files?.[0] || null)} /></label>
       </section>
       {error ? <div className={ui.error}>{error}</div> : null}
-      {aliasNotice ? <div className={ui.success}>{aliasNotice}</div> : null}
       {result ? (
         <div className={ui.success}>
           <p className="font-black">
@@ -559,7 +455,7 @@ function ImportWizard({
           </p>
           {result.unmatched_assignees?.length ? (
             <p className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-amber-800">
-              Still unlinked: {result.unmatched_assignees.join(', ')}. Create those users, return to this screen, and link each imported name to its username. Existing open records will then be assigned automatically.
+              Assignee names not matched automatically: {result.unmatched_assignees.join(', ')}. The imported name is preserved for Manager review.
             </p>
           ) : null}
         </div>
@@ -568,20 +464,31 @@ function ImportWizard({
       {headers.length ? (
         <section className={`${ui.card} ${ui.cardPad}`}>
           <p className={ui.sectionTitle}>Column mapping</p>
-          <h3 className="mt-1 text-xl font-black">Confirm the weekly export columns</h3>
-          <p className="mt-1 text-sm font-semibold text-slate-500">ASIGNACIONTXT, ASIGNACION, ASIGNADO, Responsible, and Assigned To are recognized as the responsible employee field.</p>
+          <h3 className="mt-1 text-xl font-black">Confirm the Power BI columns before importing</h3>
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            Your standard report headings are detected automatically. Optional information stays hidden below until you open its group.
+          </p>
 
           {([
             ['required', 'Required policy information', 'Named Insured, Company, Lobs, Policy and Renewal Date.', true],
-            ['powerbi', 'Current workflow fields', 'Aviso Call, Notes, EFT, REQUOTE, NOTA REQUOTE and ASIGNACIONTXT.', true],
+            ['powerbi', 'Current Power BI workflow fields', 'Aviso Call, Notes, EFT, REQUOTE, NOTA REQUOTE and ASIGNADO.', true],
             ['contact', 'Helpful customer contact fields', 'Phone, email and HawkSoft client ID improve follow-up and matching.', false],
             ['premium', 'Optional premium comparison', 'Current and renewal premiums support increase alerts and reporting.', false],
           ] as const).map(([group, title, description, open]) => (
             <details key={group} open={open} className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70">
-              <summary className="cursor-pointer list-none px-4 py-4 [&::-webkit-details-marker]:hidden"><p className="font-black text-slate-900">{title}</p><p className="mt-1 text-xs font-semibold text-slate-500">{description}</p></summary>
+              <summary className="cursor-pointer list-none px-4 py-4 [&::-webkit-details-marker]:hidden">
+                <p className="font-black text-slate-900">{title}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">{description}</p>
+              </summary>
               <div className="grid gap-4 border-t border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
                 {IMPORT_FIELDS.filter((field) => field.group === group).map((field) => (
-                  <label key={field.key}><span className={ui.label}>{field.label}{field.required ? ' *' : ''}</span><select className={ui.select} value={mapping[field.key] || ''} onChange={(event) => changeMapping(field.key, event.target.value)}><option value="">Do not import</option>{headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
+                  <label key={field.key}>
+                    <span className={ui.label}>{field.label}{field.required ? ' *' : ''}</span>
+                    <select className={ui.select} value={mapping[field.key] || ''} onChange={(event) => changeMapping(field.key, event.target.value)}>
+                      <option value="">Do not import</option>
+                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+                    </select>
+                  </label>
                 ))}
               </div>
             </details>
@@ -589,44 +496,35 @@ function ImportWizard({
         </section>
       ) : null}
 
-      {headers.length && mapping.assigned_name ? (
-        <section className={`${ui.card} ${ui.cardPad}`}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div><p className={ui.sectionTitle}>Responsible-name links</p><h3 className="mt-1 text-xl font-black">Link ASIGNACIONTXT names to Work Desk usernames</h3><p className="mt-1 text-sm font-semibold text-slate-500">The link is saved once and reused on every weekly upload. Sales Agents and Customer Service users are both eligible.</p></div>
-            <button type="button" className={ui.btnSecondary} onClick={() => void onRefreshAssignees()}><RefreshCw className="h-4 w-4" />Refresh usernames</button>
-          </div>
-
-          {assignmentLabels.length ? (
-            <div className="mt-5 space-y-3">
-              {assignmentLabels.map((label) => {
-                const key = normalizeAssignmentLabel(label);
-                const alias = aliasByLabel.get(key);
-                const selectedProfileId = assignmentSelections[key] || alias?.profile_id || '';
-                const linkedPerson = assignees.find((person) => person.id === alias?.profile_id);
-                return (
-                  <div key={key} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 lg:grid-cols-[minmax(180px,1fr)_minmax(260px,1.4fr)_auto] lg:items-end">
-                    <div><p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Imported name · {assignmentCounts.get(key) || 0} rows</p><p className="mt-1 text-lg font-black text-slate-900">{label}</p>{alias ? <p className="mt-1 text-xs font-bold text-emerald-700">Saved: @{linkedPerson?.username || linkedPerson?.display_name || 'inactive user'}</p> : <p className="mt-1 text-xs font-bold text-amber-700">Not linked yet</p>}</div>
-                    <label><span className={ui.label}>Work Desk username</span><select className={ui.select} value={selectedProfileId} onChange={(event) => setAssignmentSelections((current) => ({ ...current, [key]: event.target.value }))}><option value="">Choose after the user is created</option>{assignees.map((person) => <option key={person.id} value={person.id}>@{person.username} · {person.display_name} · {person.role === 'agent' ? 'Sales Agent' : 'Customer Service'}</option>)}</select></label>
-                    <div className="flex gap-2"><button type="button" className={ui.btnPrimary} disabled={!selectedProfileId || savingLabel === key} onClick={() => void saveAssignmentLink(label)}><UserCheck className="h-4 w-4" />{savingLabel === key ? 'Saving…' : 'Save link'}</button>{alias ? <button type="button" className={ui.btnGhost} disabled={savingLabel === key} onClick={() => void removeAssignmentLink(alias)}><X className="h-4 w-4" />Remove</button> : null}</div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : <div className={`${ui.empty} mt-5`}>No responsible names were found in the mapped assignment column.</div>}
-
-          {aliasesOutsideFile.length ? (
-            <details className="mt-5 rounded-2xl border border-slate-200 bg-white">
-              <summary className="cursor-pointer list-none px-4 py-4 font-black text-slate-700 [&::-webkit-details-marker]:hidden">Saved links not present in this file · {aliasesOutsideFile.length}</summary>
-              <div className="divide-y divide-slate-100 border-t border-slate-200">{aliasesOutsideFile.map((alias) => { const person = assignees.find((item) => item.id === alias.profile_id); return <div key={alias.id} className="flex items-center justify-between gap-4 px-4 py-3"><div><p className="font-black">{alias.import_label}</p><p className="mt-1 text-xs font-semibold text-slate-500">@{person?.username || person?.display_name || 'inactive user'}</p></div><button type="button" className={ui.btnGhost} onClick={() => void removeAssignmentLink(alias)}>Remove</button></div>; })}</div>
-            </details>
-          ) : null}
-        </section>
-      ) : null}
-
       {preview.length ? (
         <section className={`${ui.card} overflow-hidden`}>
-          <div className={ui.cardHeader}><div><p className={ui.sectionTitle}>Preview</p><h3 className="mt-1 text-xl font-black">First {preview.length} valid rows</h3></div><button type="button" className={ui.btnPrimary} disabled={busy} onClick={() => void commit()}><UploadCloud className="h-4 w-4" />Commit {normalizedRows.length} Rows</button></div>
-          <div className="overflow-x-auto"><table className={ui.table}><thead><tr><th className={ui.th}>Named Insured</th><th className={ui.th}>Company / LOB</th><th className={ui.th}>Policy / Renewal</th><th className={ui.th}>Aviso / Notes</th><th className={ui.th}>Requote</th><th className={ui.th}>Responsible</th></tr></thead><tbody>{preview.map((row, index) => { const alias = row.assigned_name ? aliasByLabel.get(normalizeAssignmentLabel(row.assigned_name)) : undefined; const person = assignees.find((item) => item.id === alias?.profile_id); return <tr key={`${row.policy_number}-${index}`}><td className={ui.td}>{row.customer_name}</td><td className={ui.td}><p className="font-bold">{row.carrier || '—'}</p><p className="mt-1 text-xs text-slate-400">{row.line_of_business || '—'}</p></td><td className={ui.td}><p className="font-bold">{row.policy_number}</p><p className="mt-1 text-xs text-slate-400">{row.renewal_date}</p></td><td className={ui.td}><p className="font-bold">{row.notice_call_date || '—'}</p><p className="mt-1 max-w-xs truncate text-xs text-slate-500">{row.notes || 'No imported note'}</p></td><td className={ui.td}><p className="font-bold">{row.requote || '—'}</p><p className="mt-1 max-w-xs truncate text-xs text-slate-500">{row.requote_note || ''}</p></td><td className={ui.td}><p className="font-bold">{row.assigned_name || 'Unassigned'}</p><p className={`mt-1 text-xs font-bold ${alias ? 'text-emerald-700' : 'text-amber-700'}`}>{alias ? `@${person?.username || person?.display_name || 'linked user'}` : row.assigned_name ? 'Link before or after import' : ''}</p></td></tr>; })}</tbody></table></div>
+          <div className={ui.cardHeader}><div><p className={ui.sectionTitle}>Preview</p><h3 className="mt-1 text-xl font-black">First {preview.length} valid rows</h3></div><button type="button" className={ui.btnPrimary} disabled={busy} onClick={() => void commit()}><UploadCloud className="h-4 w-4" />Commit {buildNormalizedRows(headers, rawRows, mapping).length} Rows</button></div>
+          <div className="overflow-x-auto">
+            <table className={ui.table}>
+              <thead>
+                <tr>
+                  <th className={ui.th}>Named Insured</th>
+                  <th className={ui.th}>Company / LOB</th>
+                  <th className={ui.th}>Policy / Renewal</th>
+                  <th className={ui.th}>Aviso / Notes</th>
+                  <th className={ui.th}>Requote</th>
+                  <th className={ui.th}>Assigned</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.map((row, index) => (
+                  <tr key={`${row.policy_number}-${index}`}>
+                    <td className={ui.td}>{row.customer_name}</td>
+                    <td className={ui.td}><p className="font-bold">{row.carrier || '—'}</p><p className="mt-1 text-xs text-slate-400">{row.line_of_business || '—'}</p></td>
+                    <td className={ui.td}><p className="font-bold">{row.policy_number}</p><p className="mt-1 text-xs text-slate-400">{row.renewal_date}</p></td>
+                    <td className={ui.td}><p className="font-bold">{row.notice_call_date || '—'}</p><p className="mt-1 max-w-xs truncate text-xs text-slate-500">{row.notes || 'No imported note'}</p></td>
+                    <td className={ui.td}><p className="font-bold">{row.requote || '—'}</p><p className="mt-1 max-w-xs truncate text-xs text-slate-500">{row.requote_note || ''}</p></td>
+                    <td className={ui.td}>{row.assigned_name || 'Unassigned'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : null}
     </div>
@@ -646,7 +544,7 @@ export default function RenewalsPage({
   showImportTab?: boolean;
   importOnly?: boolean;
 }) {
-  const [assignees, setAssignees] = useState<RenewalAssignee[]>([]);
+  const [assignees, setAssignees] = useState<ProfileLite[]>([]);
   const [rows, setRows] = useState<RenewalRecord[]>([]);
   const [tab, setTab] = useState<'overview' | 'pipeline' | 'import'>(importOnly ? 'import' : initialTab);
   const [statusFilter, setStatusFilter] = useState<'open' | 'all' | RenewalStatus>('open');
@@ -770,7 +668,7 @@ export default function RenewalsPage({
         </section>
       ) : null}
 
-      {(tab === 'import' || importOnly) && profile.role === 'manager' ? <ImportWizard assignees={assignees} onRefreshAssignees={refresh} onComplete={async () => { setNotice('Renewal data imported/updated. Closed records remained unchanged.'); await refresh(); }} /> : null}
+      {(tab === 'import' || importOnly) && profile.role === 'manager' ? <ImportWizard onComplete={async () => { setNotice('Renewal data imported/updated. Closed records remained unchanged.'); await refresh(); }} /> : null}
 
       <Drawer open={Boolean(selected)} onClose={() => setSelectedId(null)}>
         {selected ? <RenewalDrawer record={selected} profile={profile} assignees={assignees} onChanged={async () => { await refresh(); }} onClose={() => setSelectedId(null)} /> : null}
