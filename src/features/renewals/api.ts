@@ -90,6 +90,29 @@ export interface ImportBatchResult {
   unmatched_assignees?: string[];
 }
 
+export interface RenewalAssignee {
+  id: string;
+  username: string;
+  display_name: string;
+  initials: string;
+  role: 'agent' | 'customer_service';
+  is_active: boolean;
+}
+
+export interface RenewalAssignmentAlias {
+  id: string;
+  import_label: string;
+  normalized_label: string;
+  profile_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssignmentAliasResult {
+  alias: RenewalAssignmentAlias;
+  rows_assigned: number;
+}
+
 export interface NormalizedImportRow {
   policy_number: string;
   renewal_date: string;
@@ -282,6 +305,46 @@ export async function assignRenewal(recordId: string, profileId: string): Promis
   throwIfError(error);
 }
 
+export async function listRenewalAssignees(): Promise<RenewalAssignee[]> {
+  const { data, error } = await getSupabase()
+    .from('profiles')
+    .select('id,username,display_name,initials,role,is_active')
+    .eq('is_active', true)
+    .in('role', ['agent', 'customer_service'])
+    .order('role')
+    .order('display_name');
+  throwIfError(error);
+  return (data as RenewalAssignee[]) ?? [];
+}
+
+export async function listRenewalAssignmentAliases(): Promise<RenewalAssignmentAlias[]> {
+  const { data, error } = await getSupabase()
+    .from('renewal_assignment_aliases')
+    .select('id,import_label,normalized_label,profile_id,created_at,updated_at')
+    .order('import_label');
+  throwIfError(error);
+  return (data as RenewalAssignmentAlias[]) ?? [];
+}
+
+export async function upsertRenewalAssignmentAlias(
+  importLabel: string,
+  profileId: string,
+): Promise<AssignmentAliasResult> {
+  const { data, error } = await getSupabase().rpc('renewal_upsert_assignment_alias', {
+    p_import_label: importLabel,
+    p_profile_id: profileId,
+  });
+  throwIfError(error);
+  return data as AssignmentAliasResult;
+}
+
+export async function deleteRenewalAssignmentAlias(aliasId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('renewal_delete_assignment_alias', {
+    p_alias_id: aliasId,
+  });
+  throwIfError(error);
+}
+
 export async function sendToRequote(recordId: string): Promise<string> {
   const { data, error } = await getSupabase().rpc('renewal_send_to_requote', {
     p_record_id: recordId,
@@ -365,7 +428,7 @@ const GUESSES: Record<string, RegExp> = {
   eft: /^eft$|electronic\s*fund/i,
   requote: /^requote$|re[-\s]?quote\s*(needed|flag)?/i,
   requote_note: /nota\s*requote|requote\s*note/i,
-  assigned_name: /^asignado$|assigned\s*(to|agent)?|assignee/i,
+  assigned_name: /^asignaciontxt$|^asignaci[oó]n(?:\s*txt)?$|^asignado$|responsable|responsible|assigned\s*(to|agent)?|assignee/i,
 };
 
 export function guessMapping(headers: string[]): Record<string, string> {
@@ -375,6 +438,21 @@ export function guessMapping(headers: string[]): Record<string, string> {
     if (match) mapping[field] = match;
   }
   return mapping;
+}
+
+export function normalizeAssignmentLabel(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/[\s\p{P}]+/gu, ' ').trim();
+}
+
+export function extractDistinctAssignmentLabels(rows: NormalizedImportRow[]): string[] {
+  const labels = new Map<string, string>();
+  for (const row of rows) {
+    const label = row.assigned_name?.trim();
+    if (!label) continue;
+    const normalized = normalizeAssignmentLabel(label);
+    if (normalized && !labels.has(normalized)) labels.set(normalized, label);
+  }
+  return Array.from(labels.values()).sort((left, right) => left.localeCompare(right));
 }
 
 export function buildNormalizedRows(headers: string[], rawRows: string[][], mapping: Record<string, string>): NormalizedImportRow[] {
