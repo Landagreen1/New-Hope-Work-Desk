@@ -2,8 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { redirect } from 'next/navigation';
 
-import { OperationsDock } from '@/components/operations-dock';
-import { WorkDeskApp } from '@/components/work-desk-app';
+import { RoleWorkspace } from '@/components/role-workspace';
 import { loadDashboardData } from '@/lib/dashboard-data';
 import { createClient } from '@/lib/supabase/server';
 import type { SessionProfile } from '@/lib/types';
@@ -36,9 +35,6 @@ export default async function Home() {
   };
 
   return (
-    <>
-      <WorkDeskApp sessionProfile={sessionProfile} initialData={initialData} />
-      <OperationsDock role={sessionProfile.role} />
-    </>
+    <RoleWorkspace sessionProfile={sessionProfile} initialData={initialData} />
   );
 }
