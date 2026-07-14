@@ -4,7 +4,8 @@ import { ClipboardList, FilePlus2, RefreshCw, Search, X } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { getCurrentProfile, getSupabase, type ProfileLite } from '../nhwd-shared/client';
+import { getSupabase } from '../nhwd-shared/client';
+import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { csIntakeStatusTone, statusLabel, ui } from '../nhwd-shared/ui';
 import IntakeForm from './IntakeForm';
@@ -35,9 +36,8 @@ function IntakeModal({ open, onClose, children }: { open: boolean; onClose: () =
   );
 }
 
-export default function CsIntakeLanding() {
+export default function CsIntakeLanding({ initialProfile: profile }: { initialProfile: ProfileLite }) {
   const searchParams = useSearchParams();
-  const [profile, setProfile] = useState<ProfileLite | null>(null);
   const [rows, setRows] = useState<CsIntakeSubmission[]>([]);
   const [selected, setSelected] = useState<LoadedIntake | null>(null);
   const [creating, setCreating] = useState(false);
@@ -51,14 +51,7 @@ export default function CsIntakeLanding() {
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      const activeProfile = profile || await getCurrentProfile();
-      if (!activeProfile) {
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-      setProfile(activeProfile);
-      const data = activeProfile.role === 'manager' ? await listAllIntakes() : await listMyIntakes(activeProfile.id);
+      const data = profile.role === 'manager' ? await listAllIntakes() : await listMyIntakes(profile.id);
       setRows(data);
       setLastUpdated(new Date());
     } catch (caught) {
@@ -135,10 +128,6 @@ export default function CsIntakeLanding() {
   }
 
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9] font-black text-slate-500">Loading Quote Intake…</div>;
-
-  if (!profile) {
-    return <div className="grid min-h-screen place-items-center bg-[#f3f5f9] p-6"><div className={ui.card}><div className={ui.cardPad}><h1 className="text-xl font-black">Sign in to use Quote Intake</h1><p className="mt-2 text-sm font-semibold text-slate-500">Return to Work Desk and sign in again.</p></div></div></div>;
-  }
 
   if (!['customer_service', 'manager'].includes(profile.role)) {
     return <div className="grid min-h-screen place-items-center bg-[#f3f5f9] p-6"><div className={ui.error}>Quote Intake is available to Customer Service and Managers.</div></div>;

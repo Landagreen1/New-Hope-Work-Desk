@@ -1,6 +1,9 @@
-// /tools/cs-intake/queue — Agent/manager intake queue
-import IntakeQueue from '@/features/cs-intake/IntakeQueue';
+export const dynamic = 'force-dynamic';
 
-export default function Page() {
-  return <IntakeQueue />;
+import IntakeQueue from '@/features/cs-intake/IntakeQueue';
+import { requireToolProfile } from '@/lib/tool-session';
+
+export default async function Page() {
+  const profile = await requireToolProfile(['agent', 'manager']);
+  return <IntakeQueue initialProfile={profile} />;
 }

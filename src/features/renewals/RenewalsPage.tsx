@@ -26,11 +26,10 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
-  getCurrentProfile,
   getSupabase,
   listRenewalAssignees,
-  type ProfileLite,
 } from '../nhwd-shared/client';
+import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { renewalStatusTone, statusLabel, ui } from '../nhwd-shared/ui';
 import {
@@ -444,8 +443,7 @@ function ImportWizard({ onComplete }: { onComplete: () => Promise<void> }) {
   );
 }
 
-export default function RenewalsPage() {
-  const [profile, setProfile] = useState<ProfileLite | null>(null);
+export default function RenewalsPage({ initialProfile: profile }: { initialProfile: ProfileLite }) {
   const [assignees, setAssignees] = useState<ProfileLite[]>([]);
   const [rows, setRows] = useState<RenewalRecord[]>([]);
   const [tab, setTab] = useState<'overview' | 'pipeline' | 'import'>('overview');
@@ -462,22 +460,15 @@ export default function RenewalsPage() {
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      const currentProfile = profile || await getCurrentProfile();
-      if (!currentProfile) {
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-      setProfile(currentProfile);
-      const effectiveAssignee = currentProfile.role === 'manager' ? assignedFilter : currentProfile.id;
+      const effectiveAssignee = profile.role === 'manager' ? assignedFilter : profile.id;
       const [renewalRows, people] = await Promise.all([
         listRenewals({ status: statusFilter, assignedTo: effectiveAssignee, dueWindow: dueFilter, search }),
-        listRenewalAssignees(),
+        profile.role === 'manager' ? listRenewalAssignees() : Promise.resolve([]),
       ]);
       setRows(renewalRows);
       setAssignees(people);
       setLastUpdated(new Date());
-      void generateDueNotifications().catch(() => undefined);
+      if (profile.role === 'manager') void generateDueNotifications().catch(() => undefined);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to load Renewals.');
     } finally {
@@ -522,7 +513,6 @@ export default function RenewalsPage() {
   }, [rows]);
 
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9] font-black text-slate-500">Loading Renewals…</div>;
-  if (!profile) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9]"><div className={ui.error}>Sign in through Work Desk to use Renewals.</div></div>;
   if (!['agent', 'manager', 'customer_service'].includes(profile.role)) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9]"><div className={ui.error}>Your account does not have Renewals access.</div></div>;
 
   return (

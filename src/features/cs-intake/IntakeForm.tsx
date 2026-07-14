@@ -161,6 +161,29 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
     return () => { active = false; };
   }, [submission.dealer_id]);
 
+  useEffect(() => {
+    setDrivers((current) => {
+      if (!current.length) return [emptyDriver()];
+      const primary = current[0];
+      const synced = {
+        ...primary,
+        position: 1,
+        relationship: 'self',
+        first_name: submission.insured_first_name,
+        last_name: submission.insured_last_name,
+        dob: submission.insured_dob || null,
+      };
+      if (
+        primary.first_name === synced.first_name
+        && primary.last_name === synced.last_name
+        && primary.dob === synced.dob
+        && primary.relationship === synced.relationship
+        && primary.position === synced.position
+      ) return current;
+      return [synced, ...current.slice(1)];
+    });
+  }, [submission.insured_dob, submission.insured_first_name, submission.insured_last_name]);
+
   const selectedDealer = dealers.find((dealer) => dealer.id === submission.dealer_id);
   const selectedSalesperson = salespeople.find((person) => person.id === submission.salesperson_id);
 
@@ -407,13 +430,23 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
             <div key={driver.id || `driver-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="font-black text-slate-900">Person {index + 1}{index === 0 ? ' · Primary' : ''}</p>
-                {!readOnly && drivers.length > 1 ? <button type="button" className={ui.btnDanger} onClick={() => setDrivers((current) => current.filter((_, currentIndex) => currentIndex !== index).map((row, currentIndex) => ({ ...row, position: currentIndex + 1 })))}><Trash2 className="h-4 w-4" /> Remove</button> : null}
+                {!readOnly && index > 0 ? <button type="button" className={ui.btnDanger} onClick={() => setDrivers((current) => current.filter((_, currentIndex) => currentIndex !== index).map((row, currentIndex) => ({ ...row, position: currentIndex + 1 })))}><Trash2 className="h-4 w-4" /> Remove</button> : null}
               </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Field label="First name" required><input className={ui.input} disabled={disabled} value={driver.first_name} onChange={(event) => patchDriver(index, { first_name: event.target.value })} /></Field>
-                <Field label="Last name" required><input className={ui.input} disabled={disabled} value={driver.last_name} onChange={(event) => patchDriver(index, { last_name: event.target.value })} /></Field>
-                <Field label="Date of birth" required><input type="date" className={ui.input} disabled={disabled} value={driver.dob || ''} onChange={(event) => patchDriver(index, { dob: event.target.value || null })} /></Field>
-                <Field label="Relationship"><select className={ui.select} disabled={disabled} value={driver.relationship || 'other'} onChange={(event) => patchDriver(index, { relationship: event.target.value })}><option value="self">Self</option><option value="spouse">Spouse</option><option value="child">Child</option><option value="employee">Employee</option><option value="other">Other</option></select></Field>
+                {index === 0 ? (
+                  <div className="rounded-xl border border-[#c9d5e9] bg-white p-3 sm:col-span-2 lg:col-span-4">
+                    <p className="text-xs font-black uppercase tracking-wider text-[#526b9a]">Primary insured</p>
+                    <p className="mt-1 font-black text-slate-900">{submission.insured_first_name || 'First name'} {submission.insured_last_name || 'Last name'}{submission.insured_dob ? ` · DOB ${submission.insured_dob}` : ''}</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">Name and DOB are taken from the Named Insured section above, so Customer Service does not enter them twice.</p>
+                  </div>
+                ) : (
+                  <>
+                    <Field label="First name" required><input className={ui.input} disabled={disabled} value={driver.first_name} onChange={(event) => patchDriver(index, { first_name: event.target.value })} /></Field>
+                    <Field label="Last name" required><input className={ui.input} disabled={disabled} value={driver.last_name} onChange={(event) => patchDriver(index, { last_name: event.target.value })} /></Field>
+                    <Field label="Date of birth" required><input type="date" className={ui.input} disabled={disabled} value={driver.dob || ''} onChange={(event) => patchDriver(index, { dob: event.target.value || null })} /></Field>
+                    <Field label="Relationship"><select className={ui.select} disabled={disabled} value={driver.relationship || 'other'} onChange={(event) => patchDriver(index, { relationship: event.target.value })}><option value="spouse">Spouse</option><option value="child">Child</option><option value="employee">Employee</option><option value="other">Other</option></select></Field>
+                  </>
+                )}
                 <Field label="Document type" required><select className={ui.select} disabled={disabled} value={driver.document_type || 'driver_license'} onChange={(event) => patchDriver(index, { document_type: event.target.value as 'driver_license' | 'state_id' })}><option value="driver_license">Driver License</option><option value="state_id">State ID</option></select></Field>
                 <Field label={driver.document_type === 'state_id' ? 'ID number' : 'License number'} required><input className={ui.input} disabled={disabled} value={driver.license_number || ''} onChange={(event) => patchDriver(index, { license_number: event.target.value || null })} /></Field>
                 <Field label="Issuing state" required><select className={ui.select} disabled={disabled} value={driver.license_state || ''} onChange={(event) => patchDriver(index, { license_state: event.target.value || null })}><option value="">Select</option>{US_STATES.map((state) => <option key={state}>{state}</option>)}<option value="Foreign">Foreign</option></select></Field>

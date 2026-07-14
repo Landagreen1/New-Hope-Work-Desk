@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ArrowLeft, BriefcaseBusiness, ClipboardList, Home, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { AppRole } from './client';
+import type { AppRole } from './types';
 import { ui } from './ui';
 
 interface ModuleShellProps {

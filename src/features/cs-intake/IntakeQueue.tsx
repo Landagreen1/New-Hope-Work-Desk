@@ -3,7 +3,8 @@
 import { CheckCircle2, Eye, RefreshCw, Search, UserCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { getCurrentProfile, getSupabase, listActiveAgents, type ProfileLite } from '../nhwd-shared/client';
+import { getSupabase, listActiveAgents } from '../nhwd-shared/client';
+import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { csIntakeStatusTone, statusLabel, ui } from '../nhwd-shared/ui';
 import IntakeForm from './IntakeForm';
@@ -38,8 +39,7 @@ function QueueModal({ open, onClose, children }: { open: boolean; onClose: () =>
   );
 }
 
-export default function IntakeQueue() {
-  const [profile, setProfile] = useState<ProfileLite | null>(null);
+export default function IntakeQueue({ initialProfile: profile }: { initialProfile: ProfileLite }) {
   const [agents, setAgents] = useState<ProfileLite[]>([]);
   const [rows, setRows] = useState<CsIntakeSubmission[]>([]);
   const [selected, setSelected] = useState<LoadedIntake | null>(null);
@@ -55,12 +55,10 @@ export default function IntakeQueue() {
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      const [activeProfile, queueRows, activeAgents] = await Promise.all([
-        getCurrentProfile(),
+      const [queueRows, activeAgents] = await Promise.all([
         listQueue(),
         listActiveAgents(),
       ]);
-      setProfile(activeProfile);
       setRows(queueRows);
       setAgents(activeAgents);
       setLastUpdated(new Date());
@@ -143,7 +141,6 @@ export default function IntakeQueue() {
   }
 
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9] font-black text-slate-500">Loading Sales Intake Queue…</div>;
-  if (!profile) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9]"><div className={ui.error}>Sign in through Work Desk to use the Intake Queue.</div></div>;
   if (!['agent', 'manager'].includes(profile.role)) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9]"><div className={ui.error}>The Sales Intake Queue is available to Agents and Managers.</div></div>;
 
   const submittedCount = rows.filter((row) => row.status === 'submitted').length;
