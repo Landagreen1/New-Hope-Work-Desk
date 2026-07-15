@@ -49,6 +49,7 @@ import {
   normalizeDate,
   parseCsv,
   sendToRequote,
+  updateRenewalContactInfo,
   updateWorkflow,
   upsertRenewalAssignmentAlias,
   type ImportBatchResult,
@@ -114,6 +115,163 @@ function assigneeName(assignees: RenewalAssignee[], id: string | null): string {
   return assignees.find((profile) => profile.id === id)?.display_name || 'Unassigned';
 }
 
+
+type HistoryItem =
+  | { kind: 'contact'; id: string; occurredAt: string; contact: RenewalContact }
+  | { kind: 'event'; id: string; occurredAt: string; event: RenewalEvent };
+
+const INTERNAL_POWERBI_EVENTS = new Set([
+  'powerbi_record_created',
+  'powerbi_record_updated',
+  'powerbi_record_missing',
+  'powerbi_record_restored',
+  'import_record_created',
+  'import_record_updated',
+  'premium_update',
+]);
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return '—';
+  return new Date(value).toLocaleString();
+}
+
+function readableFieldLabel(value: string): string {
+  return value
+    .replace(/^p_/, '')
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function readableDetailValue(key: string, value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value)) return value.map((entry) => String(entry)).join(', ');
+  if (typeof value === 'object') return null;
+  if (key.includes('at') || key.includes('date')) {
+    const parsed = new Date(String(value));
+    if (!Number.isNaN(parsed.getTime())) return parsed.toLocaleString();
+  }
+  if (key === 'status') return statusLabel(String(value));
+  return String(value);
+}
+
+function eventPresentation(event: RenewalEvent): {
+  title: string;
+  description: string | null;
+  details: Array<{ label: string; value: string }>;
+} {
+  const detail = event.detail || {};
+  const details: Array<{ label: string; value: string }> = [];
+  const add = (label: string, value: unknown, key = label) => {
+    const rendered = readableDetailValue(key, value);
+    if (rendered) details.push({ label, value: rendered });
+  };
+
+  switch (event.event_type) {
+    case 'workflow_updated':
+      add('Status', detail.status, 'status');
+      add('Next follow-up', detail.next_follow_up_at, 'next_follow_up_at');
+      add('Outcome note', detail.outcome_reason, 'outcome_reason');
+      return {
+        title: 'Renewal workflow updated',
+        description: detail.status ? `Status changed to ${statusLabel(String(detail.status))}.` : 'Renewal workflow information was updated.',
+        details,
+      };
+    case 'assigned':
+    case 'manager_assigned':
+      add('Assigned employee', detail.assigned_name, 'assigned_name');
+      add('Role', detail.role, 'role');
+      return {
+        title: 'Renewal assigned',
+        description: detail.assigned_name ? `Assigned to ${String(detail.assigned_name)}.` : 'The renewal assignment was updated.',
+        details,
+      };
+    case 'requote_intake_draft_created':
+      return {
+        title: 'Requote intake draft created',
+        description: 'A linked Customer Service intake was created so the missing quote information can be completed.',
+        details: [],
+      };
+    case 'requote_intake_submitted':
+      return {
+        title: 'Requote intake submitted to Sales',
+        description: 'The linked renewal intake entered the shared Sales Intake Queue.',
+        details: [],
+      };
+    case 'requote_created':
+    case 'requote_work_item_created':
+      return {
+        title: 'Requote created in Quotes Database',
+        description: 'Sales ownership was created from this renewal record.',
+        details: [],
+      };
+    case 'contact_information_added':
+      if (detail.phone_added) details.push({ label: 'Phone', value: 'Added' });
+      if (detail.email_added) details.push({ label: 'Email', value: 'Added' });
+      return {
+        title: 'Customer contact information added',
+        description: 'Missing contact information was saved to this renewal record.',
+        details,
+      };
+    case 'manager_record_updated':
+      return {
+        title: 'Manager corrected renewal information',
+        description: 'One or more renewal fields were corrected by Management.',
+        details: Object.entries(detail)
+          .map(([key, value]) => ({ label: readableFieldLabel(key), value: readableDetailValue(key, value) }))
+          .filter((entry): entry is { label: string; value: string } => Boolean(entry.value)),
+      };
+    case 'powerbi_record_created':
+    case 'import_record_created':
+      add('File', detail.file_name, 'file_name');
+      add('Imported responsible name', detail.assigned_import_label, 'assigned_import_label');
+      return {
+        title: 'Power BI renewal record created',
+        description: 'This renewal was added from the monthly Power BI export.',
+        details,
+      };
+    case 'powerbi_record_updated':
+    case 'import_record_updated':
+      add('File', detail.file_name, 'file_name');
+      return {
+        title: 'Power BI renewal record updated',
+        description: 'The monthly upload refreshed the open renewal information.',
+        details,
+      };
+    case 'premium_update':
+      add('Previous premium', detail.previous_premium, 'previous_premium');
+      add('Updated premium', detail.new_premium, 'new_premium');
+      return {
+        title: 'Renewal premium updated',
+        description: 'The monthly Power BI upload contained a different renewal premium.',
+        details,
+      };
+    default:
+      return {
+        title: statusLabel(event.event_type),
+        description: null,
+        details: Object.entries(detail)
+          .map(([key, value]) => ({ label: readableFieldLabel(key), value: readableDetailValue(key, value) }))
+          .filter((entry): entry is { label: string; value: string } => Boolean(entry.value)),
+      };
+  }
+}
+
+function evidenceDescription(contact: RenewalContact): string | null {
+  if (contact.evidence_name) {
+    let size = '';
+    if (contact.evidence_size_bytes) {
+      size = contact.evidence_size_bytes >= 1_048_576
+        ? ` · ${(contact.evidence_size_bytes / 1_048_576).toFixed(1)} MB`
+        : ` · ${(contact.evidence_size_bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${contact.evidence_name}${size}`;
+  }
+  if (contact.evidence_reference) return `Reference: ${contact.evidence_reference}`;
+  if (contact.rc_recording_content_uri) return 'RingCentral recording';
+  return null;
+}
+
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return <button type="button" onClick={onClick} className={`rounded-xl px-4 py-2.5 text-sm font-black transition ${active ? 'bg-[#223f7a] text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 hover:text-[#223f7a]'}`}>{children}</button>;
 }
@@ -156,6 +314,10 @@ function RenewalDrawer({
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [evidenceReference, setEvidenceReference] = useState('');
   const [nextFollowUp, setNextFollowUp] = useState(record.next_follow_up_at ? record.next_follow_up_at.slice(0, 16) : '');
+  const [contactInfo, setContactInfo] = useState({
+    phone: record.customer_phone || '',
+    email: record.customer_email || '',
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -187,6 +349,13 @@ function RenewalDrawer({
   }, [record.id]);
 
   useEffect(() => { void loadHistory(); }, [loadHistory]);
+
+  useEffect(() => {
+    setContactInfo({
+      phone: record.customer_phone || '',
+      email: record.customer_email || '',
+    });
+  }, [record.customer_email, record.customer_phone, record.id]);
 
   async function run(task: () => Promise<void>, success: string) {
     setBusy(true);
@@ -228,6 +397,18 @@ function RenewalDrawer({
     await run(() => updateWorkflow(record.id, { status: 'monitoring', nextFollowUpAt: new Date(nextFollowUp).toISOString() }), 'Next follow-up scheduled.');
   }
 
+  async function saveMissingContactInfo() {
+    const phone = contactInfo.phone.trim();
+    const email = contactInfo.email.trim();
+    const phoneToSave = record.customer_phone ? null : phone || null;
+    const emailToSave = record.customer_email ? null : email || null;
+    if (!phoneToSave && !emailToSave) return setError('Enter the missing phone number or email address.');
+    await run(
+      () => updateRenewalContactInfo(record.id, { phone: phoneToSave, email: emailToSave }),
+      'Customer contact information saved.',
+    );
+  }
+
   async function closeRecord(status: 'renewed' | 'lost' | 'cancelled') {
     const reason = window.prompt(status === 'renewed' ? 'Renewal completion note:' : `Reason the renewal is ${status}:`);
     if (!reason?.trim()) return;
@@ -263,6 +444,17 @@ function RenewalDrawer({
   }
 
   const warning = warningLabel(record);
+  const historyItems = useMemo<HistoryItem[]>(() => {
+    const visibleEvents = isManager
+      ? events
+      : events.filter((event) => !INTERNAL_POWERBI_EVENTS.has(event.event_type));
+    return [
+      ...contacts.map((contact) => ({ kind: 'contact' as const, id: `contact-${contact.id}`, occurredAt: contact.occurred_at, contact })),
+      ...visibleEvents.map((event) => ({ kind: 'event' as const, id: `event-${event.id}`, occurredAt: event.created_at, event })),
+    ].sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime());
+  }, [contacts, events, isManager]);
+
+  const hasMissingContactInfo = !record.customer_phone || !record.customer_email;
 
   return (
     <div className="space-y-5">
@@ -271,7 +463,7 @@ function RenewalDrawer({
 
       <section className={`${ui.card} ${ui.cardPad}`}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div><p className="text-2xl font-black text-slate-950">{record.customer_name}</p><p className="mt-1 text-sm font-semibold text-slate-500">Policy {record.policy_number} · {record.carrier || 'Carrier not recorded'}</p><div className="mt-3 flex flex-wrap gap-2"><span className={`${ui.badge} ${ui.badgeTone[renewalStatusTone[record.status] || 'neutral']}`}>{statusLabel(record.status)}</span><span className={`${ui.badge} ${ui.badgeTone[warning.tone]}`}>{warning.label}</span>{record.source_sync_state === 'missing_from_latest_file' ? <span className={`${ui.badge} ${ui.badgeTone.progress}`}>Missing from latest Power BI file</span> : null}</div></div>
+          <div><p className="text-2xl font-black text-slate-950">{record.customer_name}</p><p className="mt-1 text-sm font-semibold text-slate-500">Policy {record.policy_number} · {record.carrier || 'Carrier not recorded'}</p><div className="mt-3 flex flex-wrap gap-2"><span className={`${ui.badge} ${ui.badgeTone[renewalStatusTone[record.status] || 'neutral']}`}>{statusLabel(record.status)}</span><span className={`${ui.badge} ${ui.badgeTone[warning.tone]}`}>{warning.label}</span></div></div>
           <div className="rounded-2xl bg-[#eef3fb] p-4 text-right"><p className="text-xs font-black uppercase tracking-wider text-[#223f7a]">Renewal date</p><p className="mt-1 text-xl font-black text-slate-950">{new Date(`${record.renewal_date}T00:00:00`).toLocaleDateString()}</p></div>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -282,7 +474,7 @@ function RenewalDrawer({
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2"><p className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold"><Phone className="mr-2 inline h-4 w-4 text-[#223f7a]" />{record.customer_phone || 'No phone recorded'}</p><p className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold"><Mail className="mr-2 inline h-4 w-4 text-[#223f7a]" />{record.customer_email || 'No email recorded'}</p></div>
 
-        {(record.notice_call_at || record.import_notes || record.assigned_import_label || record.requote_requested || record.requote_note || record.eft_enabled !== null) ? (
+        {isManager && (record.notice_call_at || record.import_notes || record.assigned_import_label || record.requote_requested || record.requote_note || record.eft_enabled !== null) ? (
           <details className="mt-4 rounded-2xl border border-[#c9d5e9] bg-[#f8faff]">
             <summary className="cursor-pointer list-none p-4 [&::-webkit-details-marker]:hidden">
               <p className="font-black text-[#223f7a]">Imported Power BI information</p>
@@ -313,6 +505,29 @@ function RenewalDrawer({
               <div className="mt-3 flex flex-col gap-3 sm:flex-row">
                 <select className={ui.select} value={record.assigned_to || ''} disabled={busy} onChange={(event) => void run(() => assignRenewal(record.id, event.target.value), `Renewal assigned to ${assigneeName(assignees, event.target.value)}.`)}><option value="" disabled>Assign to Agent or Customer Service</option>{assignees.map((person) => <option key={person.id} value={person.id}>{person.display_name} · {person.role === 'customer_service' ? 'Customer Service' : 'Sales Agent'}</option>)}</select>
               </div>
+            </section>
+          ) : null}
+
+          {hasMissingContactInfo ? (
+            <section className={`${ui.card} ${ui.cardPad}`}>
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-50 text-amber-700"><Phone className="h-5 w-5" /></div>
+                <div>
+                  <h3 className="font-black text-slate-950">Add missing customer contact information</h3>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">The assigned employee may fill an empty phone number or email. Existing information can only be replaced by Management.</p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <label>
+                  <span className={ui.label}>Phone</span>
+                  <input className={ui.input} disabled={busy || Boolean(record.customer_phone)} value={contactInfo.phone} onChange={(event) => setContactInfo((current) => ({ ...current, phone: event.target.value }))} placeholder="Customer phone number" />
+                </label>
+                <label>
+                  <span className={ui.label}>Email</span>
+                  <input type="email" className={ui.input} disabled={busy || Boolean(record.customer_email)} value={contactInfo.email} onChange={(event) => setContactInfo((current) => ({ ...current, email: event.target.value }))} placeholder="Customer email address" />
+                </label>
+              </div>
+              <button type="button" className={`${ui.btnPrimary} mt-4`} disabled={busy} onClick={() => void saveMissingContactInfo()}><UserCheck className="h-4 w-4" />Save Contact Information</button>
             </section>
           ) : null}
 
@@ -355,17 +570,68 @@ function RenewalDrawer({
 
       {tab === 'history' ? (
         <section className={`${ui.card} overflow-hidden`}>
-          <div className={ui.cardHeader}><div><p className={ui.sectionTitle}>Audit history</p><h3 className="mt-1 text-xl font-black">Contacts, proof, uploads and manager changes</h3></div><button type="button" className={ui.btnSecondary} onClick={() => void loadHistory()}><RefreshCw className="h-4 w-4" />Refresh</button></div>
+          <div className={ui.cardHeader}>
+            <div>
+              <p className={ui.sectionTitle}>History & Evidence</p>
+              <h3 className="mt-1 text-xl font-black">Customer notes, uploaded proof, and readable workflow activity</h3>
+            </div>
+            <button type="button" className={ui.btnSecondary} onClick={() => void loadHistory()}><RefreshCw className="h-4 w-4" />Refresh</button>
+          </div>
           <div className="space-y-3 p-5">
-            {contacts.map((contact) => (
-              <div key={contact.id} className="rounded-2xl border border-cyan-100 bg-cyan-50/40 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black text-slate-900">{statusLabel(contact.channel)} · {contact.outcome || 'Contact logged'}</p><p className="mt-1 text-xs font-semibold text-slate-500">{new Date(contact.occurred_at).toLocaleString()} · {statusLabel(contact.direction)}</p></div><span className={`${ui.badge} ${ui.badgeTone.cyan}`}>{contact.entry_source === 'ringcentral_api' ? 'RingCentral' : 'Manual'}</span></div>
-                <p className="mt-3 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-700">{contact.notes}</p>
-                {(contact.evidence_path || contact.evidence_reference || contact.rc_recording_content_uri) ? <button type="button" className={`${ui.btnSecondary} mt-3`} onClick={() => void getEvidenceUrl(contact).then((url) => { if (url) window.open(url, '_blank', 'noopener,noreferrer'); })}><Paperclip className="h-4 w-4" />Open Evidence{contact.evidence_name ? ` · ${contact.evidence_name}` : ''}</button> : null}
-              </div>
-            ))}
-            {events.map((event) => <div key={event.id} className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex items-center justify-between gap-3"><p className="font-black text-slate-900">{statusLabel(event.event_type)}</p><p className="text-xs font-bold text-slate-400">{new Date(event.created_at).toLocaleString()}</p></div>{event.detail ? <pre className="mt-3 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-600">{JSON.stringify(event.detail, null, 2)}</pre> : null}</div>)}
-            {!contacts.length && !events.length ? <div className={ui.empty}>No renewal history has been recorded yet.</div> : null}
+            {historyItems.map((item) => {
+              if (item.kind === 'contact') {
+                const contact = item.contact;
+                const evidence = evidenceDescription(contact);
+                return (
+                  <article key={item.id} className="rounded-2xl border border-cyan-100 bg-cyan-50/40 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-black text-slate-900">{statusLabel(contact.channel)} · {contact.outcome || 'Customer interaction'}</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">{formatDateTime(contact.occurred_at)} · {statusLabel(contact.direction)}</p>
+                      </div>
+                      <span className={`${ui.badge} ${ui.badgeTone.cyan}`}>{contact.entry_source === 'ringcentral_api' ? 'RingCentral' : 'Recorded by employee'}</span>
+                    </div>
+                    <div className="mt-3 rounded-xl bg-white/80 p-3">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Actual notes</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-700">{contact.notes || 'No note was entered.'}</p>
+                    </div>
+                    {evidence ? (
+                      <div className="mt-3 rounded-xl border border-cyan-100 bg-white p-3">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Evidence</p>
+                        <p className="mt-1 text-sm font-bold text-slate-700">{evidence}</p>
+                        {(contact.evidence_path || contact.rc_recording_content_uri) ? (
+                          <button type="button" className={`${ui.btnSecondary} mt-3`} onClick={() => void getEvidenceUrl(contact).then((url) => { if (url) window.open(url, '_blank', 'noopener,noreferrer'); })}><Paperclip className="h-4 w-4" />Open Uploaded File</button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              }
+
+              const presentation = eventPresentation(item.event);
+              return (
+                <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-black text-slate-900">{presentation.title}</p>
+                      {presentation.description ? <p className="mt-1 text-sm font-semibold text-slate-500">{presentation.description}</p> : null}
+                    </div>
+                    <p className="text-xs font-bold text-slate-400">{formatDateTime(item.event.created_at)}</p>
+                  </div>
+                  {presentation.details.length ? (
+                    <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {presentation.details.map((detail) => (
+                        <div key={`${item.id}-${detail.label}`} className="rounded-xl bg-slate-50 p-3">
+                          <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">{detail.label}</dt>
+                          <dd className="mt-1 whitespace-pre-wrap text-sm font-bold text-slate-700">{detail.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
+                </article>
+              );
+            })}
+            {!historyItems.length ? <div className={ui.empty}>No customer contacts, evidence, or workflow activity has been recorded yet.</div> : null}
           </div>
         </section>
       ) : null}

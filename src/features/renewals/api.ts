@@ -322,6 +322,19 @@ export async function updateWorkflow(recordId: string, patch: {
   throwIfError(error);
 }
 
+
+export async function updateRenewalContactInfo(
+  recordId: string,
+  input: { phone?: string | null; email?: string | null },
+): Promise<void> {
+  const { error } = await getSupabase().rpc('renewal_update_contact_info', {
+    p_record_id: recordId,
+    p_phone: input.phone || null,
+    p_email: input.email || null,
+  });
+  throwIfError(error);
+}
+
 export async function managerUpdateRecord(recordId: string, patch: Partial<Pick<RenewalRecord,
   | 'hawksoft_client_id'
   | 'policy_number'
