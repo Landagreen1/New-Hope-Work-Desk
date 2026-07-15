@@ -7,11 +7,18 @@ import {
   ChevronRight,
   CircleDollarSign,
   ClipboardCheck,
+  Download,
+  Eye,
+  FileAudio,
   FileClock,
+  FileImage,
+  FileText,
   FileUp,
   Mail,
+  LoaderCircle,
   MessageSquareText,
   Paperclip,
+  Play,
   Pencil,
   Phone,
   RefreshCw,
@@ -34,6 +41,7 @@ import {
   assignRenewal,
   buildNormalizedRows,
   deleteRenewalAssignmentAlias,
+  downloadEvidenceFile,
   extractDistinctAssignmentLabels,
   generateDueNotifications,
   getEvidenceUrl,
@@ -270,6 +278,167 @@ function evidenceDescription(contact: RenewalContact): string | null {
   if (contact.evidence_reference) return `Reference: ${contact.evidence_reference}`;
   if (contact.rc_recording_content_uri) return 'RingCentral recording';
   return null;
+}
+
+
+type EvidenceKind = 'image' | 'audio' | 'video' | 'pdf' | 'file';
+
+function evidenceKind(contact: RenewalContact): EvidenceKind {
+  const mime = contact.evidence_mime_type?.toLowerCase() || '';
+  const name = contact.evidence_name?.toLowerCase() || '';
+  const source = `${mime} ${name}`;
+
+  if (mime.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|heic|heif)$/i.test(name)) return 'image';
+  if (mime.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|opus|wma)$/i.test(name)) return 'audio';
+  if (mime.startsWith('video/') || /\.(mp4|mov|webm|mkv|avi)$/i.test(name)) return 'video';
+  if (mime === 'application/pdf' || /\.pdf$/i.test(name)) return 'pdf';
+  if (contact.channel === 'call' || contact.rc_recording_content_uri || source.includes('recording')) return 'audio';
+  return 'file';
+}
+
+function evidenceIcon(kind: EvidenceKind) {
+  if (kind === 'image') return FileImage;
+  if (kind === 'audio' || kind === 'video') return FileAudio;
+  return FileText;
+}
+
+function EvidenceAttachment({ contact }: { contact: RenewalContact }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
+
+  const kind = evidenceKind(contact);
+  const Icon = evidenceIcon(kind);
+  const description = evidenceDescription(contact);
+  const hasStoredOrLinkedFile = Boolean(
+    contact.evidence_path
+    || contact.rc_recording_content_uri
+    || (contact.evidence_reference && /^https?:\/\//i.test(contact.evidence_reference)),
+  );
+  const previewLabel = kind === 'image'
+    ? 'View Image'
+    : kind === 'audio'
+      ? contact.channel === 'call' || contact.rc_recording_content_uri
+        ? 'Play Call'
+        : 'Play Audio'
+      : kind === 'video'
+        ? 'Play Video'
+        : kind === 'pdf'
+          ? 'View PDF'
+          : 'Open File';
+  const downloadLabel = kind === 'audio' && (contact.channel === 'call' || contact.rc_recording_content_uri)
+    ? 'Download Call'
+    : 'Download File';
+
+  async function togglePreview() {
+    if (previewOpen) {
+      setPreviewOpen(false);
+      return;
+    }
+
+    if (!previewUrl) {
+      setLoadingPreview(true);
+      setEvidenceError(null);
+      try {
+        const url = await getEvidenceUrl(contact);
+        if (!url) throw new Error('No previewable file URL is attached to this interaction.');
+        setPreviewUrl(url);
+      } catch (caught) {
+        setEvidenceError(caught instanceof Error ? caught.message : 'The file preview could not be opened.');
+        setLoadingPreview(false);
+        return;
+      }
+      setLoadingPreview(false);
+    }
+
+    setPreviewOpen(true);
+  }
+
+  async function downloadFile() {
+    setDownloading(true);
+    setEvidenceError(null);
+    try {
+      await downloadEvidenceFile(contact);
+    } catch (caught) {
+      setEvidenceError(caught instanceof Error ? caught.message : 'The file could not be downloaded.');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-cyan-100 bg-white p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-50 text-cyan-700">
+            <Icon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Evidence</p>
+            <p className="mt-1 break-words text-sm font-bold text-slate-700">{description || 'Attached evidence'}</p>
+            {contact.evidence_mime_type ? <p className="mt-1 text-xs font-semibold text-slate-400">{contact.evidence_mime_type}</p> : null}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {hasStoredOrLinkedFile ? (
+            <button type="button" className={ui.btnSecondary} disabled={loadingPreview} onClick={() => void togglePreview()}>
+              {loadingPreview
+                ? <LoaderCircle className="h-4 w-4 animate-spin" />
+                : kind === 'audio' || kind === 'video'
+                  ? <Play className="h-4 w-4" />
+                  : <Eye className="h-4 w-4" />}
+              {previewOpen ? 'Hide Preview' : previewLabel}
+            </button>
+          ) : null}
+          {hasStoredOrLinkedFile ? (
+            <button type="button" className={ui.btnSecondary} disabled={downloading} onClick={() => void downloadFile()}>
+              {downloading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {downloadLabel}
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {evidenceError ? <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">{evidenceError}</p> : null}
+
+      {previewOpen && previewUrl ? (
+        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3">
+          {kind === 'image' ? (
+            <img
+              src={previewUrl}
+              alt={contact.evidence_name || 'Renewal evidence'}
+              className="max-h-[32rem] w-full rounded-lg object-contain"
+            />
+          ) : null}
+          {kind === 'audio' ? (
+            <audio className="w-full" controls preload="metadata" src={previewUrl}>
+              Your browser does not support audio playback.
+            </audio>
+          ) : null}
+          {kind === 'video' ? (
+            <video className="max-h-[32rem] w-full rounded-lg" controls preload="metadata" src={previewUrl}>
+              Your browser does not support video playback.
+            </video>
+          ) : null}
+          {kind === 'pdf' ? (
+            <iframe
+              title={contact.evidence_name || 'Renewal evidence PDF'}
+              src={previewUrl}
+              className="h-[34rem] w-full rounded-lg bg-white"
+            />
+          ) : null}
+          {kind === 'file' ? (
+            <a className={ui.btnSecondary} href={previewUrl} target="_blank" rel="noreferrer">
+              <Paperclip className="h-4 w-4" />
+              Open File in New Tab
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -540,7 +709,7 @@ function RenewalDrawer({
             </div>
             <label className="mt-4 block"><span className={ui.label}>Mandatory notes</span><textarea className={ui.textarea} rows={4} disabled={busy || !activeRecord} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="What happened, what the customer said, and the next step." /></label>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label><span className={ui.label}>Upload proof</span><input type="file" className={`${ui.input} file:mr-3 file:rounded-lg file:border-0 file:bg-[#eef3fb] file:px-3 file:py-1.5 file:text-xs file:font-black file:text-[#223f7a]`} disabled={busy || !activeRecord} onChange={(event) => setEvidenceFile(event.target.files?.[0] || null)} /></label>
+              <label><span className={ui.label}>Upload proof or call recording</span><input type="file" accept="image/*,application/pdf,audio/*,video/*,.txt,.csv,.doc,.docx" className={`${ui.input} file:mr-3 file:rounded-lg file:border-0 file:bg-[#eef3fb] file:px-3 file:py-1.5 file:text-xs file:font-black file:text-[#223f7a]`} disabled={busy || !activeRecord} onChange={(event) => setEvidenceFile(event.target.files?.[0] || null)} />{evidenceFile ? <p className="mt-2 text-xs font-bold text-emerald-700">Selected: {evidenceFile.name} · {(evidenceFile.size / 1_048_576).toFixed(1)} MB</p> : <p className="mt-2 text-xs font-semibold text-slate-400">Images, PDFs, documents, audio, and video up to 100 MB.</p>}</label>
               <label><span className={ui.label}>Or contact/reference record</span><input className={ui.input} disabled={busy || !activeRecord} value={evidenceReference} onChange={(event) => setEvidenceReference(event.target.value)} placeholder="RingCentral ID, attachment reference, email message ID…" /></label>
             </div>
             <button type="button" className={`${ui.btnPrimary} mt-4`} disabled={busy || !activeRecord} onClick={() => void saveContact()}><ClipboardCheck className="h-4 w-4" />Save Interaction</button>
@@ -595,15 +764,7 @@ function RenewalDrawer({
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Actual notes</p>
                       <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-700">{contact.notes || 'No note was entered.'}</p>
                     </div>
-                    {evidence ? (
-                      <div className="mt-3 rounded-xl border border-cyan-100 bg-white p-3">
-                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Evidence</p>
-                        <p className="mt-1 text-sm font-bold text-slate-700">{evidence}</p>
-                        {(contact.evidence_path || contact.rc_recording_content_uri) ? (
-                          <button type="button" className={`${ui.btnSecondary} mt-3`} onClick={() => void getEvidenceUrl(contact).then((url) => { if (url) window.open(url, '_blank', 'noopener,noreferrer'); })}><Paperclip className="h-4 w-4" />Open Uploaded File</button>
-                        ) : null}
-                      </div>
-                    ) : null}
+                    {evidence ? <EvidenceAttachment contact={contact} /> : null}
                   </article>
                 );
               }

@@ -187,6 +187,7 @@ export interface RenewalFilters {
 }
 
 const OPEN_STATUSES: RenewalStatus[] = ['imported', 'assigned', 'in_progress', 'monitoring', 'requote_sent'];
+const MAX_EVIDENCE_SIZE_BYTES = 100 * 1024 * 1024;
 
 function throwIfError(error: { message?: string } | null) {
   if (error) throw new Error(error.message || 'The renewal request could not be completed.');
@@ -266,13 +267,28 @@ export async function addContact(input: {
   let evidenceSizeBytes: number | null = null;
 
   if (input.evidenceFile) {
-    const extension = input.evidenceFile.name.includes('.') ? input.evidenceFile.name.split('.').pop() : 'bin';
-    const safeName = `${crypto.randomUUID()}.${extension}`;
+    if (input.evidenceFile.size > MAX_EVIDENCE_SIZE_BYTES) {
+      throw new Error('The evidence file is larger than 100 MB. Compress it or upload a smaller file.');
+    }
+
+    const extension = input.evidenceFile.name.includes('.')
+      ? input.evidenceFile.name.split('.').pop()?.toLowerCase()
+      : 'bin';
+    const safeName = `${crypto.randomUUID()}.${extension || 'bin'}`;
     evidencePath = `${input.recordId}/${safeName}`;
+
     const { error: uploadError } = await supabase.storage
       .from('renewal-contact-evidence')
-      .upload(evidencePath, input.evidenceFile, { upsert: false });
-    throwIfError(uploadError);
+      .upload(evidencePath, input.evidenceFile, {
+        upsert: false,
+        cacheControl: '3600',
+        contentType: input.evidenceFile.type || 'application/octet-stream',
+      });
+
+    if (uploadError) {
+      throw new Error(`Evidence upload failed: ${uploadError.message}`);
+    }
+
     evidenceName = input.evidenceFile.name;
     evidenceMimeType = input.evidenceFile.type || null;
     evidenceSizeBytes = input.evidenceFile.size;
@@ -293,19 +309,95 @@ export async function addContact(input: {
     evidence_mime_type: evidenceMimeType,
     evidence_size_bytes: evidenceSizeBytes,
   });
-  if (error && evidencePath) await supabase.storage.from('renewal-contact-evidence').remove([evidencePath]);
-  throwIfError(error);
+
+  if (error && evidencePath) {
+    await supabase.storage.from('renewal-contact-evidence').remove([evidencePath]);
+  }
+
+  if (error) {
+    throw new Error(`The customer contact could not be saved: ${error.message}`);
+  }
+}
+
+function isHttpUrl(value: string | null | undefined): value is string {
+  return Boolean(value && /^https?:\/\//i.test(value));
+}
+
+function evidenceDownloadName(contact: RenewalContact): string {
+  if (contact.evidence_name?.trim()) return contact.evidence_name.trim();
+
+  const timestamp = contact.occurred_at
+    ? new Date(contact.occurred_at).toISOString().replaceAll(':', '-')
+    : new Date().toISOString().replaceAll(':', '-');
+
+  if (contact.channel === 'call' || contact.rc_recording_content_uri) {
+    return `renewal-call-${timestamp}.mp3`;
+  }
+
+  return `renewal-evidence-${timestamp}`;
 }
 
 export async function getEvidenceUrl(contact: RenewalContact): Promise<string | null> {
   if (contact.evidence_path) {
     const { data, error } = await getSupabase().storage
       .from('renewal-contact-evidence')
-      .createSignedUrl(contact.evidence_path, 300);
+      .createSignedUrl(contact.evidence_path, 900);
     throwIfError(error);
     return data?.signedUrl || null;
   }
-  return contact.evidence_reference || contact.rc_recording_content_uri || null;
+
+  if (isHttpUrl(contact.rc_recording_content_uri)) return contact.rc_recording_content_uri;
+  if (isHttpUrl(contact.evidence_reference)) return contact.evidence_reference;
+  return null;
+}
+
+export async function downloadEvidenceFile(contact: RenewalContact): Promise<void> {
+  const fileName = evidenceDownloadName(contact);
+
+  if (contact.evidence_path) {
+    const { data, error } = await getSupabase().storage
+      .from('renewal-contact-evidence')
+      .download(contact.evidence_path);
+
+    if (error) throw new Error(`The uploaded file could not be downloaded: ${error.message}`);
+    if (!data) throw new Error('The uploaded file was not returned by storage.');
+
+    const objectUrl = URL.createObjectURL(data);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+    return;
+  }
+
+  const externalUrl = isHttpUrl(contact.rc_recording_content_uri)
+    ? contact.rc_recording_content_uri
+    : isHttpUrl(contact.evidence_reference)
+      ? contact.evidence_reference
+      : null;
+
+  if (!externalUrl) {
+    throw new Error('No downloadable file or recording is attached to this interaction.');
+  }
+
+  try {
+    const response = await fetch(externalUrl);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+  } catch {
+    window.open(externalUrl, '_blank', 'noopener,noreferrer');
+  }
 }
 
 export async function updateWorkflow(recordId: string, patch: {
