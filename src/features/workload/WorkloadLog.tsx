@@ -72,8 +72,10 @@ function correctionDescription(row: WorkloadLogRow["correction_history"][number]
 
 export default function WorkloadLog({
   initialProfile,
+  embedded = false,
 }: {
   initialProfile: ProfileLite;
+  embedded?: boolean;
 }) {
   const defaultFrom = new Date();
   defaultFrom.setDate(defaultFrom.getDate() - 30);
@@ -269,27 +271,38 @@ export default function WorkloadLog({
     URL.revokeObjectURL(url);
   }
 
-  if (initialProfile.role !== "manager") {
+  const canManage = initialProfile.role === "manager";
+  const canView = initialProfile.role === "manager" || initialProfile.role === "agent";
+
+  if (!canView) {
     return (
       <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 font-bold text-rose-800">
-        Workload management is available only to Managers.
+        Workload history is available to Sales Agents and Managers.
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-[1700px] space-y-5 px-4 pb-8 sm:px-6 lg:px-8">
+    <div
+      className={
+        embedded
+          ? "space-y-5"
+          : "mx-auto max-w-[1700px] space-y-5 px-4 pb-8 sm:px-6 lg:px-8"
+      }
+    >
       <section className="rounded-[28px] border border-[#c9d5e9] bg-gradient-to-br from-white to-[#eef3fb] p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[#526b9a]">
-              Workload Management
+              {canManage ? "Workload Management" : "Workload Database"}
             </p>
             <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
-              Team workload log
+              {canManage ? "Team workload log" : "Team workload history"}
             </h2>
             <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-500">
-              Review workload volume and types, correct the assigned employee, and void records logged by mistake without deleting the audit history.
+              {canManage
+                ? "Review workload volume and types, correct the assigned employee, and void records logged by mistake without deleting the audit history."
+                : "Review the workload volume and types completed by you and the rest of the Sales team."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -372,10 +385,12 @@ export default function WorkloadLog({
             </span>
           </label>
         </div>
-        <label className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-slate-600">
-          <input type="checkbox" checked={includeVoided} onChange={(event) => setIncludeVoided(event.target.checked)} />
-          Include records deleted as mistakes
-        </label>
+        {canManage ? (
+          <label className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-slate-600">
+            <input type="checkbox" checked={includeVoided} onChange={(event) => setIncludeVoided(event.target.checked)} />
+            Include records deleted as mistakes
+          </label>
+        ) : null}
       </section>
 
       <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
@@ -397,7 +412,7 @@ export default function WorkloadLog({
                 <th className="px-4 py-3">Assigned</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Notes</th>
-                <th className="px-4 py-3">Management</th>
+                <th className="px-4 py-3">{canManage ? "Management" : "Access"}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -443,7 +458,13 @@ export default function WorkloadLog({
                     ) : null}
                   </td>
                   <td className="px-4 py-4">
-                    {row.is_voided ? <span className="text-xs font-bold text-slate-400">No actions</span> : (
+                    {!canManage ? (
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-500">
+                        Read only
+                      </span>
+                    ) : row.is_voided ? (
+                      <span className="text-xs font-bold text-slate-400">No actions</span>
+                    ) : (
                       <div className="min-w-[280px] space-y-2">
                         <div className="flex gap-2">
                           <select value={draftAssignee[row.id] || row.assigned_profile_id} onChange={(event) => setDraftAssignee((current) => ({ ...current, [row.id]: event.target.value }))} className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold">
