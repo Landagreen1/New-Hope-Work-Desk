@@ -6999,7 +6999,7 @@ function ManagerView({
         </section>
       ) : null}
 
-      {managerTab === "quotes" && managerDatabaseView === "quotes" ? (
+      {managerTab === "quotes" ? (
         <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Agency Databases</p><p className="mt-1 text-sm font-semibold text-slate-500">Quotes and workload records in one place.</p></div>
           <div className="flex gap-1 rounded-2xl bg-slate-100 p-1.5">
