@@ -224,6 +224,21 @@ export default function PowerBiRenewalImport({
     (label) => !aliasByLabel.has(normalizeAssignmentLabel(label)),
   );
 
+  const importBlockedReason = missingRequiredMappings.length
+    ? `Map the required columns: ${missingRequiredMappings.join(", ")}.`
+    : !normalizedRows.length
+      ? "Choose a CSV containing valid renewal policies."
+      : duplicateKeys.length
+        ? "Remove duplicate Policy# + Renewal Date combinations before importing."
+        : null;
+
+  const canImport = Boolean(headers.length) && !busy && !importBlockedReason;
+  const importButtonLabel = busy
+    ? "Importing and assigning…"
+    : `Import & Assign ${normalizedRows.length} Renewal${
+        normalizedRows.length === 1 ? "" : "s"
+      }`;
+
   const loadReferenceData = useCallback(async () => {
     if (profile.role !== "manager") return;
     setLoadingReferenceData(true);
@@ -503,6 +518,20 @@ export default function PowerBiRenewalImport({
               }
             />
           </label>
+
+          {fileName ? (
+            <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-[#c9d5e9] bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                  Selected file
+                </p>
+                <p className="mt-1 font-black text-slate-900">{fileName}</p>
+              </div>
+              <p className="text-sm font-bold text-[#223f7a]">
+                Next: confirm assignments, then use Import &amp; Assign Renewals.
+              </p>
+            </div>
+          ) : null}
         </section>
 
         {headers.length ? (
@@ -571,6 +600,50 @@ export default function PowerBiRenewalImport({
                 File validation passed: all valid policy keys are unique.
               </div>
             )}
+
+            <section
+              id="powerbi-import-action"
+              className="rounded-[28px] border-2 border-[#7890ba] bg-gradient-to-br from-[#eef3fb] to-white p-5 shadow-sm"
+            >
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#223f7a] text-white">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className={ui.sectionTitle}>Final import action</p>
+                    <h3 className="mt-1 text-xl font-black text-slate-950">
+                      Import and assign the renewal workload
+                    </h3>
+                    <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
+                      Saved Asignacion TXT links assign policies automatically to
+                      Sales Agents or Customer Service. The {unlinkedLabels.length}
+                      unlinked name{unlinkedLabels.length === 1 ? "" : "s"} will
+                      remain visible but unassigned until you create and link the
+                      username.
+                    </p>
+                    <p
+                      className={`mt-2 text-sm font-black ${
+                        importBlockedReason ? "text-amber-700" : "text-emerald-700"
+                      }`}
+                    >
+                      {importBlockedReason ||
+                        `${normalizedRows.length} valid policies are ready to synchronize.`}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className={`${ui.btnPrimary} min-h-12 shrink-0 px-6 text-base`}
+                  disabled={!canImport}
+                  onClick={() => void commitImport()}
+                >
+                  <UploadCloud className="h-5 w-5" />
+                  {importButtonLabel}
+                </button>
+              </div>
+            </section>
 
             <section className={`${ui.card} ${ui.cardPad}`}>
               <details open>
@@ -851,18 +924,11 @@ export default function PowerBiRenewalImport({
                 <button
                   type="button"
                   className={ui.btnPrimary}
-                  disabled={
-                    busy ||
-                    Boolean(missingRequiredMappings.length) ||
-                    !normalizedRows.length ||
-                    Boolean(duplicateKeys.length)
-                  }
+                  disabled={!canImport}
                   onClick={() => void commitImport()}
                 >
                   <ShieldCheck className="h-4 w-4" />
-                  {busy
-                    ? "Synchronizing…"
-                    : `Import ${normalizedRows.length} policies`}
+                  {importButtonLabel}
                 </button>
               </div>
             </section>
