@@ -35,6 +35,11 @@ export interface RenewalRecord {
   requote_note: string | null;
   assigned_import_label: string | null;
   powerbi_raw: Record<string, string> | null;
+  assignment_source: 'powerbi' | 'manager' | 'manual' | null;
+  last_seen_import_run_id: string | null;
+  last_seen_imported_at: string | null;
+  source_sync_state: 'present' | 'missing_from_latest_file';
+  missing_since_import_run_id: string | null;
   assigned_to: string | null;
   assigned_at: string | null;
   dealer_id: string | null;
@@ -87,7 +92,71 @@ export interface ImportBatchResult {
   rows_closed_preserved?: number;
   rows_assigned?: number;
   rows_requote_flagged?: number;
+  rows_missing_in_window?: number;
+  rows_restored_present?: number;
+  distinct_assignee_labels?: number;
+  file_date_min?: string | null;
+  file_date_max?: string | null;
   unmatched_assignees?: string[];
+}
+
+export interface RenewalAssignee {
+  id: string;
+  username: string;
+  display_name: string;
+  initials: string;
+  role: 'agent' | 'customer_service';
+  is_active: boolean;
+}
+
+export interface RenewalAssignmentAlias {
+  id: string;
+  import_label: string;
+  normalized_label: string;
+  profile_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssignmentAliasResult {
+  alias: RenewalAssignmentAlias;
+  rows_assigned: number;
+}
+
+export interface RenewalImportRun {
+  id: string;
+  file_name: string;
+  imported_by: string;
+  column_mapping: Record<string, string>;
+  rows_total: number;
+  rows_inserted: number;
+  rows_updated: number;
+  rows_skipped: number;
+  rows_closed_preserved: number;
+  rows_assigned: number;
+  rows_requote_flagged: number;
+  rows_missing_in_window: number;
+  rows_restored_present: number;
+  distinct_assignee_labels: number;
+  unmatched_assignees: string[];
+  file_date_min: string | null;
+  file_date_max: string | null;
+  created_at: string;
+}
+
+export interface RenewalSyncException {
+  id: string;
+  customer_name: string;
+  policy_number: string;
+  renewal_date: string;
+  carrier: string | null;
+  line_of_business: string | null;
+  assigned_import_label: string | null;
+  assigned_to: string | null;
+  source_sync_state: 'missing_from_latest_file';
+  last_seen_imported_at: string | null;
+  missing_since_import_run_id: string | null;
+  status: RenewalStatus;
 }
 
 export interface NormalizedImportRow {
@@ -282,6 +351,72 @@ export async function assignRenewal(recordId: string, profileId: string): Promis
   throwIfError(error);
 }
 
+export async function listRenewalAssignees(): Promise<RenewalAssignee[]> {
+  const { data, error } = await getSupabase()
+    .from('profiles')
+    .select('id,username,display_name,initials,role,is_active')
+    .eq('is_active', true)
+    .in('role', ['agent', 'customer_service'])
+    .order('role')
+    .order('display_name');
+  throwIfError(error);
+  return (data as RenewalAssignee[]) ?? [];
+}
+
+export async function listRenewalAssignmentAliases(): Promise<RenewalAssignmentAlias[]> {
+  const { data, error } = await getSupabase()
+    .from('renewal_assignment_aliases')
+    .select('id,import_label,normalized_label,profile_id,created_at,updated_at')
+    .order('import_label');
+  throwIfError(error);
+  return (data as RenewalAssignmentAlias[]) ?? [];
+}
+
+export async function listRenewalImportRuns(limit = 12): Promise<RenewalImportRun[]> {
+  const { data, error } = await getSupabase()
+    .from('renewal_import_runs')
+    .select(
+      'id,file_name,imported_by,column_mapping,rows_total,rows_inserted,rows_updated,rows_skipped,rows_closed_preserved,rows_assigned,rows_requote_flagged,rows_missing_in_window,rows_restored_present,distinct_assignee_labels,unmatched_assignees,file_date_min,file_date_max,created_at',
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  throwIfError(error);
+  return (data as RenewalImportRun[]) ?? [];
+}
+
+export async function listRenewalSyncExceptions(): Promise<RenewalSyncException[]> {
+  const { data, error } = await getSupabase()
+    .from('renewal_records')
+    .select(
+      'id,customer_name,policy_number,renewal_date,carrier,line_of_business,assigned_import_label,assigned_to,source_sync_state,last_seen_imported_at,missing_since_import_run_id,status',
+    )
+    .eq('source_sync_state', 'missing_from_latest_file')
+    .in('status', OPEN_STATUSES)
+    .order('renewal_date', { ascending: true })
+    .limit(2000);
+  throwIfError(error);
+  return (data as RenewalSyncException[]) ?? [];
+}
+
+export async function upsertRenewalAssignmentAlias(
+  importLabel: string,
+  profileId: string,
+): Promise<AssignmentAliasResult> {
+  const { data, error } = await getSupabase().rpc('renewal_upsert_assignment_alias', {
+    p_import_label: importLabel,
+    p_profile_id: profileId,
+  });
+  throwIfError(error);
+  return data as AssignmentAliasResult;
+}
+
+export async function deleteRenewalAssignmentAlias(aliasId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('renewal_delete_assignment_alias', {
+    p_alias_id: aliasId,
+  });
+  throwIfError(error);
+}
+
 export async function sendToRequote(recordId: string): Promise<string> {
   const { data, error } = await getSupabase().rpc('renewal_send_to_requote', {
     p_record_id: recordId,
@@ -335,7 +470,10 @@ export function parseCsv(text: string): { headers: string[]; rows: string[][] } 
   }
   pushField();
   pushRow();
-  const headers = rows.shift()?.map((header) => header.trim()) ?? [];
+  const headers = rows.shift()?.map((header, index) => {
+    const trimmed = header.trim();
+    return index === 0 ? trimmed.replace(/^\uFEFF/, '') : trimmed;
+  }) ?? [];
   return { headers, rows };
 }
 
@@ -350,22 +488,22 @@ export function normalizeDate(value: string): string | null {
 }
 
 const GUESSES: Record<string, RegExp> = {
-  policy_number: /policy/i,
-  renewal_date: /renew|expiration|exp\s*date|eff/i,
-  customer_name: /insured|customer|client|name/i,
-  customer_phone: /phone|tel/i,
-  customer_email: /email/i,
-  carrier: /carrier|company/i,
-  line_of_business: /line|lob|policy\s*type/i,
-  hawksoft_client_id: /client\s*(id|no|#)|cms/i,
+  policy_number: /^(policy#?|policy\s*(number|no\.?|#))$/i,
+  renewal_date: /^(renewal\s*date|renewal|expiration\s*date|exp\.?\s*date)$/i,
+  customer_name: /^(named\s*insured|insured|customer|client|name)$/i,
+  customer_phone: /^(phone|telephone|tel|customer\s*phone)$/i,
+  customer_email: /^(email|customer\s*email)$/i,
+  carrier: /^(company|carrier)$/i,
+  line_of_business: /^(lob|lobs|line\s*of\s*business|policy\s*type)$/i,
+  hawksoft_client_id: /^(hawksoft\s*)?client\s*(id|no\.?|#)|^cms$/i,
   premium_current: /current.*prem|prem.*current|old.*prem/i,
   premium_renewal: /renew.*prem|prem.*renew|new.*prem/i,
-  notice_call_date: /aviso\s*call|notice\s*call|last\s*call|contact\s*date/i,
+  notice_call_date: /^(aviso\s*call|notice\s*call|last\s*call|contact\s*date)$/i,
   notes: /^notes?$|status\s*note|contact\s*note/i,
   eft: /^eft$|electronic\s*fund/i,
   requote: /^requote$|re[-\s]?quote\s*(needed|flag)?/i,
   requote_note: /nota\s*requote|requote\s*note/i,
-  assigned_name: /^asignado$|assigned\s*(to|agent)?|assignee/i,
+  assigned_name: /^(asignacion\s*txt|asignació?n\s*txt|asignaciontxt|asignado|asignaci[oó]n|responsable|responsible|assigned\s*(to|agent)?|assignee)$/i,
 };
 
 export function guessMapping(headers: string[]): Record<string, string> {
@@ -375,6 +513,21 @@ export function guessMapping(headers: string[]): Record<string, string> {
     if (match) mapping[field] = match;
   }
   return mapping;
+}
+
+export function normalizeAssignmentLabel(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/[\s\p{P}]+/gu, ' ').trim();
+}
+
+export function extractDistinctAssignmentLabels(rows: NormalizedImportRow[]): string[] {
+  const labels = new Map<string, string>();
+  for (const row of rows) {
+    const label = row.assigned_name?.trim();
+    if (!label) continue;
+    const normalized = normalizeAssignmentLabel(label);
+    if (normalized && !labels.has(normalized)) labels.set(normalized, label);
+  }
+  return Array.from(labels.values()).sort((left, right) => left.localeCompare(right));
 }
 
 export function buildNormalizedRows(headers: string[], rawRows: string[][], mapping: Record<string, string>): NormalizedImportRow[] {
