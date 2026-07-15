@@ -82,6 +82,8 @@ type AgentRenewalPriorityFilter =
   | 'days_4_7'
   | 'days_0_3'
   | 'no_follow_up';
+
+type ManagerRenewalDueWindow = 3 | 7 | 15 | 30;
 const IMPORT_FIELDS: Array<{ key: keyof NormalizedImportRow; label: string; required?: boolean; group: 'required' | 'contact' | 'powerbi' | 'premium' }> = [
   { key: 'policy_number', label: 'Policy', required: true, group: 'required' },
   { key: 'renewal_date', label: 'Renewal Date', required: true, group: 'required' },
@@ -1105,6 +1107,8 @@ export default function RenewalsPage({
   const [dueFilter, setDueFilter] = useState<'all' | 'active30' | 'overdue'>('active30');
   const [search, setSearch] = useState('');
   const [agentPriorityFilter, setAgentPriorityFilter] = useState<AgentRenewalPriorityFilter>('all');
+  const [managerDueWindow, setManagerDueWindow] = useState<ManagerRenewalDueWindow>(30);
+  const [managerReportRows, setManagerReportRows] = useState<RenewalRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1115,7 +1119,7 @@ export default function RenewalsPage({
     try {
       setError(null);
       const effectiveAssignee = profile.role === 'manager' ? assignedFilter : profile.id;
-      const [renewalRows, people] = await Promise.all([
+      const [renewalRows, people, agencyReportRows] = await Promise.all([
         listRenewals({
           status: statusFilter,
           assignedTo: effectiveAssignee,
@@ -1123,9 +1127,18 @@ export default function RenewalsPage({
           search,
         }),
         profile.role === 'manager' ? listRenewalAssignees() : Promise.resolve([]),
+        profile.role === 'manager'
+          ? listRenewals({
+              status: 'open',
+              assignedTo: 'all',
+              dueWindow: 'active30',
+              search: '',
+            })
+          : Promise.resolve([]),
       ]);
       setRows(renewalRows);
       setAssignees(people);
+      setManagerReportRows(agencyReportRows);
       setLastUpdated(new Date());
       if (profile.role === 'manager') void generateDueNotifications().catch(() => undefined);
     } catch (caught) {
@@ -1211,6 +1224,54 @@ export default function RenewalsPage({
     });
   }, [agentPriorityFilter, profile.role, rows]);
 
+  const managerDueMetrics = useMemo(() => {
+    const active = managerReportRows.filter((row) => OPEN_STATUSES.includes(row.status));
+    const countWithin = (windowDays: ManagerRenewalDueWindow) =>
+      active.filter((row) => {
+        const days = daysUntil(row.renewal_date);
+        return days >= 0 && days <= windowDays;
+      });
+
+    return {
+      3: countWithin(3),
+      7: countWithin(7),
+      15: countWithin(15),
+      30: countWithin(30),
+    };
+  }, [managerReportRows]);
+
+  const managerSelectedRows = managerDueMetrics[managerDueWindow];
+
+  const managerAgentBreakdown = useMemo(() => {
+    const totals = new Map<string, {
+      id: string;
+      name: string;
+      total: number;
+      noFollowUp: number;
+    }>();
+
+    for (const row of managerSelectedRows) {
+      const key = row.assigned_to || 'unassigned';
+      const current = totals.get(key) || {
+        id: key,
+        name: row.assigned_to ? assigneeName(assignees, row.assigned_to) : 'Unassigned',
+        total: 0,
+        noFollowUp: 0,
+      };
+      current.total += 1;
+      if (!row.next_follow_up_at) current.noFollowUp += 1;
+      totals.set(key, current);
+    }
+
+    return Array.from(totals.values()).sort((left, right) =>
+      right.total - left.total || left.name.localeCompare(right.name),
+    );
+  }, [assignees, managerSelectedRows]);
+
+  const managerNoFollowUpCount = managerSelectedRows.filter(
+    (row) => !row.next_follow_up_at,
+  ).length;
+
   const metrics = useMemo(() => {
     const active = rows.filter((row) => OPEN_STATUSES.includes(row.status));
     return {
@@ -1264,6 +1325,136 @@ export default function RenewalsPage({
 
       {tab === 'pipeline' ? (
         <section className={`${ui.card} overflow-hidden`}>
+          {profile.role === 'manager' ? (
+            <div className="border-b border-slate-100 bg-slate-50/70 p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p className={ui.sectionTitle}>Renewal due report</p>
+                  <h2 className="mt-1 text-xl font-black text-slate-950">
+                    Agency renewal workload by deadline
+                  </h2>
+                  <p className="mt-1 max-w-3xl text-xs font-semibold leading-5 text-slate-500">
+                    Select a deadline window to see the agency total, the workload assigned to each employee, and renewals without a scheduled follow-up.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-xs font-black uppercase tracking-wide text-amber-700">
+                    No follow-up · selected period
+                  </p>
+                  <p className="mt-1 text-2xl font-black text-amber-900">
+                    {managerNoFollowUpCount}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {([3, 7, 15, 30] as ManagerRenewalDueWindow[]).map((windowDays) => {
+                  const windowRows = managerDueMetrics[windowDays];
+                  const noFollowUp = windowRows.filter((row) => !row.next_follow_up_at).length;
+                  const active = managerDueWindow === windowDays;
+                  return (
+                    <button
+                      key={windowDays}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setManagerDueWindow(windowDays)}
+                      className={`rounded-2xl border p-3 text-left transition ${
+                        active
+                          ? 'border-[#223f7a] bg-[#223f7a] text-white shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-900 hover:border-[#8da4cf] hover:bg-[#f8faff]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className={`text-xs font-black uppercase tracking-wide ${active ? 'text-blue-100' : 'text-slate-500'}`}>
+                            Next {windowDays} days
+                          </p>
+                          <p className={`mt-1 text-[11px] font-semibold ${active ? 'text-blue-100' : 'text-slate-400'}`}>
+                            {noFollowUp} without follow-up
+                          </p>
+                        </div>
+                        <span className={`text-2xl font-black ${active ? 'text-white' : 'text-[#223f7a]'}`}>
+                          {windowRows.length}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-900">
+                      Due within the next {managerDueWindow} days
+                    </p>
+                    <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                      Agent assignment and missing follow-up totals
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#eef3fb] px-3 py-1 text-xs font-black text-[#223f7a]">
+                    {managerSelectedRows.length} renewals
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className={ui.table}>
+                    <thead>
+                      <tr>
+                        <th className={ui.th}>Agent / Employee</th>
+                        <th className={ui.th}>Renewals Due</th>
+                        <th className={ui.th}>No Follow-up</th>
+                        <th className={ui.th}>Follow-up Coverage</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {managerAgentBreakdown.map((entry) => {
+                        const coverage = entry.total
+                          ? Math.round(((entry.total - entry.noFollowUp) / entry.total) * 100)
+                          : 0;
+                        return (
+                          <tr key={entry.id}>
+                            <td className={ui.td}>
+                              <p className="font-black text-slate-900">{entry.name}</p>
+                              <p className="mt-1 text-xs font-semibold text-slate-400">
+                                {entry.id === 'unassigned' ? 'Needs assignment' : 'Assigned workload'}
+                              </p>
+                            </td>
+                            <td className={ui.td}>
+                              <span className="text-lg font-black text-[#223f7a]">{entry.total}</span>
+                            </td>
+                            <td className={ui.td}>
+                              <span className={`text-lg font-black ${entry.noFollowUp ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                {entry.noFollowUp}
+                              </span>
+                            </td>
+                            <td className={ui.td}>
+                              <div className="min-w-[150px]">
+                                <div className="flex items-center justify-between gap-2 text-xs font-black">
+                                  <span className="text-slate-500">{coverage}%</span>
+                                  <span className="text-slate-400">
+                                    {entry.total - entry.noFollowUp}/{entry.total}
+                                  </span>
+                                </div>
+                                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                                  <div
+                                    className="h-full rounded-full bg-[#223f7a]"
+                                    style={{ width: `${coverage}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {!managerAgentBreakdown.length ? (
+                  <div className={ui.empty}>No open renewals are due in this period.</div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           {profile.role === 'agent' ? (
             <div className="border-b border-slate-100 bg-slate-50/70 p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
