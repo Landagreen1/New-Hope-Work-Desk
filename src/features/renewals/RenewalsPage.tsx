@@ -1175,7 +1175,7 @@ export default function RenewalsPage({
 
       {!importOnly ? (
         <div className="mb-5 flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
-          <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabButton>
+          {profile.role === 'manager' ? <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabButton> : null}
           <TabButton active={tab === 'pipeline'} onClick={() => setTab('pipeline')}>Renewal Pipeline</TabButton>
           {profile.role === 'manager' && showImportTab ? <TabButton active={tab === 'import'} onClick={() => setTab('import')}>Import & Update Data</TabButton> : null}
         </div>
@@ -1190,10 +1190,6 @@ export default function RenewalsPage({
             <div className={ui.stat}><p className={ui.statLabel}>Overdue</p><p className="mt-1 text-3xl font-black text-rose-700">{metrics.overdue}</p></div>
             <div className={ui.stat}><p className={ui.statLabel}>Unassigned</p><p className="mt-1 text-3xl font-black text-amber-700">{metrics.unassigned}</p></div>
             <div className={ui.stat}><p className={ui.statLabel}>Follow-Up Due</p><p className="mt-1 text-3xl font-black text-violet-700">{metrics.followUps}</p></div>
-          </section>
-          <section className="grid gap-5 lg:grid-cols-3">
-            <div className={`${ui.card} ${ui.cardPad} lg:col-span-2`}><div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-2xl bg-[#eef3fb] text-[#223f7a]"><FileClock className="h-5 w-5" /></div><div><h2 className="text-xl font-black">30-day renewal workflow</h2><p className="mt-1 text-sm font-semibold leading-6 text-slate-500">At 30 days the record becomes active. The assignee contacts the customer, logs proof, schedules follow-up, and either closes the renewal or sends it to Sales for re-quoting.</p></div></div><div className="mt-5 grid gap-3 sm:grid-cols-4">{['Assigned','Contact & Proof','Monitor / Requote','Renewed or Closed'].map((step, index) => <div key={step} className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-black text-[#223f7a]">0{index + 1}</p><p className="mt-2 font-black text-slate-800">{step}</p></div>)}</div></div>
-            <div className={`${ui.card} ${ui.cardPad}`}><p className={ui.sectionTitle}>Quick access</p><button className={`${ui.btnPrimary} mt-4 w-full`} onClick={() => setTab('pipeline')}><ClipboardCheck className="h-4 w-4" />Open Renewal Pipeline</button>{profile.role === 'manager' ? <button className={`${ui.btnSecondary} mt-3 w-full`} onClick={() => setTab('import')}><FileUp className="h-4 w-4" />Upload Updated Data</button> : null}</div>
           </section>
           <section className={`${ui.card} overflow-hidden`}><div className={ui.cardHeader}><div><p className={ui.sectionTitle}>Priority list</p><h2 className="mt-1 text-xl font-black">Closest deadlines</h2></div><button className={ui.btnSecondary} onClick={() => setTab('pipeline')}>View All <ChevronRight className="h-4 w-4" /></button></div><div className="divide-y divide-slate-100">{rows.slice(0, 8).map((row) => { const warning = warningLabel(row); return <button key={row.id} className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left hover:bg-[#f8faff]" onClick={() => setSelectedId(row.id)}><div><p className="font-black text-slate-900">{row.customer_name}</p><p className="mt-1 text-xs font-semibold text-slate-500">{row.policy_number} · {assigneeName(assignees, row.assigned_to)}</p></div><span className={`${ui.badge} ${ui.badgeTone[warning.tone]}`}>{warning.label}</span></button>})}{!rows.length ? <div className={ui.empty}>No renewal records in this view.</div> : null}</div></section>
         </div>
