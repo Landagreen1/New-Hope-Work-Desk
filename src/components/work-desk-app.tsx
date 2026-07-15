@@ -2542,11 +2542,13 @@ export function WorkDeskApp({
   initialData,
   workspaceTabs,
   externalWorkspaceContent,
+  workloadDatabaseContent,
 }: {
   sessionProfile: SessionProfile;
   initialData: DashboardData;
   workspaceTabs?: React.ReactNode;
   externalWorkspaceContent?: React.ReactNode;
+  workloadDatabaseContent?: React.ReactNode;
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -2629,6 +2631,10 @@ export function WorkDeskApp({
   );
   const [quoteStatusFilter, setQuoteStatusFilter] = useState("all");
   const [quoteUpdateFilter, setQuoteUpdateFilter] = useState("all");
+  const [agentDatabaseView, setAgentDatabaseView] = useState<"quotes" | "workloads">("quotes");
+  const todayForPerformance = dateInputValue(new Date());
+  const [agentPerformanceStart, setAgentPerformanceStart] = useState(todayForPerformance);
+  const [agentPerformanceEnd, setAgentPerformanceEnd] = useState(todayForPerformance);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const refreshTimer = useRef<number | null>(null);
   const refreshInFlight = useRef(false);
@@ -2809,6 +2815,62 @@ export function WorkDeskApp({
       }),
     [myPerformance, performance],
   );
+
+  const agentPerformanceSummary = useMemo(() => {
+    const myQuotes = allQuoteRecords.filter(
+      (quote) =>
+        quote.assignedProfileId === currentUserId &&
+        withinDateRange(quote.createdAt, agentPerformanceStart, agentPerformanceEnd),
+    );
+    const notSold = myQuotes.filter((quote) => quote.status === "Not Sold");
+    const sold = myQuotes.filter((quote) => quote.status === "Sold");
+    const priceMinutes = myQuotes
+      .map((quote) => {
+        const priceEvent = quoteActivities
+          .filter(
+            (activity) =>
+              activity.sourceWorkItemId === quote.sourceWorkItemId &&
+              activity.eventType === "price_sent",
+          )
+          .sort(
+            (a, b) =>
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+          )[0];
+        return priceEvent
+          ? durationMinutes(quote.createdAt, priceEvent.createdAt)
+          : null;
+      })
+      .filter((value): value is number => value !== null);
+    return {
+      total: myQuotes.length,
+      sold: sold.length,
+      notSold,
+      averagePriceMinutes: priceMinutes.length
+        ? priceMinutes.reduce((sum, value) => sum + value, 0) / priceMinutes.length
+        : null,
+    };
+  }, [
+    agentPerformanceEnd,
+    agentPerformanceStart,
+    allQuoteRecords,
+    currentUserId,
+    quoteActivities,
+  ]);
+
+  function setAgentPerformancePreset(
+    preset: "today" | "yesterday" | "week",
+  ) {
+    const end = new Date();
+    const start = new Date();
+    if (preset === "yesterday") {
+      start.setDate(start.getDate() - 1);
+      end.setDate(end.getDate() - 1);
+    } else if (preset === "week") {
+      start.setDate(start.getDate() - 6);
+    }
+    setAgentPerformanceStart(dateInputValue(start));
+    setAgentPerformanceEnd(dateInputValue(end));
+  }
 
   const todayKey = dateInputValue(new Date());
   const dailyEfficiencyByAgent = useMemo(() => {
@@ -3720,12 +3782,12 @@ export function WorkDeskApp({
       icon: <Clock3 className="h-4 w-4" />,
       badge: myPendingPricing.length,
     },
+    { id: "team", label: "My Team", icon: <UsersRound className="h-4 w-4" /> },
     {
       id: "quotes",
-      label: "Quotes Database",
+      label: "Databases",
       icon: <Table2 className="h-4 w-4" />,
     },
-    { id: "team", label: "My Team", icon: <UsersRound className="h-4 w-4" /> },
     {
       id: "performance",
       label: "Performance",
@@ -4424,6 +4486,19 @@ export function WorkDeskApp({
             ) : null}
 
             {agentTab === "quotes" ? (
+              <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Team Databases</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">Review the quotes and workload handled by every team member.</p>
+                </div>
+                <div className="flex gap-1 rounded-2xl bg-slate-100 p-1.5">
+                  <button type="button" onClick={() => setAgentDatabaseView("quotes")} className={cn("rounded-xl px-4 py-2.5 text-xs font-black", agentDatabaseView === "quotes" ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-white")}>Quotes</button>
+                  <button type="button" onClick={() => setAgentDatabaseView("workloads")} className={cn("rounded-xl px-4 py-2.5 text-xs font-black", agentDatabaseView === "workloads" ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-white")}>Workloads</button>
+                </div>
+              </section>
+            ) : null}
+
+            {agentTab === "quotes" && agentDatabaseView === "quotes" ? (
               <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 p-6">
                   <div>
@@ -4628,6 +4703,12 @@ export function WorkDeskApp({
               </section>
             ) : null}
 
+            {agentTab === "quotes" && agentDatabaseView === "workloads" ? (
+              workloadDatabaseContent ?? (
+                <EmptyState title="Workload database unavailable" note="Refresh the page or contact Management." />
+              )
+            ) : null}
+
             {agentTab === "team" ? (
               <MyTeamPanel
                 quotes={allQuoteRecords}
@@ -4638,6 +4719,40 @@ export function WorkDeskApp({
 
             {agentTab === "performance" ? (
               <section className="space-y-5">
+                <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]">Performance Period</p>
+                      <h3 className="mt-1 text-xl font-black">My quote results</h3>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <button type="button" className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black" onClick={() => setAgentPerformancePreset("today")}>Today</button>
+                      <button type="button" className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black" onClick={() => setAgentPerformancePreset("yesterday")}>Yesterday</button>
+                      <button type="button" className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black" onClick={() => setAgentPerformancePreset("week")}>Current Week</button>
+                      <label><span className="block text-[10px] font-black uppercase text-slate-400">From</span><input type="date" className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold" value={agentPerformanceStart} onChange={(event) => setAgentPerformanceStart(event.target.value)} /></label>
+                      <label><span className="block text-[10px] font-black uppercase text-slate-400">To</span><input type="date" className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold" value={agentPerformanceEnd} onChange={(event) => setAgentPerformanceEnd(event.target.value)} /></label>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-black uppercase text-slate-400">Quotes</p><p className="mt-1 text-3xl font-black">{agentPerformanceSummary.total}</p></div>
+                    <div className="rounded-2xl bg-emerald-50 p-4"><p className="text-xs font-black uppercase text-emerald-700">Sold</p><p className="mt-1 text-3xl font-black text-emerald-800">{agentPerformanceSummary.sold}</p></div>
+                    <div className="rounded-2xl bg-rose-50 p-4"><p className="text-xs font-black uppercase text-rose-700">Not Sold</p><p className="mt-1 text-3xl font-black text-rose-800">{agentPerformanceSummary.notSold.length}</p></div>
+                    <div className="rounded-2xl bg-blue-50 p-4"><p className="text-xs font-black uppercase text-blue-700">Avg. time to pricing</p><p className="mt-1 text-3xl font-black text-blue-800">{formatDuration(agentPerformanceSummary.averagePriceMinutes)}</p></div>
+                  </div>
+                </section>
+                {agentPerformanceSummary.notSold.length ? (
+                  <details className="rounded-[24px] border border-rose-200 bg-white shadow-sm">
+                    <summary className="cursor-pointer list-none p-4 font-black text-rose-800 [&::-webkit-details-marker]:hidden">Not Sold quotes in this period · {agentPerformanceSummary.notSold.length}</summary>
+                    <div className="divide-y divide-slate-100 border-t border-rose-100">
+                      {agentPerformanceSummary.notSold.map((quote) => (
+                        <button key={quote.id} type="button" onClick={() => openQuoteLog(quote.sourceWorkItemId)} className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-rose-50/40">
+                          <div><p className="font-black">{quote.customer}</p><p className="mt-1 text-xs font-semibold text-slate-500">{quote.source} · {quote.salesperson} · {formatDateTime(quote.statusDate)}</p></div>
+                          <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">Open Log</span>
+                        </button>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
                   {performanceMetrics.map((metric) => {
                     const setup = {
@@ -4775,6 +4890,7 @@ export function WorkDeskApp({
             onUpdateCustomerServiceOverflow={
               managerUpdateCustomerServiceOverflow
             }
+            workloadDatabaseContent={workloadDatabaseContent}
           />
         )}
       </main>
@@ -5479,6 +5595,7 @@ function ManagerView({
   onToggleRotation,
   onSetQueueOrder,
   onUpdateCustomerServiceOverflow,
+  workloadDatabaseContent,
 }: {
   agentList: Agent[];
   customerServiceUsers: CustomerServiceUser[];
@@ -5521,12 +5638,14 @@ function ManagerView({
     enabled: boolean,
     profileId: string | null,
   ) => Promise<void>;
+  workloadDatabaseContent?: React.ReactNode;
 }) {
   const [reportView, setReportView] = useState<ReportView>("executive");
-  const [workView, setWorkView] = useState<"tasks" | "pricing">("tasks");
+  const [workView, setWorkView] = useState<"tasks" | "pricing" | "workload">("tasks");
+  const [managerDatabaseView, setManagerDatabaseView] = useState<"quotes" | "workloads">("quotes");
   const [administrationView, setAdministrationView] = useState<
-    "users" | "sources"
-  >("users");
+    "controls" | "users" | "sources"
+  >("controls");
   const selectedReport =
     reportNavigationItems.find((item) => item.id === reportView) ??
     reportNavigationItems[0];
@@ -5700,7 +5819,7 @@ function ManagerView({
     },
     {
       id: "quotes",
-      label: "Quotes Database",
+      label: "Databases",
       icon: <Table2 className="h-4 w-4" />,
     },
     {
@@ -5709,13 +5828,8 @@ function ManagerView({
       icon: <BarChart3 className="h-4 w-4" />,
     },
     {
-      id: "team",
-      label: "Team Controls",
-      icon: <Settings2 className="h-4 w-4" />,
-    },
-    {
       id: "administration",
-      label: "Users & Sources",
+      label: "Team & Access",
       icon: <UsersRound className="h-4 w-4" />,
     },
   ];
@@ -6818,6 +6932,18 @@ function ManagerView({
             >
               Pending Pricing · {pendingPricing.length}
             </button>
+            <button
+              type="button"
+              onClick={() => setWorkView("workload")}
+              className={cn(
+                "rounded-xl px-4 py-2.5 text-xs font-black transition",
+                workView === "workload"
+                  ? "bg-[#223f7a] text-white shadow-sm"
+                  : "text-slate-500 hover:bg-white",
+              )}
+            >
+              Workload Log
+            </button>
           </div>
         </section>
       ) : null}
@@ -6826,13 +6952,25 @@ function ManagerView({
         <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-              Administration
+              Team & Access
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-500">
-              Users, permissions, sources and dealer salespeople are grouped in one place.
+              Rotation controls, users, permissions, sources and salespeople in one compact workspace.
             </p>
           </div>
-          <div className="flex gap-1 rounded-2xl bg-slate-100 p-1.5">
+          <div className="flex flex-wrap gap-1 rounded-2xl bg-slate-100 p-1.5">
+            <button
+              type="button"
+              onClick={() => setAdministrationView("controls")}
+              className={cn(
+                "rounded-xl px-4 py-2.5 text-xs font-black transition",
+                administrationView === "controls"
+                  ? "bg-[#223f7a] text-white shadow-sm"
+                  : "text-slate-500 hover:bg-white",
+              )}
+            >
+              Team Controls
+            </button>
             <button
               type="button"
               onClick={() => setAdministrationView("users")}
@@ -6861,27 +6999,24 @@ function ManagerView({
         </section>
       ) : null}
 
+      {managerTab === "quotes" && managerDatabaseView === "quotes" ? (
+        <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Agency Databases</p><p className="mt-1 text-sm font-semibold text-slate-500">Quotes and workload records in one place.</p></div>
+          <div className="flex gap-1 rounded-2xl bg-slate-100 p-1.5">
+            <button type="button" onClick={() => setManagerDatabaseView("quotes")} className={cn("rounded-xl px-4 py-2.5 text-xs font-black", managerDatabaseView === "quotes" ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-white")}>Quotes Database</button>
+            <button type="button" onClick={() => setManagerDatabaseView("workloads")} className={cn("rounded-xl px-4 py-2.5 text-xs font-black", managerDatabaseView === "workloads" ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-white")}>Workload Database</button>
+          </div>
+        </section>
+      ) : null}
+
       {managerTab === "overview" ? (
         <div className="space-y-5">
-          <section className="flex flex-col gap-4 rounded-[28px] border border-[#c9d5e9] bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]">
-                <FilePlus2 className="h-4 w-4" /> Manager Quick Action
-              </div>
-              <h2 className="mt-1 text-2xl font-black tracking-tight">
-                Create and assign a quote
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Assign a quote directly to any agent. No queue moves, and the
-                assignment timestamp starts immediately.
-              </p>
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-[#c9d5e9] bg-white px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#eef3fb] text-[#223f7a]"><FilePlus2 className="h-4 w-4" /></div>
+              <div><p className="text-xs font-black uppercase tracking-[0.14em] text-[#223f7a]">Manager Quick Action</p><p className="text-sm font-bold text-slate-500">Create and assign a quote without moving a queue.</p></div>
             </div>
-            <button
-              onClick={onOpenAssignQuote}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#223f7a] px-5 py-3 text-sm font-black text-white hover:bg-[#17305f]"
-            >
-              <UserPlus className="h-4 w-4" /> Create & Assign Quote
-            </button>
+            <button onClick={onOpenAssignQuote} className="inline-flex items-center gap-2 rounded-xl bg-[#223f7a] px-4 py-2.5 text-xs font-black text-white hover:bg-[#17305f]"><UserPlus className="h-4 w-4" />Create & Assign</button>
           </section>
 
           <details className="rounded-[28px] border border-amber-200 bg-amber-50 shadow-sm">
@@ -6919,6 +7054,22 @@ function ManagerView({
                   No operational alerts right now.
                 </p>
               )}
+            </div>
+          </details>
+
+          <details className="rounded-[24px] border border-slate-200 bg-white shadow-sm" open>
+            <summary className="cursor-pointer list-none px-4 py-3 [&::-webkit-details-marker]:hidden">
+              <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.14em] text-[#223f7a]">Team Controls</p><p className="mt-1 text-sm font-bold text-slate-600">Availability and rotation eligibility</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{agentList.filter((agent) => agent.availability === "available").length} available</span></div>
+            </summary>
+            <div className="grid gap-2 border-t border-slate-100 p-3 sm:grid-cols-2 xl:grid-cols-4">
+              {agentList.map((agent) => (
+                <div key={agent.id} className="rounded-2xl bg-slate-50 p-3">
+                  <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><Avatar agent={agent} size="sm" /><div><p className="text-sm font-black">{agent.name}</p><p className="text-[10px] font-bold capitalize text-slate-400">{agent.availability === "break" ? "Break / Lunch" : agent.availability}</p></div></div><StatusDot status={agent.availability} /></div>
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {([['WA', agent.whatsappActive], ['RC', agent.ringCentralActive], ['WL', agent.workloadActive]] as const).map(([label, active]) => <span key={label} className={cn("rounded-full px-2 py-1 text-[10px] font-black", active ? "bg-emerald-50 text-emerald-700" : "bg-slate-200 text-slate-500")}>{label}</span>)}
+                  </div>
+                </div>
+              ))}
             </div>
           </details>
 
@@ -7424,6 +7575,14 @@ function ManagerView({
         </section>
       ) : null}
 
+      {managerTab === "quotes" && managerDatabaseView === "workloads" ? (
+        workloadDatabaseContent ?? <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"><EmptyState title="Workload database unavailable" note="Refresh the page or verify the workload module." /></div>
+      ) : null}
+
+      {managerTab === "work" && workView === "workload" ? (
+        workloadDatabaseContent ?? <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"><EmptyState title="Workload log unavailable" note="Refresh the page or verify the workload module." /></div>
+      ) : null}
+
       {managerTab === "reports" ? (
         <section className="space-y-5">
           <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -7808,7 +7967,7 @@ function ManagerView({
 
       {managerTab === "administration" && administrationView === "users" ? <UserAdminPanel /> : null}
 
-      {managerTab === "team" ? (
+      {managerTab === "administration" && administrationView === "controls" ? (
         <div className="space-y-5">
           <QueueOrderPanel agentList={agentList} onSave={onSetQueueOrder} />
           <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">

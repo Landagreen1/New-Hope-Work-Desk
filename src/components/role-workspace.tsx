@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BriefcaseBusiness,
   ClipboardCheck,
   FileSpreadsheet,
   Headphones,
@@ -27,7 +26,6 @@ type WorkspaceTab =
   | "intake_queue"
   | "customer_service"
   | "renewals"
-  | "workload_log"
   | "powerbi";
 
 interface TabDefinition {
@@ -222,12 +220,6 @@ export function RoleWorkspace({
           icon: UsersRound,
         },
         {
-          id: "workload_log",
-          label: "Workload Log",
-          description: "Volume, types and corrections",
-          icon: BriefcaseBusiness,
-        },
-        {
           id: "renewals",
           label: "Renewals",
           description: "Pipeline and assignments",
@@ -278,14 +270,12 @@ export function RoleWorkspace({
     externalWorkspaceContent = (
       <ManagerCustomerServiceWorkspace profile={profile} />
     );
-  } else if (activeTab === "workload_log") {
-    externalWorkspaceContent = <WorkloadLog initialProfile={profile} />;
   } else if (activeTab === "renewals") {
     externalWorkspaceContent = (
       <RenewalsPage
         initialProfile={profile}
         embedded
-        initialTab={sessionProfile.role === "manager" ? "pipeline" : "overview"}
+        initialTab={sessionProfile.role === "manager" || sessionProfile.role === "customer_service" ? "pipeline" : "overview"}
         showImportTab={false}
       />
     );
@@ -307,6 +297,11 @@ export function RoleWorkspace({
         />
       }
       externalWorkspaceContent={externalWorkspaceContent}
+      workloadDatabaseContent={
+        sessionProfile.role === "agent" || sessionProfile.role === "manager" ? (
+          <WorkloadLog initialProfile={profile} embedded />
+        ) : undefined
+      }
     />
   );
 }
