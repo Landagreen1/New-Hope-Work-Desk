@@ -558,7 +558,7 @@ function RenewalDrawer({
       setNotes('');
       setEvidenceFile(null);
       setEvidenceReference('');
-    }, 'Customer interaction recorded with timestamp and proof.');
+    }, 'Contact update recorded. The renewal remains open until a final outcome is selected.');
   }
 
   async function saveFollowUp() {
@@ -705,14 +705,29 @@ function RenewalDrawer({
             <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <label><span className={ui.label}>Method</span><select className={ui.select} disabled={busy || !activeRecord} value={channel} onChange={(event) => setChannel(event.target.value as RenewalChannel)}><option value="call">Call</option><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="in_person">In Person</option><option value="other">Other</option></select></label>
               <label><span className={ui.label}>Direction</span><select className={ui.select} disabled={busy || !activeRecord} value={direction} onChange={(event) => setDirection(event.target.value as 'outbound' | 'inbound')}><option value="outbound">Outbound</option><option value="inbound">Inbound</option></select></label>
-              <label className="sm:col-span-2"><span className={ui.label}>Outcome</span><select className={ui.select} disabled={busy || !activeRecord} value={outcome} onChange={(event) => setOutcome(event.target.value)}><option>No answer</option><option>Left voicemail</option><option>Customer reached</option><option>Customer requested callback</option><option>Customer reviewing renewal</option><option>Customer wants re-quote</option><option>Wrong number</option><option>Other</option></select></label>
+              <label className="sm:col-span-2">
+                <span className={ui.label}>Contact result — does not close the renewal</span>
+                <select className={ui.select} disabled={busy || !activeRecord} value={outcome} onChange={(event) => setOutcome(event.target.value)}>
+                  <option>No answer</option>
+                  <option>Left voicemail</option>
+                  <option>Customer reached</option>
+                  <option>Customer requested callback</option>
+                  <option>Customer reviewing renewal</option>
+                  <option>Customer wants re-quote</option>
+                  <option>Wrong number</option>
+                  <option>Other</option>
+                </select>
+                <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                  This records what happened during this contact attempt. Use Renewed, Lost, or Cancelled only after the customer has made a final decision.
+                </p>
+              </label>
             </div>
             <label className="mt-4 block"><span className={ui.label}>Mandatory notes</span><textarea className={ui.textarea} rows={4} disabled={busy || !activeRecord} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="What happened, what the customer said, and the next step." /></label>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <label><span className={ui.label}>Upload proof or call recording</span><input type="file" accept="image/*,application/pdf,audio/*,video/*,.txt,.csv,.doc,.docx" className={`${ui.input} file:mr-3 file:rounded-lg file:border-0 file:bg-[#eef3fb] file:px-3 file:py-1.5 file:text-xs file:font-black file:text-[#223f7a]`} disabled={busy || !activeRecord} onChange={(event) => setEvidenceFile(event.target.files?.[0] || null)} />{evidenceFile ? <p className="mt-2 text-xs font-bold text-emerald-700">Selected: {evidenceFile.name} · {(evidenceFile.size / 1_048_576).toFixed(1)} MB</p> : <p className="mt-2 text-xs font-semibold text-slate-400">Images, PDFs, documents, audio, and video up to 100 MB.</p>}</label>
               <label><span className={ui.label}>Or contact/reference record</span><input className={ui.input} disabled={busy || !activeRecord} value={evidenceReference} onChange={(event) => setEvidenceReference(event.target.value)} placeholder="RingCentral ID, attachment reference, email message ID…" /></label>
             </div>
-            <button type="button" className={`${ui.btnPrimary} mt-4`} disabled={busy || !activeRecord} onClick={() => void saveContact()}><ClipboardCheck className="h-4 w-4" />Save Interaction</button>
+            <button type="button" className={`${ui.btnPrimary} mt-4`} disabled={busy || !activeRecord} onClick={() => void saveContact()}><ClipboardCheck className="h-4 w-4" />Save Contact Update</button>
           </section>
 
           <section className={`${ui.card} ${ui.cardPad}`}>
