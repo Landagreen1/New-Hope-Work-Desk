@@ -15,6 +15,7 @@ import { WorkDeskApp } from "@/components/work-desk-app";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type { ProfileLite } from "@/features/nhwd-shared/types";
+import PowerBiRenewalImport from "@/features/renewals/PowerBiRenewalImport";
 import RenewalsPage from "@/features/renewals/RenewalsPage";
 import type { DashboardData, SessionProfile } from "@/lib/types";
 
@@ -279,13 +280,7 @@ export function RoleWorkspace({
     );
   } else if (activeTab === "powerbi") {
     externalWorkspaceContent = (
-      <RenewalsPage
-        initialProfile={profile}
-        embedded
-        initialTab="import"
-        showImportTab={false}
-        importOnly
-      />
+      <PowerBiRenewalImport initialProfile={profile} embedded />
     );
   }
 
