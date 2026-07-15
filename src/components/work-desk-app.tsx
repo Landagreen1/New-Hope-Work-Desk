@@ -1778,7 +1778,7 @@ function StartRescueTimerForm({
   salespeople,
   onSubmit,
 }: {
-  rotation: "whatsapp" | "ringcentral";
+  rotation: "whatsapp";
   sourceList: SourceOption[];
   salespeople: DealerSalesperson[];
   manual?: boolean;
@@ -1808,16 +1808,7 @@ function StartRescueTimerForm({
         <input name="customer" required className="field" />
       </Field>
       <DealerSalespersonFields sources={sourceList} salespeople={salespeople} />
-      {rotation === "ringcentral" ? (
-        <Field label="Quote type">
-          <select name="quoteType" className="field">
-            <option value="new_quote">New Quote</option>
-            <option value="requote">Requote</option>
-          </select>
-        </Field>
-      ) : (
-        <input type="hidden" name="quoteType" value="new_quote" />
-      )}
+      <input type="hidden" name="quoteType" value="new_quote" />
       <Field label="Notes (optional)">
         <textarea
           name="note"
@@ -2618,9 +2609,7 @@ export function WorkDeskApp({
   const [notSoldTarget, setNotSoldTarget] = useState<NotSoldTarget>(null);
   const [reopenNotSoldRecord, setReopenNotSoldRecord] =
     useState<QuoteRecord | null>(null);
-  const [takeRotation, setTakeRotation] = useState<
-    "whatsapp" | "ringcentral" | null
-  >(null);
+  const [takeRotation, setTakeRotation] = useState<"whatsapp" | null>(null);
   const [customerServicePassItemId, setCustomerServicePassItemId] = useState<
     string | null
   >(null);
@@ -2677,9 +2666,6 @@ export function WorkDeskApp({
     : null;
   const whatsappTimer = quoteTakeTimers.find(
     (timer) => timer.rotation === "whatsapp",
-  );
-  const ringCentralTimer = quoteTakeTimers.find(
-    (timer) => timer.rotation === "ringcentral",
   );
   const customerServicePassItem =
     workItems.find((item) => item.id === customerServicePassItemId) ?? null;
@@ -3124,6 +3110,7 @@ export function WorkDeskApp({
       const now = Date.now();
       const warningTimers = quoteTakeTimers.filter((timer) => {
         if (
+          timer.rotation !== "whatsapp" ||
           timer.currentProfileId !== currentUserId ||
           timer.warningSentAt ||
           requestedTimerWarningIds.current.has(timer.id)
@@ -3321,7 +3308,7 @@ export function WorkDeskApp({
     }
   }
 
-  function openTake(rotation: "whatsapp" | "ringcentral") {
+  function openTake(rotation: "whatsapp") {
     setTakeRotation(rotation);
     setModal("take_quote");
   }
@@ -3332,8 +3319,7 @@ export function WorkDeskApp({
   }
 
   async function submitTakeQuote(formData: FormData) {
-    const rotation = String(formData.get("rotation")) as
-      "whatsapp" | "ringcentral";
+    const rotation = String(formData.get("rotation")) as "whatsapp";
     const receivedAtLocal = String(formData.get("receivedAt") || "");
     const customer = String(formData.get("customer") || "");
     const dealerId = String(formData.get("dealer") || "");
@@ -4031,25 +4017,9 @@ export function WorkDeskApp({
                       ringCentralCurrentId !== null &&
                       currentUserId === ringCentralCurrentId
                     }
-                    canStartTimer={
-                      ringCentralCurrentId !== null &&
-                      currentUserId !== ringCentralCurrentId &&
-                      currentUser.availability === "available" &&
-                      currentUser.ringCentralActive
-                    }
-                    timer={ringCentralTimer}
                     currentUserId={currentUserId}
                     onAction={() => setModal("ringcentral_quote")}
                     onPass={() => handlePass("ringcentral")}
-                    onStartTimer={() => openTake("ringcentral")}
-                    onClaimTimer={() =>
-                      ringCentralTimer &&
-                      void claimTimedQuote(ringCentralTimer.id)
-                    }
-                    onStealTimer={() =>
-                      ringCentralTimer &&
-                      void stealTimedQuote(ringCentralTimer.id)
-                    }
                   />
                   <RotationCard
                     variant="workload"
@@ -4873,8 +4843,8 @@ export function WorkDeskApp({
 
       <Modal
         open={modal === "take_quote" && takeRotation !== null}
-        title="Start Rescue Timer"
-        subtitle="Alert the current agent and begin one 3-minute response period without changing the queue order."
+        title="Start WhatsApp Rescue Timer"
+        subtitle="Alert the current WhatsApp agent and begin one 3-minute response period without changing the queue order."
         onClose={() => {
           setModal(null);
           setTakeRotation(null);

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BriefcaseBusiness,
   ClipboardCheck,
   FileSpreadsheet,
   Headphones,
@@ -17,6 +18,7 @@ import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type { ProfileLite } from "@/features/nhwd-shared/types";
 import PowerBiRenewalImport from "@/features/renewals/PowerBiRenewalImport";
 import RenewalsPage from "@/features/renewals/RenewalsPage";
+import WorkloadLog from "@/features/workload/WorkloadLog";
 import type { DashboardData, SessionProfile } from "@/lib/types";
 
 type WorkspaceTab =
@@ -25,6 +27,7 @@ type WorkspaceTab =
   | "intake_queue"
   | "customer_service"
   | "renewals"
+  | "workload_log"
   | "powerbi";
 
 interface TabDefinition {
@@ -219,6 +222,12 @@ export function RoleWorkspace({
           icon: UsersRound,
         },
         {
+          id: "workload_log",
+          label: "Workload Log",
+          description: "Volume, types and corrections",
+          icon: BriefcaseBusiness,
+        },
+        {
           id: "renewals",
           label: "Renewals",
           description: "Pipeline and assignments",
@@ -269,6 +278,8 @@ export function RoleWorkspace({
     externalWorkspaceContent = (
       <ManagerCustomerServiceWorkspace profile={profile} />
     );
+  } else if (activeTab === "workload_log") {
+    externalWorkspaceContent = <WorkloadLog initialProfile={profile} />;
   } else if (activeTab === "renewals") {
     externalWorkspaceContent = (
       <RenewalsPage
