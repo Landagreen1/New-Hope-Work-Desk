@@ -73,6 +73,15 @@ import {
 
 const OPEN_STATUSES: RenewalStatus[] = ['imported', 'assigned', 'in_progress', 'monitoring', 'requote_sent'];
 const CLOSED_STATUSES: RenewalStatus[] = ['renewed', 'lost', 'cancelled'];
+
+type AgentRenewalPriorityFilter =
+  | 'all'
+  | 'days_30_plus'
+  | 'days_16_30'
+  | 'days_8_15'
+  | 'days_4_7'
+  | 'days_0_3'
+  | 'no_follow_up';
 const IMPORT_FIELDS: Array<{ key: keyof NormalizedImportRow; label: string; required?: boolean; group: 'required' | 'contact' | 'powerbi' | 'premium' }> = [
   { key: 'policy_number', label: 'Policy', required: true, group: 'required' },
   { key: 'renewal_date', label: 'Renewal Date', required: true, group: 'required' },
@@ -1095,6 +1104,7 @@ export default function RenewalsPage({
   const [assignedFilter, setAssignedFilter] = useState('all');
   const [dueFilter, setDueFilter] = useState<'all' | 'active30' | 'overdue'>('active30');
   const [search, setSearch] = useState('');
+  const [agentPriorityFilter, setAgentPriorityFilter] = useState<AgentRenewalPriorityFilter>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1106,7 +1116,12 @@ export default function RenewalsPage({
       setError(null);
       const effectiveAssignee = profile.role === 'manager' ? assignedFilter : profile.id;
       const [renewalRows, people] = await Promise.all([
-        listRenewals({ status: statusFilter, assignedTo: effectiveAssignee, dueWindow: dueFilter, search }),
+        listRenewals({
+          status: statusFilter,
+          assignedTo: effectiveAssignee,
+          dueWindow: profile.role === 'agent' ? 'all' : dueFilter,
+          search,
+        }),
         profile.role === 'manager' ? listRenewalAssignees() : Promise.resolve([]),
       ]);
       setRows(renewalRows);
@@ -1144,6 +1159,58 @@ export default function RenewalsPage({
   }, [refresh]);
 
   const selected = rows.find((row) => row.id === selectedId) || null;
+
+  const agentPriorityMetrics = useMemo(() => {
+    const active = rows.filter((row) => OPEN_STATUSES.includes(row.status));
+    return {
+      all: active.length,
+      days_30_plus: active.filter((row) => daysUntil(row.renewal_date) > 30).length,
+      days_16_30: active.filter((row) => {
+        const days = daysUntil(row.renewal_date);
+        return days >= 16 && days <= 30;
+      }).length,
+      days_8_15: active.filter((row) => {
+        const days = daysUntil(row.renewal_date);
+        return days >= 8 && days <= 15;
+      }).length,
+      days_4_7: active.filter((row) => {
+        const days = daysUntil(row.renewal_date);
+        return days >= 4 && days <= 7;
+      }).length,
+      days_0_3: active.filter((row) => {
+        const days = daysUntil(row.renewal_date);
+        return days >= 0 && days <= 3;
+      }).length,
+      no_follow_up: active.filter((row) => !row.next_follow_up_at).length,
+    };
+  }, [rows]);
+
+  const displayedRows = useMemo(() => {
+    if (profile.role !== 'agent' || agentPriorityFilter === 'all') return rows;
+
+    return rows.filter((row) => {
+      if (!OPEN_STATUSES.includes(row.status)) return false;
+      const days = daysUntil(row.renewal_date);
+
+      switch (agentPriorityFilter) {
+        case 'days_30_plus':
+          return days > 30;
+        case 'days_16_30':
+          return days >= 16 && days <= 30;
+        case 'days_8_15':
+          return days >= 8 && days <= 15;
+        case 'days_4_7':
+          return days >= 4 && days <= 7;
+        case 'days_0_3':
+          return days >= 0 && days <= 3;
+        case 'no_follow_up':
+          return !row.next_follow_up_at;
+        default:
+          return true;
+      }
+    });
+  }, [agentPriorityFilter, profile.role, rows]);
+
   const metrics = useMemo(() => {
     const active = rows.filter((row) => OPEN_STATUSES.includes(row.status));
     return {
@@ -1197,14 +1264,74 @@ export default function RenewalsPage({
 
       {tab === 'pipeline' ? (
         <section className={`${ui.card} overflow-hidden`}>
+          {profile.role === 'agent' ? (
+            <div className="border-b border-slate-100 bg-slate-50/70 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className={ui.sectionTitle}>My renewal priorities</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    Select a counter to filter your assigned renewals. Select it again to show all.
+                  </p>
+                </div>
+                {agentPriorityFilter !== 'all' ? (
+                  <button
+                    type="button"
+                    className={ui.btnSecondary}
+                    onClick={() => setAgentPriorityFilter('all')}
+                  >
+                    Clear filter
+                  </button>
+                ) : null}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                {([
+                  ['days_30_plus', '30+ days', 'More than 30 days', agentPriorityMetrics.days_30_plus],
+                  ['days_16_30', '30 days', '16–30 days', agentPriorityMetrics.days_16_30],
+                  ['days_8_15', '15 days', '8–15 days', agentPriorityMetrics.days_8_15],
+                  ['days_4_7', '7 days', '4–7 days', agentPriorityMetrics.days_4_7],
+                  ['days_0_3', '3 days', '0–3 days', agentPriorityMetrics.days_0_3],
+                  ['no_follow_up', 'No follow-up', 'Nothing scheduled', agentPriorityMetrics.no_follow_up],
+                ] as Array<[AgentRenewalPriorityFilter, string, string, number]>).map(([value, label, description, count]) => {
+                  const active = agentPriorityFilter === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setAgentPriorityFilter((current) => current === value ? 'all' : value)}
+                      className={`rounded-2xl border p-3 text-left transition ${
+                        active
+                          ? 'border-[#223f7a] bg-[#223f7a] text-white shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-900 hover:border-[#8da4cf] hover:bg-[#f8faff]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className={`text-xs font-black uppercase tracking-wide ${active ? 'text-blue-100' : 'text-slate-500'}`}>{label}</p>
+                          <p className={`mt-1 text-[11px] font-semibold ${active ? 'text-blue-100' : 'text-slate-400'}`}>{description}</p>
+                        </div>
+                        <span className={`text-2xl font-black ${active ? 'text-white' : 'text-[#223f7a]'}`}>{count}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           <div className={ui.cardHeader}><div><p className={ui.sectionTitle}>Renewal Pipeline</p><h2 className="mt-1 text-xl font-black">{profile.role === 'manager' ? 'Agency renewal workload' : 'My assigned renewals'}</h2></div><button type="button" className={ui.btnSecondary} onClick={() => void refresh()}><RefreshCw className="h-4 w-4" />Refresh</button></div>
           <div className="grid gap-3 border-b border-slate-100 p-4 xl:grid-cols-[1fr_180px_190px_190px]">
             <label className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm font-semibold outline-none" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer, policy, carrier, phone or email" /></label>
             <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option value="open">Open statuses</option><option value="all">All statuses</option>{[...OPEN_STATUSES, ...CLOSED_STATUSES].map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select>
-            <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={dueFilter} onChange={(event) => setDueFilter(event.target.value as typeof dueFilter)}><option value="active30">Active 30-day window</option><option value="overdue">Overdue</option><option value="all">All dates</option></select>
+            {profile.role === 'manager' ? (
+              <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={dueFilter} onChange={(event) => setDueFilter(event.target.value as typeof dueFilter)}><option value="active30">Active 30-day window</option><option value="overdue">Overdue</option><option value="all">All dates</option></select>
+            ) : (
+              <div className="rounded-xl bg-[#eef3fb] px-3 py-2.5 text-sm font-black text-[#223f7a]">
+                Showing {displayedRows.length} of {rows.length}
+              </div>
+            )}
             {profile.role === 'manager' ? <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={assignedFilter} onChange={(event) => setAssignedFilter(event.target.value)}><option value="all">All assignees</option><option value="unassigned">Unassigned</option>{assignees.map((person) => <option key={person.id} value={person.id}>{person.display_name}</option>)}</select> : <div className="rounded-xl bg-[#eef3fb] px-3 py-2.5 text-sm font-black text-[#223f7a]">Assigned to {profile.display_name}</div>}
           </div>
-          <div className="overflow-x-auto"><table className={ui.table}><thead><tr><th className={ui.th}>Deadline</th><th className={ui.th}>Customer / Policy</th><th className={ui.th}>Carrier</th><th className={ui.th}>Premium</th><th className={ui.th}>Status</th><th className={ui.th}>Assigned</th><th className={ui.th}>Next follow-up</th><th className={ui.th}>Action</th></tr></thead><tbody>{rows.map((row) => { const warning = warningLabel(row); return <tr key={row.id} className={ui.trHover} onClick={() => setSelectedId(row.id)}><td className={ui.td}><span className={`${ui.badge} ${ui.badgeTone[warning.tone]}`}>{warning.label}</span><p className="mt-2 text-xs font-semibold text-slate-400">{new Date(`${row.renewal_date}T00:00:00`).toLocaleDateString()}</p></td><td className={ui.td}><p className="font-black text-slate-900">{row.customer_name}</p><div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-xs font-semibold text-slate-500">{row.policy_number}</p>{row.requote_requested ? <span className={`${ui.badge} ${ui.badgeTone.progress}`}>Requote flagged</span> : null}{row.source_sync_state === 'missing_from_latest_file' ? <span className={`${ui.badge} ${ui.badgeTone.progress}`}>Missing from latest file</span> : null}</div></td><td className={ui.td}><p className="font-bold">{row.carrier || '—'}</p><p className="mt-1 text-xs text-slate-400">{row.line_of_business || 'Line not recorded'}</p></td><td className={ui.td}><p className="font-black">{money(row.premium_renewal)}</p><p className={`mt-1 text-xs font-black ${premiumDelta(row).startsWith('+') ? 'text-rose-700' : 'text-emerald-700'}`}>{premiumDelta(row)}</p></td><td className={ui.td}><span className={`${ui.badge} ${ui.badgeTone[renewalStatusTone[row.status] || 'neutral']}`}>{statusLabel(row.status)}</span></td><td className={ui.td}><p className="font-bold">{assigneeName(assignees, row.assigned_to)}</p></td><td className={ui.td}><p className="text-xs font-semibold text-slate-500">{row.next_follow_up_at ? new Date(row.next_follow_up_at).toLocaleString() : 'Not scheduled'}</p></td><td className={ui.td}><button className={ui.btnSecondary} onClick={(event) => { event.stopPropagation(); setSelectedId(row.id); }}>Open</button></td></tr>})}</tbody></table>{!rows.length ? <div className={ui.empty}>No renewals match these filters.</div> : null}</div>
+          <div className="overflow-x-auto"><table className={ui.table}><thead><tr><th className={ui.th}>Deadline</th><th className={ui.th}>Customer / Policy</th><th className={ui.th}>Carrier</th><th className={ui.th}>Premium</th><th className={ui.th}>Status</th><th className={ui.th}>Assigned</th><th className={ui.th}>Next follow-up</th><th className={ui.th}>Action</th></tr></thead><tbody>{displayedRows.map((row) => { const warning = warningLabel(row); return <tr key={row.id} className={ui.trHover} onClick={() => setSelectedId(row.id)}><td className={ui.td}><span className={`${ui.badge} ${ui.badgeTone[warning.tone]}`}>{warning.label}</span><p className="mt-2 text-xs font-semibold text-slate-400">{new Date(`${row.renewal_date}T00:00:00`).toLocaleDateString()}</p></td><td className={ui.td}><p className="font-black text-slate-900">{row.customer_name}</p><div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-xs font-semibold text-slate-500">{row.policy_number}</p>{row.requote_requested ? <span className={`${ui.badge} ${ui.badgeTone.progress}`}>Requote flagged</span> : null}{row.source_sync_state === 'missing_from_latest_file' ? <span className={`${ui.badge} ${ui.badgeTone.progress}`}>Missing from latest file</span> : null}</div></td><td className={ui.td}><p className="font-bold">{row.carrier || '—'}</p><p className="mt-1 text-xs text-slate-400">{row.line_of_business || 'Line not recorded'}</p></td><td className={ui.td}><p className="font-black">{money(row.premium_renewal)}</p><p className={`mt-1 text-xs font-black ${premiumDelta(row).startsWith('+') ? 'text-rose-700' : 'text-emerald-700'}`}>{premiumDelta(row)}</p></td><td className={ui.td}><span className={`${ui.badge} ${ui.badgeTone[renewalStatusTone[row.status] || 'neutral']}`}>{statusLabel(row.status)}</span></td><td className={ui.td}><p className="font-bold">{assigneeName(assignees, row.assigned_to)}</p></td><td className={ui.td}><p className="text-xs font-semibold text-slate-500">{row.next_follow_up_at ? new Date(row.next_follow_up_at).toLocaleString() : 'Not scheduled'}</p></td><td className={ui.td}><button className={ui.btnSecondary} onClick={(event) => { event.stopPropagation(); setSelectedId(row.id); }}>Open</button></td></tr>})}</tbody></table>{!displayedRows.length ? <div className={ui.empty}>No renewals match this priority filter.</div> : null}</div>
         </section>
       ) : null}
 
