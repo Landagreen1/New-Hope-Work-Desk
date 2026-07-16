@@ -661,5 +661,5 @@ export function buildNormalizedRows(headers: string[], rawRows: string[][], mapp
     requote_note: value(row, 'requote_note'),
     assigned_name: value(row, 'assigned_name'),
     raw: Object.fromEntries(headers.map((header, index) => [header, row[index] || ''])),
-  })).filter((row) => row.policy_number && row.renewal_date && row.customer_name);
+  })).filter((row) => row.policy_number && row.renewal_date);
 }
