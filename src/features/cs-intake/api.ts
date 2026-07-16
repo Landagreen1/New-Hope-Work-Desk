@@ -253,9 +253,8 @@ export async function saveDraft(
 
   if (drivers.length) {
     const { error } = await supabase.from('cs_intake_drivers').insert(
-      drivers.map((driver, index) => ({
-        ...driver,
-        id: undefined,
+      drivers.map(({ id: _id, submission_id: _sid, ...rest }, index) => ({
+        ...rest,
         submission_id: id,
         position: index + 1,
       })),
@@ -265,9 +264,8 @@ export async function saveDraft(
 
   if (vehicles.length) {
     const { error } = await supabase.from('cs_intake_vehicles').insert(
-      vehicles.map((vehicle, index) => ({
-        ...vehicle,
-        id: undefined,
+      vehicles.map(({ id: _id, submission_id: _sid, ...rest }, index) => ({
+        ...rest,
         submission_id: id,
         position: index + 1,
       })),
