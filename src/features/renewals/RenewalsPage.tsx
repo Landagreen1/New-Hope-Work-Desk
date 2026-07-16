@@ -476,13 +476,11 @@ function RenewalDrawer({
   profile,
   assignees,
   onChanged,
-  onClose,
 }: {
   record: RenewalRecord;
   profile: ProfileLite;
   assignees: RenewalAssignee[];
   onChanged: () => Promise<void>;
-  onClose: () => void;
 }) {
   const [contacts, setContacts] = useState<RenewalContact[]>([]);
   const [events, setEvents] = useState<RenewalEvent[]>([]);
@@ -1529,7 +1527,7 @@ export default function RenewalsPage({
       {(tab === 'import' || importOnly) && profile.role === 'manager' ? <ImportWizard assignees={assignees} onRefreshAssignees={refresh} onComplete={async () => { setNotice('Renewal data imported/updated. Closed records remained unchanged.'); await refresh(); }} /> : null}
 
       <Drawer open={Boolean(selected)} onClose={() => setSelectedId(null)}>
-        {selected ? <RenewalDrawer record={selected} profile={profile} assignees={assignees} onChanged={async () => { await refresh(); }} onClose={() => setSelectedId(null)} /> : null}
+        {selected ? <RenewalDrawer record={selected} profile={profile} assignees={assignees} onChanged={async () => { await refresh(); }} /> : null}
       </Drawer>
     </ModuleShell>
   );
