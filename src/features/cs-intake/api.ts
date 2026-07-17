@@ -475,14 +475,14 @@ export async function getLinkedQuoteEvents(workItemId: string): Promise<LinkedQu
   const supabase = getSupabase();
   const { data: events, error } = await supabase
     .from('work_item_events')
-    .select('id, event_type, details, created_at, actor_id')
+    .select('id, event_type, details, created_at, actor_profile_id')
     .eq('source_work_item_id', workItemId)
     .order('created_at', { ascending: true });
   throwIfError(error);
   if (!events?.length) return [];
 
   // Resolve actor display names
-  const actorIds = [...new Set(events.map(e => e.actor_id).filter(Boolean))] as string[];
+  const actorIds = [...new Set(events.map(e => e.actor_profile_id).filter(Boolean))] as string[];
   let actorMap = new Map<string, string>();
   if (actorIds.length) {
     const { data: profiles, error: profileError } = await supabase
@@ -500,7 +500,7 @@ export async function getLinkedQuoteEvents(workItemId: string): Promise<LinkedQu
     event_type: e.event_type,
     details: e.details,
     created_at: e.created_at,
-    actor_name: actorMap.get(e.actor_id) ?? 'System',
+    actor_name: actorMap.get(e.actor_profile_id) ?? 'System',
   }));
 }
 
@@ -527,10 +527,10 @@ export async function deleteLinkedWorkItem(workItemId: string, reason: string): 
   const { error: eventError } = await supabase
     .from('work_item_events')
     .insert({
-      work_item_id: workItemId,
+      source_work_item_id: workItemId,
       event_type: 'cancelled_from_cs_queue',
       details: { reason },
-      actor_id: user.id,
+      actor_profile_id: user.id,
     });
   throwIfError(eventError);
 
