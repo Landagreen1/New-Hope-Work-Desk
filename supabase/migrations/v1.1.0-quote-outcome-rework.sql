@@ -11,7 +11,8 @@ alter table public.work_item_events
     event_type in (
       'created', 'assigned', 'accepted', 'reassigned', 'price_sent', 'sold',
       'not_sold', 'completed', 'cancelled', 'taken', 'activation', 'change',
-      'payment', 'outcome_change'
+      'payment', 'customer_service_handoff', 'created_from_cs_intake',
+      'ringcentral_intake_claim_completed', 'outcome_change'
     )
   );
 
