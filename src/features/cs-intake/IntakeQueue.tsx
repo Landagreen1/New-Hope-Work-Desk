@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Edit3, ExternalLink, Eye, FileText, History, RefreshCw, RotateCcw, Search, Trash2, UserCheck, X } from 'lucide-react';
+import { CheckCircle2, Edit3, ExternalLink, Eye, FileText, RefreshCw, RotateCcw, Search, Trash2, UserCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getSupabase, listActiveAgents } from '../nhwd-shared/client';
@@ -8,10 +8,8 @@ import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { csIntakeStatusTone, statusLabel, ui } from '../nhwd-shared/ui';
 import { subscribeToRotationChanges } from '../notifications/api';
-import type { IntakeHistoryEvent } from '../quotes/types';
 import IntakeEditForm from './IntakeEditForm';
 import IntakeForm from './IntakeForm';
-import IntakeHistory from './IntakeHistory';
 import QuoteActivityModal from './QuoteActivityModal';
 import {
   claimIntake,
@@ -19,7 +17,6 @@ import {
   convertIntake,
   deleteCustomerIntake,
   deleteLinkedWorkItem,
-  getCustomerIntakeHistory,
   getIntake,
   getLinkedQuoteStatuses,
   listAllIntakes,
@@ -39,7 +36,7 @@ type LoadedIntake = {
   vehicles: CsIntakeVehicle[];
 };
 
-type ModalMode = 'view' | 'edit' | 'history';
+type ModalMode = 'view' | 'edit';
 
 // Source display helper
 function sourceLabel(row: CsIntakeSubmission, dealers: { id: string; name: string }[]): string {
@@ -87,7 +84,6 @@ export default function IntakeQueue({
   const [rows, setRows] = useState<CsIntakeSubmission[]>([]);
   const [selected, setSelected] = useState<LoadedIntake | null>(null);
   const [modalMode, setModalMode] = useState<ModalMode>('view');
-  const [historyEvents, setHistoryEvents] = useState<IntakeHistoryEvent[]>([]);
   const [search, setSearch] = useState('');
   const [coverage, setCoverage] = useState('all');
   const [priority, setPriority] = useState('all');
@@ -110,7 +106,7 @@ export default function IntakeQueue({
     try {
       setError(null);
       const [queueRows, activeAgents] = await Promise.all([
-        profile.role === 'manager' ? listAllIntakes() : listQueue(),
+        listAllIntakes(),
         listActiveAgents(),
       ]);
       setRows(queueRows);
@@ -132,7 +128,7 @@ export default function IntakeQueue({
     } finally {
       setLoading(false);
     }
-  }, [profile.role]);
+  }, []);
 
   // Load current rotation state on mount
   useEffect(() => {
@@ -316,20 +312,6 @@ export default function IntakeQueue({
     }, 'Linked quote cancelled successfully.');
   }
 
-  async function handleViewHistory(row: CsIntakeSubmission) {
-    try {
-      const events = await getCustomerIntakeHistory(row.id);
-      setHistoryEvents(events);
-      const detail = await getIntake(row.id);
-      if (detail) {
-        setSelected({ submission: detail.submission, drivers: detail.drivers, vehicles: detail.vehicles });
-        setModalMode('history');
-      }
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to load intake history.');
-    }
-  }
-
   async function handleEdit(row: CsIntakeSubmission) {
     try {
       const detail = await getIntake(row.id);
@@ -353,7 +335,6 @@ export default function IntakeQueue({
   function closeModal() {
     setSelected(null);
     setModalMode('view');
-    setHistoryEvents([]);
   }
 
   // Determine if a row is RingCentral-sourced
@@ -365,10 +346,6 @@ export default function IntakeQueue({
 
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9] font-black text-slate-500">Loading Sales Intake Queue…</div>;
   if (!['agent', 'manager'].includes(profile.role)) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9]"><div className={ui.error}>The Sales Intake Queue is available to Agents and Managers.</div></div>;
-
-  const submittedCount = rows.filter((row) => row.status === 'submitted').length;
-  const claimedCount = rows.filter((row) => row.status === 'claimed').length;
-  const mine = rows.filter((row) => row.claimed_by === profile.id).length;
 
   return (
     <ModuleShell
@@ -401,32 +378,24 @@ export default function IntakeQueue({
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <div className={ui.stat}><p className={ui.statLabel}>Unclaimed</p><p className={ui.statValue}>{submittedCount}</p><p className="mt-1 text-xs font-semibold text-slate-500">Available to eligible Sales Agents</p></div>
-        <div className={ui.stat}><p className={ui.statLabel}>Claimed</p><p className={ui.statValue}>{claimedCount}</p><p className="mt-1 text-xs font-semibold text-slate-500">Waiting to convert into Quotes Database</p></div>
-        <div className={ui.stat}><p className={ui.statLabel}>Assigned to Me</p><p className={ui.statValue}>{mine}</p><p className="mt-1 text-xs font-semibold text-slate-500">You become Sales owner after conversion</p></div>
-      </section>
-
       <section className={`${ui.card} mt-5 overflow-hidden`}>
         <div className={ui.cardHeader}>
           <div><p className={ui.sectionTitle}>Shared Queue</p><h2 className="mt-1 text-xl font-black">Customer Service submissions</h2><p className="mt-1 text-sm font-semibold text-slate-500">Claiming is atomic—only one Agent can win when multiple people click at the same time.</p></div>
           <button type="button" className={ui.btnSecondary} onClick={() => void refresh()}><RefreshCw className="h-4 w-4" />Refresh</button>
         </div>
-        <div className={`grid gap-3 border-b border-slate-100 p-4 ${isManager ? 'md:grid-cols-[1fr_180px_180px_180px]' : 'md:grid-cols-[1fr_210px_180px]'}`}>
+        <div className={`grid gap-3 border-b border-slate-100 p-4 md:grid-cols-[1fr_180px_180px_180px]`}>
           <label className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm font-semibold outline-none focus:border-[#7890bc]" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer, business, phone or DOT" /></label>
           <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={coverage} onChange={(event) => setCoverage(event.target.value)}><option value="all">All coverage types</option><option value="personal_auto">Personal Auto</option><option value="commercial_auto">Commercial Auto</option></select>
-          {isManager && (
-            <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">All statuses</option>
-              <option value="draft">Draft</option>
-              <option value="submitted">Submitted</option>
-              <option value="claimed">Claimed</option>
-              <option value="converted">Converted</option>
-              <option value="returned">Returned</option>
-              <option value="rejected">Rejected</option>
-              <option value="deleted">Deleted</option>
-            </select>
-          )}
+          <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="submitted">Submitted</option>
+            <option value="claimed">Claimed</option>
+            <option value="converted">Converted</option>
+            <option value="returned">Returned</option>
+            {isManager && <option value="draft">Draft</option>}
+            {isManager && <option value="rejected">Rejected</option>}
+            {isManager && <option value="deleted">Deleted</option>}
+          </select>
           <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={priority} onChange={(event) => setPriority(event.target.value)}><option value="all">All priorities</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option></select>
         </div>
         <div className="overflow-x-auto">
@@ -438,9 +407,7 @@ export default function IntakeQueue({
                 <th className={ui.th}>Submitted</th>
                 <th className={ui.th}>Status</th>
                 <th className={ui.th}>Quote Status</th>
-                {isManager && <th className={ui.th}>Creator</th>}
-                <th className={ui.th}>RC Agent</th>
-                {isManager && <th className={ui.th}>Linked Quote</th>}
+                <th className={ui.th}>Agent</th>
                 <th className={ui.th}>Actions</th>
               </tr>
             </thead>
@@ -507,56 +474,28 @@ export default function IntakeQueue({
                       )}
                     </td>
 
-                    {/* Creator (Manager only) */}
-                    {isManager && (
-                      <td className={ui.td}>
-                        <p className="text-xs font-bold text-slate-600">{profileName(agents, row.created_by)}</p>
-                      </td>
-                    )}
-
-                    {/* Current RC Agent (turn holder for unclaimed RC intakes) */}
+                    {/* Agent (who claimed or is assigned) */}
                     <td className={ui.td}>
-                      {isRc && row.status === 'submitted' ? (
+                      {row.claimed_by ? (
+                        <p className="font-bold text-slate-700">{profileName(agents, row.claimed_by)}</p>
+                      ) : isRc && row.status === 'submitted' ? (
                         <div>
                           <p className="font-bold text-slate-700">{rcTurnHolderName}</p>
-                          {!canClaimRc && (
-                            <p className="mt-0.5 text-xs text-amber-600 font-semibold">Their turn</p>
-                          )}
                           {isCurrentRcAgent && (
                             <p className="mt-0.5 text-xs text-emerald-600 font-semibold">Your turn</p>
                           )}
                         </div>
-                      ) : row.claimed_by ? (
-                        <p className="font-bold text-slate-700">{profileName(agents, row.claimed_by)}</p>
                       ) : (
-                        <p className="text-xs text-slate-400">—</p>
+                        <p className="text-xs text-slate-400">Unassigned</p>
                       )}
                     </td>
-
-                    {/* Linked Quote (Manager only) - Req 24.6 */}
-                    {isManager && (
-                      <td className={ui.td}>
-                        {hasLinkedQuote ? (
-                          <button
-                            type="button"
-                            className="text-xs font-bold text-blue-600 underline hover:text-blue-800"
-                            disabled={isDeleted}
-                            onClick={() => handleOpenLinkedQuote(row)}
-                          >
-                            Open Quote
-                          </button>
-                        ) : (
-                          <p className="text-xs text-slate-400">—</p>
-                        )}
-                      </td>
-                    )}
 
                     {/* Actions */}
                     <td className={ui.td}>
                       <div className="flex min-w-[260px] flex-wrap gap-2">
                         <button type="button" className={ui.btnSecondary} onClick={() => void show(row)}><Eye className="h-4 w-4" />View</button>
 
-                        {/* Quote Activity: visible for converted rows with linked work item */}
+                        {/* Log: visible for converted rows with linked work item — all roles */}
                         {hasLinkedQuote && row.work_item_id ? (
                           <button
                             type="button"
@@ -566,11 +505,11 @@ export default function IntakeQueue({
                               setIsQuoteActivityOpen(true);
                             }}
                           >
-                            <FileText className="h-4 w-4" />Quote Activity
+                            <FileText className="h-4 w-4" />Log
                           </button>
                         ) : null}
 
-                        {/* Manager: Delete Quote (only for converted rows with linked work item) */}
+                        {/* Delete Quote: Manager only */}
                         {isManager && hasLinkedQuote && row.work_item_id ? (
                           <button
                             type="button"
@@ -582,17 +521,13 @@ export default function IntakeQueue({
                           </button>
                         ) : null}
 
-                        {/* Manager: Edit (disabled for deleted intakes per Req 24.2) */}
-                        {isManager && !isDeleted ? (
+                        {/* Edit: Manager can always edit; agent who created can edit if not yet assigned to another agent */}
+                        {!isDeleted && (
+                          isManager
+                          || (profile.role === 'agent' && row.created_by === profile.id && (!row.claimed_by || row.claimed_by === profile.id))
+                        ) ? (
                           <button type="button" className={ui.btnSecondary} disabled={busyId === row.id} onClick={() => void handleEdit(row)}>
                             <Edit3 className="h-4 w-4" />Edit
-                          </button>
-                        ) : null}
-
-                        {/* Manager: View History (always available per Req 24.2) */}
-                        {isManager ? (
-                          <button type="button" className={ui.btnSecondary} onClick={() => void handleViewHistory(row)}>
-                            <History className="h-4 w-4" />History
                           </button>
                         ) : null}
 
@@ -609,7 +544,7 @@ export default function IntakeQueue({
                         ) : null}
 
                         {/* RingCentral-sourced unclaimed but NOT current agent: show disabled with tooltip */}
-                        {isRc && row.status === 'submitted' && !canClaimRc ? (
+                        {isRc && row.status === 'submitted' && !canClaimRc && !isManager ? (
                           <button
                             type="button"
                             className={ui.btnPrimary}
@@ -643,7 +578,7 @@ export default function IntakeQueue({
                           </button>
                         ) : null}
 
-                        {/* Manager: Assign (disabled for deleted or already-linked intakes per Req 24.2, 24.6) */}
+                        {/* Manager: Assign */}
                         {canAssign ? (
                           <select className="rounded-xl border border-[#c9d5e9] bg-white px-3 py-2 text-xs font-black text-[#223f7a]" defaultValue="" onChange={(event) => void assign(row, event.target.value)}>
                             <option value="" disabled>Assign to…</option>
@@ -656,14 +591,14 @@ export default function IntakeQueue({
                           <button type="button" className={ui.btnDanger} disabled={busyId === row.id} onClick={() => void requestReturn(row)}>Return</button>
                         ) : null}
 
-                        {/* Manager: Delete (disabled for deleted intakes per Req 24.2) */}
+                        {/* Manager: Delete intake */}
                         {isManager && !isDeleted ? (
                           <button type="button" className={ui.btnDanger} disabled={busyId === row.id} onClick={() => void handleDelete(row)}>
                             <Trash2 className="h-4 w-4" />Delete
                           </button>
                         ) : null}
 
-                        {/* Manager: Restore (only for deleted intakes per Req 24.2) */}
+                        {/* Manager: Restore (only for deleted intakes) */}
                         {isManager && isDeleted ? (
                           <button type="button" className={ui.btnSecondary} disabled={busyId === row.id} onClick={() => void handleRestore(row)}>
                             <RotateCcw className="h-4 w-4" />Restore
@@ -719,14 +654,6 @@ export default function IntakeQueue({
                 onSave={() => { closeModal(); void refresh(); }}
                 onCancel={closeModal}
               />
-            )}
-
-            {/* History mode: IntakeHistory timeline */}
-            {modalMode === 'history' && (
-              <div>
-                <h3 className="mb-4 text-lg font-black text-slate-900">Intake History</h3>
-                <IntakeHistory intakeId={selected.submission.id} events={historyEvents} />
-              </div>
             )}
           </div>
         ) : null}

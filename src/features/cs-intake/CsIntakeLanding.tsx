@@ -1,6 +1,6 @@
 'use client';
 
-import { ClipboardList, Eye, FilePlus2, Pencil, RefreshCw, Search, Send, X } from 'lucide-react';
+import { ClipboardList, Eye, FileText, FilePlus2, Pencil, RefreshCw, Search, Send, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -9,6 +9,7 @@ import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { csIntakeStatusTone, statusLabel, ui } from '../nhwd-shared/ui';
 import IntakeForm from './IntakeForm';
+import QuoteActivityModal from './QuoteActivityModal';
 import {
   getIntake,
   listMyIntakes,
@@ -69,6 +70,8 @@ export default function CsIntakeLanding({
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoOpened, setAutoOpened] = useState(false);
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [logWorkItemId, setLogWorkItemId] = useState<string | null>(null);
+  const [isLogOpen, setIsLogOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -325,6 +328,18 @@ export default function CsIntakeLanding({
                           <Eye className="h-3.5 w-3.5" />View
                         </button>
 
+                        {/* Log action — available when intake has a linked quote */}
+                        {row.work_item_id && row.status === 'converted' ? (
+                          <button
+                            type="button"
+                            className={ui.btnSecondary}
+                            onClick={() => { setLogWorkItemId(row.work_item_id); setIsLogOpen(true); }}
+                            title="View quote log"
+                          >
+                            <FileText className="h-3.5 w-3.5" />Log
+                          </button>
+                        ) : null}
+
                         {/* Edit action — Draft, Submitted, Waiting statuses */}
                         {isEditable && (
                           <button
@@ -388,6 +403,12 @@ export default function CsIntakeLanding({
           />
         ) : null}
       </IntakeModal>
+
+      <QuoteActivityModal
+        workItemId={logWorkItemId}
+        isOpen={isLogOpen}
+        onClose={() => { setIsLogOpen(false); setLogWorkItemId(null); }}
+      />
     </ModuleShell>
   );
 }
