@@ -391,8 +391,10 @@ begin
     v_me.ringcentral_position
   );
 
+  -- If no other eligible agent is found, wrap back to the same agent.
+  -- This is consistent with the existing queue rules per the deploy guide.
   if v_next is null then
-    raise exception 'No eligible RingCentral agent is available.';
+    v_next := v_me.id;
   end if;
 
   update public.rotation_state
