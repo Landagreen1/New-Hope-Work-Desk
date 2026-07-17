@@ -88,6 +88,7 @@ export default function IntakeQueue({
   const [coverage, setCoverage] = useState('all');
   const [priority, setPriority] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateRange, setDateRange] = useState<'today' | 'week' | 'all'>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -205,7 +206,19 @@ export default function IntakeQueue({
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Sunday
+
     return rows.filter((row) => {
+      // Date range filter
+      if (dateRange !== 'all') {
+        const rowDate = new Date(row.submitted_at || row.created_at);
+        if (dateRange === 'today' && rowDate < startOfToday) return false;
+        if (dateRange === 'week' && rowDate < startOfWeek) return false;
+      }
+
       const matchesSearch = !needle || [row.insured_first_name, row.insured_last_name, row.business_name, row.insured_phone_primary, row.dot_number].some((value) => value?.toLowerCase().includes(needle));
       const matchesCoverage = coverage === 'all'
         || (coverage === 'personal_auto' && ['auto', 'personal_auto'].includes(row.line_of_business))
@@ -213,7 +226,7 @@ export default function IntakeQueue({
       const matchesStatus = statusFilter === 'all' || row.status === statusFilter;
       return matchesSearch && matchesCoverage && matchesStatus && (priority === 'all' || row.priority === priority);
     });
-  }, [coverage, priority, rows, search, statusFilter]);
+  }, [coverage, dateRange, priority, rows, search, statusFilter]);
 
   async function show(row: CsIntakeSubmission) {
     try {
@@ -382,18 +395,20 @@ export default function IntakeQueue({
           <div><p className={ui.sectionTitle}>Shared Queue</p><h2 className="mt-1 text-xl font-black">Customer Service submissions</h2><p className="mt-1 text-sm font-semibold text-slate-500">Claiming is atomic—only one Agent can win when multiple people click at the same time.</p></div>
           <button type="button" className={ui.btnSecondary} onClick={() => void refresh()}><RefreshCw className="h-4 w-4" />Refresh</button>
         </div>
-        <div className={`grid gap-3 border-b border-slate-100 p-4 md:grid-cols-[1fr_180px_180px_180px]`}>
+        <div className={`grid gap-3 border-b border-slate-100 p-4 md:grid-cols-[1fr_160px_160px_160px_160px]`}>
           <label className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm font-semibold outline-none focus:border-[#7890bc]" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer, business, phone or DOT" /></label>
-          <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={coverage} onChange={(event) => setCoverage(event.target.value)}><option value="all">All coverage types</option><option value="personal_auto">Personal Auto</option><option value="commercial_auto">Commercial Auto</option></select>
+          <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={dateRange} onChange={(event) => setDateRange(event.target.value as 'today' | 'week' | 'all')}>
+            <option value="all">All time</option>
+            <option value="today">Today</option>
+            <option value="week">This week</option>
+          </select>
+          <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={coverage} onChange={(event) => setCoverage(event.target.value)}><option value="all">All coverage</option><option value="personal_auto">Personal Auto</option><option value="commercial_auto">Commercial Auto</option></select>
           <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value="all">All statuses</option>
             <option value="submitted">Submitted</option>
             <option value="claimed">Claimed</option>
             <option value="converted">Converted</option>
             <option value="returned">Returned</option>
-            {isManager && <option value="draft">Draft</option>}
-            {isManager && <option value="rejected">Rejected</option>}
-            {isManager && <option value="deleted">Deleted</option>}
           </select>
           <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={priority} onChange={(event) => setPriority(event.target.value)}><option value="all">All priorities</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option></select>
         </div>

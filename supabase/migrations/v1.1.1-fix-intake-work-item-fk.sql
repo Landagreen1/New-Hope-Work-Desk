@@ -13,8 +13,20 @@
 --   2. Update manager_delete_quote to also reset the intake status back to
 --      'claimed' (preserving the agent assignment) so the CS queue reflects
 --      that the converted quote was removed.
+--   3. Disable RLS on cs_intake_submissions so all authenticated users see all rows.
 
 begin;
+
+-- -----------------------------------------------------------------------------
+-- 0. Ensure RLS is disabled on cs_intake_submissions.
+--    All agents and managers should see the full historical queue.
+-- -----------------------------------------------------------------------------
+
+alter table public.cs_intake_submissions disable row level security;
+drop policy if exists "cs_intake_select_all" on public.cs_intake_submissions;
+drop policy if exists "cs_intake_insert" on public.cs_intake_submissions;
+drop policy if exists "cs_intake_update" on public.cs_intake_submissions;
+drop policy if exists "cs_intake_delete" on public.cs_intake_submissions;
 
 -- -----------------------------------------------------------------------------
 -- 1. ALTER the FK constraint to ON DELETE SET NULL.

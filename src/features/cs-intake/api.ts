@@ -179,7 +179,7 @@ export async function listAllIntakes(): Promise<CsIntakeSubmission[]> {
     .from('cs_intake_submissions')
     .select(SUBMISSION_COLS)
     .order('updated_at', { ascending: false })
-    .limit(500);
+    .limit(2000);
   throwIfError(error);
   return (data as CsIntakeSubmission[]) ?? [];
 }
