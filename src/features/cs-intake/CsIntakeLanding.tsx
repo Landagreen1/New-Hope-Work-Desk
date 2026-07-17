@@ -279,7 +279,7 @@ export default function CsIntakeLanding({
                 const isEditable = EDITABLE_STATUSES.has(row.status);
                 const isSubmittable = SUBMITTABLE_STATUSES.has(row.status);
                 const assignedAgent = row.claimed_by ? 'Assigned' : 'Unassigned';
-                const linkedQuote = (row as Record<string, unknown>).converted_quote_id as string | null;
+                const linkedQuote = (row as unknown as Record<string, unknown>).converted_quote_id as string | null;
 
                 return (
                   <tr key={row.id} className="hover:bg-[#f8faff]">
