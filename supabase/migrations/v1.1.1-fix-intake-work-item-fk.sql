@@ -29,6 +29,13 @@ drop policy if exists "cs_intake_update" on public.cs_intake_submissions;
 drop policy if exists "cs_intake_delete" on public.cs_intake_submissions;
 
 -- -----------------------------------------------------------------------------
+-- 0b. Add insured_middle_name column for the intake form.
+-- -----------------------------------------------------------------------------
+
+alter table public.cs_intake_submissions
+  add column if not exists insured_middle_name varchar(75);
+
+-- -----------------------------------------------------------------------------
 -- 1. ALTER the FK constraint to ON DELETE SET NULL.
 --    This fixes manager_delete_quote AND the quote lifecycle functions
 --    (send_quote_to_pending_pricing, finalize_my_active_quote) which also
