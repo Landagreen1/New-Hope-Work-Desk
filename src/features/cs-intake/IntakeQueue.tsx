@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Edit3, ExternalLink, Eye, History, RefreshCw, RotateCcw, Search, Trash2, UserCheck, X } from 'lucide-react';
+import { CheckCircle2, Edit3, ExternalLink, Eye, FileText, History, RefreshCw, RotateCcw, Search, Trash2, UserCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getSupabase, listActiveAgents } from '../nhwd-shared/client';
@@ -12,13 +12,16 @@ import type { IntakeHistoryEvent } from '../quotes/types';
 import IntakeEditForm from './IntakeEditForm';
 import IntakeForm from './IntakeForm';
 import IntakeHistory from './IntakeHistory';
+import QuoteActivityModal from './QuoteActivityModal';
 import {
   claimIntake,
   claimRingcentralQueueIntake,
   convertIntake,
   deleteCustomerIntake,
+  deleteLinkedWorkItem,
   getCustomerIntakeHistory,
   getIntake,
+  getLinkedQuoteStatuses,
   listAllIntakes,
   listQueue,
   managerAssignIntake,
@@ -47,6 +50,18 @@ function sourceLabel(row: CsIntakeSubmission, dealers: { id: string; name: strin
   // Fallback to line_of_business / generic source info
   if (row.business_name) return 'Commercial';
   return 'Direct';
+}
+
+function quoteStatusTone(status: string | undefined): string {
+  switch (status) {
+    case 'active': return ui.badgeTone.info;
+    case 'price_sent': return ui.badgeTone.violet;
+    case 'sold': return ui.badgeTone.success;
+    case 'not_sold': return ui.badgeTone.danger;
+    case 'completed': return ui.badgeTone.success;
+    case 'cancelled': return ui.badgeTone.danger;
+    default: return ui.badgeTone.neutral;
+  }
 }
 
 function QueueModal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
@@ -85,6 +100,11 @@ export default function IntakeQueue({
 
   // RingCentral rotation state
   const [rcTurnHolderId, setRcTurnHolderId] = useState<string | null>(null);
+  const [quoteStatuses, setQuoteStatuses] = useState<Map<string, string>>(new Map());
+
+  // Quote Activity Modal state
+  const [selectedQuoteWorkItemId, setSelectedQuoteWorkItemId] = useState<string | null>(null);
+  const [isQuoteActivityOpen, setIsQuoteActivityOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -96,6 +116,17 @@ export default function IntakeQueue({
       setRows(queueRows);
       setAgents(activeAgents);
       setLastUpdated(new Date());
+
+      // Fetch quote statuses for converted rows
+      const convertedWorkItemIds = queueRows
+        .filter(r => r.status === 'converted' && r.work_item_id)
+        .map(r => r.work_item_id!);
+      if (convertedWorkItemIds.length) {
+        const statuses = await getLinkedQuoteStatuses(convertedWorkItemIds);
+        setQuoteStatuses(statuses);
+      } else {
+        setQuoteStatuses(new Map());
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to load the Sales Intake Queue.');
     } finally {
@@ -126,12 +157,17 @@ export default function IntakeQueue({
   useEffect(() => { void refresh(); }, [refresh]);
 
   // Real-time: queue updates
+  // Task 6.4: The refresh() function atomically fetches both intake data and quote statuses
+  // for converted rows, so any subscription that triggers refresh() will update quote visibility.
+  // We also subscribe to work_items changes so quote status updates (e.g., active → price_sent)
+  // from the Sales side are reflected promptly without waiting for the 60s polling interval.
   useEffect(() => {
     const supabase = getSupabase();
     const channel = supabase
       .channel('sales-intake-queue-v1')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cs_intake_submissions' }, () => void refresh())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_intakes' }, () => void refresh())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'work_items' }, () => void refresh())
       .subscribe();
     const interval = window.setInterval(() => void refresh(), 60_000);
     const onFocus = () => void refresh();
@@ -268,6 +304,18 @@ export default function IntakeQueue({
     }, 'Intake restored to its previous status.');
   }
 
+  async function handleDeleteQuote(row: CsIntakeSubmission) {
+    if (!row.work_item_id) return;
+    const reason = window.prompt('Provide a reason for deleting this linked quote (min 5 characters):');
+    if (!reason?.trim() || reason.trim().length < 5) {
+      if (reason !== null) setError('Delete reason must be at least 5 characters.');
+      return;
+    }
+    await action(row.id, async () => {
+      await deleteLinkedWorkItem(row.work_item_id!, reason.trim());
+    }, 'Linked quote cancelled successfully.');
+  }
+
   async function handleViewHistory(row: CsIntakeSubmission) {
     try {
       const events = await getCustomerIntakeHistory(row.id);
@@ -389,6 +437,7 @@ export default function IntakeQueue({
                 <th className={ui.th}>Customer Name</th>
                 <th className={ui.th}>Submitted</th>
                 <th className={ui.th}>Status</th>
+                <th className={ui.th}>Quote Status</th>
                 {isManager && <th className={ui.th}>Creator</th>}
                 <th className={ui.th}>RC Agent</th>
                 {isManager && <th className={ui.th}>Linked Quote</th>}
@@ -447,6 +496,17 @@ export default function IntakeQueue({
                       </div>
                     </td>
 
+                    {/* Quote Status (only for converted rows with linked work item) */}
+                    <td className={ui.td}>
+                      {hasLinkedQuote && row.work_item_id ? (
+                        <span className={`${ui.badge} ${quoteStatusTone(quoteStatuses.get(row.work_item_id))}`}>
+                          {statusLabel(quoteStatuses.get(row.work_item_id) ?? 'unknown')}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+
                     {/* Creator (Manager only) */}
                     {isManager && (
                       <td className={ui.td}>
@@ -495,6 +555,32 @@ export default function IntakeQueue({
                     <td className={ui.td}>
                       <div className="flex min-w-[260px] flex-wrap gap-2">
                         <button type="button" className={ui.btnSecondary} onClick={() => void show(row)}><Eye className="h-4 w-4" />View</button>
+
+                        {/* Quote Activity: visible for converted rows with linked work item */}
+                        {hasLinkedQuote && row.work_item_id ? (
+                          <button
+                            type="button"
+                            className={ui.btnSecondary}
+                            onClick={() => {
+                              setSelectedQuoteWorkItemId(row.work_item_id);
+                              setIsQuoteActivityOpen(true);
+                            }}
+                          >
+                            <FileText className="h-4 w-4" />Quote Activity
+                          </button>
+                        ) : null}
+
+                        {/* Manager: Delete Quote (only for converted rows with linked work item) */}
+                        {isManager && hasLinkedQuote && row.work_item_id ? (
+                          <button
+                            type="button"
+                            className={ui.btnDanger}
+                            disabled={busyId === row.id}
+                            onClick={() => void handleDeleteQuote(row)}
+                          >
+                            <Trash2 className="h-4 w-4" />Delete Quote
+                          </button>
+                        ) : null}
 
                         {/* Manager: Edit (disabled for deleted intakes per Req 24.2) */}
                         {isManager && !isDeleted ? (
@@ -645,6 +731,15 @@ export default function IntakeQueue({
           </div>
         ) : null}
       </QueueModal>
+
+      <QuoteActivityModal
+        workItemId={selectedQuoteWorkItemId}
+        isOpen={isQuoteActivityOpen}
+        onClose={() => {
+          setIsQuoteActivityOpen(false);
+          setSelectedQuoteWorkItemId(null);
+        }}
+      />
     </ModuleShell>
   );
 }

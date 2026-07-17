@@ -1,0 +1,320 @@
+{
+  "pbtResults": {
+    "1. Write bug condition exploration test": {
+      "status": "passed",
+      "failingExample": "All 7 property tests FAILED as expected, confirming the bug exists:\n\n1. IntakeQueue renders a quote status badge for converted intake rows → FAILED\n   Counterexample: [{\"id\":\"00000000-0000-1000-8000-000000000000\",\"status\":\"converted\",\"work_item_id\":\"00000000-0000-1000-8000-000000000000\",\"converted_at\":\"2024-01-01T00:00:00.000Z\",\"insured_first_name\":\"!\",\"insured_last_name\":\"!\"}]\n\n2. IntakeQueue renders a \"Quote Activity\" button for converted intake rows → FAILED\n   Counterexample: [{\"id\":\"00000000-0000-1000-8000-000000000000\",\"status\":\"converted\",\"work_item_id\":\"00000000-0000-1000-8000-000000000000\",\"converted_at\":\"2024-01-01T00:00:00.000Z\",\"insured_first_name\":\"!\",\"insured_last_name\":\"!\"}]\n\n3. QuoteHistory renders structured intake data sections for created_from_cs_intake events → FAILED\n   Counterexample: [{\"insured_first_name\":\" \",\"insured_last_name\":\" \",\"insured_phone_primary\":\"          \",\"insured_email\":\"a@a.aa\",\"drivers\":[{\"first_name\":\" \",\"last_name\":\" \",\"license_number\":\"     \"}],\"vehicles\":[{\"year\":2000,\"make\":\"Toyota\",\"model\":\"  \",\"vin\":\"                 \"}],\"csr_notes\":null,\"desired_coverage\":\"liability_only\"}]\n\n4. IntakeQueue renders a \"Delete Quote\" button for managers on converted intake rows → FAILED\n   Counterexample: [{\"id\":\"00000000-0000-1000-8000-000000000000\",\"status\":\"converted\",\"work_item_id\":\"00000000-0000-1000-8000-000000000000\",\"converted_at\":\"2024-01-01T00:00:00.000Z\",\"insured_first_name\":\"!\",\"insured_last_name\":\"!\"}]\n\n5. api.ts exports getLinkedQuoteStatuses → FAILED (function doesn't exist)\n   Counterexample: [\"00000000-0000-1000-8000-000000000000\"]\n\n6. api.ts exports getLinkedQuoteEvents → FAILED (function doesn't exist)\n   Counterexample: [\"00000000-0000-1000-8000-000000000000\"]\n\n7. api.ts exports deleteLinkedWorkItem → FAILED (function doesn't exist)\n   Counterexample: [\"00000000-0000-1000-8000-000000000000\"]\n\nRoot cause confirmed: IntakeQueue.tsx has no quote visibility logic for converted rows, QuoteHistory.tsx has no handler for created_from_cs_intake events with structured rendering, and api.ts is missing the three required API functions.",
+      "lastRunTimestamp": 1784300264140
+    },
+    "2. Write preservation property tests (BEFORE implementing fix)": {
+      "status": "passed",
+      "lastRunTimestamp": 1784300494204
+    },
+    "8.1 Verify bug condition exploration test now passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1784303371907
+    },
+    "8.2 Verify preservation tests still pass": {
+      "status": "passed",
+      "lastRunTimestamp": 1784303854308
+    }
+  },
+  "executionHistory": {
+    "1. Write bug condition exploration test": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299779683
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299819325
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784300281803
+      }
+    ],
+    "2. Write preservation property tests (BEFORE implementing fix)": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299779801
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784300285266
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784300509333
+      }
+    ],
+    "3.1 Add `getLinkedQuoteStatuses` batch function to `src/features/cs-intake/api.ts`": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299779871
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784300517155
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784300812151
+      }
+    ],
+    "3.2 Add `getLinkedQuoteEvents` function to `src/features/cs-intake/api.ts`": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299779923
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784300818533
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301055783
+      }
+    ],
+    "3.3 Add `deleteLinkedWorkItem` function to `src/features/cs-intake/api.ts`": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299779982
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301059142
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301116906
+      }
+    ],
+    "4.1 Create `src/features/cs-intake/IntakeDataDisplay.tsx`": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299780062
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301121003
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301295318
+      }
+    ],
+    "5.1 Create `src/features/cs-intake/QuoteActivityModal.tsx`": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299780106
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301298619
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301477468
+      }
+    ],
+    "6.1 Add quote status column to converted intake rows": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299780154
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301485430
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301642125
+      }
+    ],
+    "6.2 Add \"Quote Activity\" button for converted rows": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299780198
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301645708
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301898912
+      }
+    ],
+    "6.3 Add \"Delete Quote\" button for managers on converted rows": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299780251
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301902739
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784302427285
+      }
+    ],
+    "6.4 Integrate quote status refresh with existing real-time subscription": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299780453
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784302430887
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303098721
+      }
+    ],
+    "7.1 Add `created_from_cs_intake` event renderer to `QuoteHistory.tsx`": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299780589
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303103453
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303290737
+      }
+    ],
+    "8.1 Verify bug condition exploration test now passes": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299780685
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303299699
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303382054
+      }
+    ],
+    "8.2 Verify preservation tests still pass": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299780772
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303385632
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303866004
+      }
+    ],
+    "9. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784299780937
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303869850
+      },
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303919684
+      }
+    ],
+    "3. Implement API layer for quote visibility": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301116955
+      }
+    ],
+    "4. Create `IntakeDataDisplay` component": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301295365
+      }
+    ],
+    "5. Create `QuoteActivityModal` component": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784301477521
+      }
+    ],
+    "6. Update `IntakeQueue.tsx` with quote visibility features": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303098847
+      }
+    ],
+    "7. Update `QuoteHistory.tsx` with intake data renderer": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303290806
+      }
+    ],
+    "8. Verify fixes": [
+      {
+        "executionId": "233f1c97-e5e5-4a48-b1c9-a32388861284",
+        "chatSessionId": "sess_b7b2c56c-f676-4326-b9e5-a5f7711bf2ef",
+        "timestamp": 1784303866089
+      }
+    ]
+  }
+}

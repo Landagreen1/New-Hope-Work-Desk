@@ -436,3 +436,103 @@ export async function restoreCustomerIntake(
 export function profileName(profiles: ProfileLite[], id: string | null): string {
   return profiles.find((profile) => profile.id === id)?.display_name ?? 'Unassigned';
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Quote Visibility (CS Intake → Work Desk link)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Batch-fetches the current status for a set of linked work items (quotes).
+ * Only call with work_item_ids from converted intakes to avoid unnecessary queries.
+ */
+export async function getLinkedQuoteStatuses(workItemIds: string[]): Promise<Map<string, string>> {
+  if (!workItemIds.length) return new Map();
+  const { data, error } = await getSupabase()
+    .from('work_items')
+    .select('id, status')
+    .in('id', workItemIds);
+  throwIfError(error);
+  const map = new Map<string, string>();
+  for (const row of (data ?? [])) {
+    map.set(row.id, row.status);
+  }
+  return map;
+}
+
+export interface LinkedQuoteEvent {
+  id: string;
+  event_type: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+  actor_name: string;
+}
+
+/**
+ * Fetches all work_item_events for a linked quote, ordered chronologically.
+ * Resolves actor display names from the profiles table.
+ */
+export async function getLinkedQuoteEvents(workItemId: string): Promise<LinkedQuoteEvent[]> {
+  const supabase = getSupabase();
+  const { data: events, error } = await supabase
+    .from('work_item_events')
+    .select('id, event_type, details, created_at, actor_id')
+    .eq('source_work_item_id', workItemId)
+    .order('created_at', { ascending: true });
+  throwIfError(error);
+  if (!events?.length) return [];
+
+  // Resolve actor display names
+  const actorIds = [...new Set(events.map(e => e.actor_id).filter(Boolean))] as string[];
+  let actorMap = new Map<string, string>();
+  if (actorIds.length) {
+    const { data: profiles, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .in('id', actorIds);
+    throwIfError(profileError);
+    for (const p of (profiles ?? [])) {
+      actorMap.set(p.id, p.display_name);
+    }
+  }
+
+  return events.map(e => ({
+    id: e.id,
+    event_type: e.event_type,
+    details: e.details,
+    created_at: e.created_at,
+    actor_name: actorMap.get(e.actor_id) ?? 'System',
+  }));
+}
+
+/**
+ * Soft-deletes a linked work item (quote) by marking it as cancelled.
+ * Creates an audit event in work_item_events with reason and actor.
+ * Manager-only: caller must verify role before invoking.
+ */
+export async function deleteLinkedWorkItem(workItemId: string, reason: string): Promise<{ success: boolean }> {
+  const supabase = getSupabase();
+
+  // Get current user for audit trail
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Authentication required.');
+
+  // Soft-delete: mark work item as cancelled
+  const { error: updateError } = await supabase
+    .from('work_items')
+    .update({ status: 'cancelled' })
+    .eq('id', workItemId);
+  throwIfError(updateError);
+
+  // Insert audit event
+  const { error: eventError } = await supabase
+    .from('work_item_events')
+    .insert({
+      work_item_id: workItemId,
+      event_type: 'cancelled_from_cs_queue',
+      details: { reason },
+      actor_id: user.id,
+    });
+  throwIfError(eventError);
+
+  return { success: true };
+}

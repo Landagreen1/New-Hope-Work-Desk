@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import type { QuoteHistoryEvent } from './types';
 import IntakeNoteLog from './IntakeNoteLog';
+import IntakeDataDisplay, { type IntakeDataDetails } from '../cs-intake/IntakeDataDisplay';
 
 interface QuoteHistoryProps {
   quoteId: string;
@@ -32,6 +33,7 @@ function eventLabel(eventType: string): string {
   const labels: Record<string, string> = {
     intake_note_log: 'Intake Note Log',
     intake_update: 'Intake Updated',
+    created_from_cs_intake: 'Created from CS Intake',
     quote_created: 'Quote Created',
     agent_started_quoting: 'Quoting Started',
     pricing_sent: 'Pricing Sent',
@@ -58,6 +60,8 @@ function eventIcon(eventType: string) {
     case 'intake_update':
       return <Edit3 className="h-4 w-4" />;
     case 'quote_created':
+      return <FileText className="h-4 w-4" />;
+    case 'created_from_cs_intake':
       return <FileText className="h-4 w-4" />;
     case 'agent_started_quoting':
       return <Clock className="h-4 w-4" />;
@@ -89,6 +93,8 @@ function eventIcon(eventType: string) {
 function eventColor(eventType: string): { dot: string; text: string } {
   switch (eventType) {
     case 'intake_note_log':
+      return { dot: 'bg-indigo-500 ring-indigo-100', text: 'text-indigo-700' };
+    case 'created_from_cs_intake':
       return { dot: 'bg-indigo-500 ring-indigo-100', text: 'text-indigo-700' };
     case 'intake_update':
       return { dot: 'bg-blue-500 ring-blue-100', text: 'text-blue-700' };
@@ -179,6 +185,7 @@ export default function QuoteHistory({ quoteId: _quoteId, events }: QuoteHistory
               event.event_type === 'intake_update' &&
               event.changed_fields &&
               event.changed_fields.length > 0;
+            const isCsIntakeEvent = event.event_type === 'created_from_cs_intake';
 
             return (
               <li key={event.id} className="relative pl-12">
@@ -213,11 +220,18 @@ export default function QuoteHistory({ quoteId: _quoteId, events }: QuoteHistory
                     </div>
                   )}
 
-                  {/* Details text (for non-note-log events) */}
-                  {!isNoteLog && event.details && (
+                  {/* Details text (for non-note-log, non-cs-intake events) */}
+                  {!isNoteLog && !isCsIntakeEvent && event.details && (
                     <p className="mt-1 text-sm font-semibold text-slate-600">
                       {event.details}
                     </p>
+                  )}
+
+                  {/* Structured intake data for created_from_cs_intake events */}
+                  {isCsIntakeEvent && event.details && (
+                    <div className="mt-3">
+                      <IntakeDataDisplay details={event.details as unknown as IntakeDataDetails} />
+                    </div>
                   )}
 
                   {/* Reason */}
