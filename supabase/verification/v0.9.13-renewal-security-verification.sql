@@ -469,7 +469,10 @@ checks(check_name, pass, expected, actual) as (
     'policy.legacy_absence.' || required.policy_name,
     policy.policyname is null,
     'absent',
-    coalesce(format('%I.%I.%I', policy.schemaname, policy.tablename, policy.policyname), 'absent')
+    case when policy.policyname is not null
+      then format('%I.%I.%I', policy.schemaname, policy.tablename, policy.policyname)
+      else 'absent'
+    end
   from legacy_policies required
   left join pg_policies policy
     on policy.schemaname = required.schema_name

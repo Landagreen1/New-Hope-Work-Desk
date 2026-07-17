@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+import { NotificationPanelWrapper } from "@/features/notifications/NotificationPanelWrapper";
+
 export const metadata: Metadata = {
   title: "New Hope Work Desk",
   description: "Internal sales rotation, backup service, workload, and performance desk.",
@@ -18,7 +20,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <NotificationPanelWrapper />
+        {children}
+      </body>
     </html>
   );
 }

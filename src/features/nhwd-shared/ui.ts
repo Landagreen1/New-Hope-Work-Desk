@@ -40,7 +40,7 @@ export const ui = {
 };
 
 export const csIntakeStatusTone: Record<string, string> = {
-  draft: 'neutral', submitted: 'info', claimed: 'progress', converted: 'success', returned: 'violet', rejected: 'danger',
+  draft: 'neutral', submitted: 'info', claimed: 'progress', converted: 'success', returned: 'violet', rejected: 'danger', deleted: 'danger',
 };
 
 export const renewalStatusTone: Record<string, string> = {

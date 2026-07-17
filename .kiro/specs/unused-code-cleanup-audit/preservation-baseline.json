@@ -1,0 +1,49 @@
+{
+  "formatVersion": 1,
+  "snapshotSha256": "3b04adef6f9fdf85a276159c6f1b3371af031bd97e6cf08c758a8c0f706800ab",
+  "recordedFrom": "unfixed repository",
+  "secretValuesCaptured": false,
+  "note": "Run preservation-oracle.mjs --print for the reviewable normalized contract snapshot; --compare requires an exact digest match.",
+  "validationBaseline": "post-Wave-1B approved diagnostic state; original unfixed validation is retained in preCleanupValidation",
+  "preCleanupValidation": {
+    "lint": {
+      "exitCode": 1,
+      "normalized": {
+        "errors": 18,
+        "warnings": 5,
+        "fingerprint": "c32476569a96e35b20f8aa885b170e8ff08f1f2d8d4f8a512e45d8d3b4aeeb2e"
+      }
+    },
+    "strictTypeScript": { "exitCode": 0 },
+    "unused": {
+      "exitCode": 1,
+      "diagnostics": [
+        { "file": "src/features/renewals/RenewalsPage.tsx", "line": 4, "column": 3, "code": "TS6133", "message": "'AlertTriangle' is declared but its value is never read." },
+        { "file": "src/features/renewals/RenewalsPage.tsx", "line": 8, "column": 3, "code": "TS6133", "message": "'CircleDollarSign' is declared but its value is never read." },
+        { "file": "src/features/renewals/RenewalsPage.tsx", "line": 13, "column": 3, "code": "TS6133", "message": "'FileClock' is declared but its value is never read." },
+        { "file": "src/features/renewals/RenewalsPage.tsx", "line": 479, "column": 3, "code": "TS6133", "message": "'onClose' is declared but its value is never read." }
+      ]
+    },
+    "build": { "exitCode": 0, "proxy": "Proxy (Middleware)" }
+  },
+  "validation": {
+    "lint": {
+      "exitCode": 1,
+      "normalized": {
+        "errors": 18,
+        "warnings": 5,
+        "fingerprint": "738c8e9eabe8bc2477f640bee2e885db41b73d781fe59bac1e33fa2963de91b5"
+      }
+    },
+    "strictTypeScript": { "exitCode": 0 },
+    "unused": {
+      "exitCode": 1,
+      "diagnostics": [
+        { "file": "src/features/renewals/RenewalsPage.tsx", "line": 4, "column": 3, "code": "TS6133", "message": "'AlertTriangle' is declared but its value is never read." },
+        { "file": "src/features/renewals/RenewalsPage.tsx", "line": 8, "column": 3, "code": "TS6133", "message": "'CircleDollarSign' is declared but its value is never read." },
+        { "file": "src/features/renewals/RenewalsPage.tsx", "line": 13, "column": 3, "code": "TS6133", "message": "'FileClock' is declared but its value is never read." }
+      ]
+    },
+    "build": { "exitCode": 0, "proxy": "Proxy (Middleware)" }
+  }
+}

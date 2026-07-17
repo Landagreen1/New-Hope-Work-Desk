@@ -7,3 +7,6 @@ export interface ProfileLite {
   role: AppRole;
   is_active: boolean;
 }
+
+// Re-export status types from quotes feature for shared access
+export type { IntakeStatus, QuoteStatus } from '../quotes/types';

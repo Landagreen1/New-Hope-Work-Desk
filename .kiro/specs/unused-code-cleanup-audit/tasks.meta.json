@@ -1,0 +1,163 @@
+{
+  "pbtResults": {
+    "2. Establish observation-first preservation property checks before cleanup": {
+      "status": "passed",
+      "lastRunTimestamp": 1784172211702
+    },
+    "1. Build the whole-system inventory and bug-condition evidence report": {
+      "status": "passed",
+      "failingExample": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\nactual: ['AlertTriangle', 'CircleDollarSign', 'FileClock', 'RenewalDrawer.onClose']\nexpected: []",
+      "lastRunTimestamp": 1784172981731
+    },
+    "3.6 Verify the bug-condition exploration property after each wave": {
+      "status": "failed",
+      "failingExample": "AssertionError [ERR_ASSERTION]: onClose should occur only in the binding and inline prop type\n0 !== 2\n    at retainedRenewalsCounterexamples (.../.kiro/specs/unused-code-cleanup-audit/audit-classifier.test.mjs:61:10)\nactual: 0\nexpected: 2\noperator: strictEqual",
+      "lastRunTimestamp": 1784175798772
+    },
+    "3.7 Verify preservation properties after each wave": {
+      "status": "passed",
+      "lastRunTimestamp": 1784175994975
+    }
+  },
+  "executionHistory": {
+    "2. Establish observation-first preservation property checks before cleanup": [
+      {
+        "executionId": "35ef7d76-5d63-40a6-922f-b581fe15cb14",
+        "chatSessionId": "sess_710c8ab6-5f0f-4b38-ad55-87fdb9692ae4",
+        "timestamp": 1784170212164
+      },
+      {
+        "executionId": "35ef7d76-5d63-40a6-922f-b581fe15cb14",
+        "chatSessionId": "sess_710c8ab6-5f0f-4b38-ad55-87fdb9692ae4",
+        "timestamp": 1784172497740
+      }
+    ],
+    "1. Build the whole-system inventory and bug-condition evidence report": [
+      {
+        "executionId": "f8d01899-435f-478b-a312-4b949d4542de",
+        "chatSessionId": "sess_25282ff6-c531-42e2-8040-8718f80b518e",
+        "timestamp": 1784172531580
+      },
+      {
+        "executionId": "f8d01899-435f-478b-a312-4b949d4542de",
+        "chatSessionId": "sess_25282ff6-c531-42e2-8040-8718f80b518e",
+        "timestamp": 1784173357462
+      }
+    ],
+    "3. Apply only approved cleanup waves with isolated reversible boundaries": [
+      {
+        "executionId": "9ab59445-9cd2-4ee1-b7b4-534ecaa0d65f",
+        "chatSessionId": "sess_d478204a-437a-4ca9-8389-cf86e9a8e904",
+        "timestamp": 1784173480490
+      },
+      {
+        "executionId": "77cec472-8941-471f-b46d-a8a5281b38ec",
+        "chatSessionId": "sess_af8a11b2-3370-4da2-b913-b8ef9e203293",
+        "timestamp": 1784176499908
+      }
+    ],
+    "3.1 Execute Wave 1A for proven low-risk unused icon import specifiers": [
+      {
+        "executionId": "9ab59445-9cd2-4ee1-b7b4-534ecaa0d65f",
+        "chatSessionId": "sess_d478204a-437a-4ca9-8389-cf86e9a8e904",
+        "timestamp": 1784173511342
+      },
+      {
+        "executionId": "9ab59445-9cd2-4ee1-b7b4-534ecaa0d65f",
+        "chatSessionId": "sess_d478204a-437a-4ca9-8389-cf86e9a8e904",
+        "timestamp": 1784173928638
+      }
+    ],
+    "3.2 Execute Wave 1B for the proven `RenewalDrawer.onClose` dependency closure": [
+      {
+        "executionId": "e82b9f10-2d65-4b92-8bb9-8ae022fc1a03",
+        "chatSessionId": "sess_d1d5880b-e03d-429c-be05-e603c8f59fca",
+        "timestamp": 1784174009084
+      },
+      {
+        "executionId": "e82b9f10-2d65-4b92-8bb9-8ae022fc1a03",
+        "chatSessionId": "sess_d1d5880b-e03d-429c-be05-e603c8f59fca",
+        "timestamp": 1784174864431
+      }
+    ],
+    "3.3 Execute separate Wave 2 patches for proven leaf exports, functions, types, styles, or assets": [
+      {
+        "executionId": "1500ec49-f58e-40a1-9942-4006ade8b8c3",
+        "chatSessionId": "sess_4752cfd2-8021-42de-949d-74905b4bfc79",
+        "timestamp": 1784174886584
+      },
+      {
+        "executionId": "1500ec49-f58e-40a1-9942-4006ade8b8c3",
+        "chatSessionId": "sess_4752cfd2-8021-42de-949d-74905b4bfc79",
+        "timestamp": 1784175071310
+      }
+    ],
+    "3.4 Execute separate Wave 3 patches for approved root duplicate/orphan files": [
+      {
+        "executionId": "19599697-7d43-49a6-8f30-46b70e8f79a1",
+        "chatSessionId": "sess_9ff2c3cb-1539-459e-b71b-4d572b98521e",
+        "timestamp": 1784175098133
+      },
+      {
+        "executionId": "19599697-7d43-49a6-8f30-46b70e8f79a1",
+        "chatSessionId": "sess_9ff2c3cb-1539-459e-b71b-4d572b98521e",
+        "timestamp": 1784175451979
+      }
+    ],
+    "3.5 Review Wave 4 high-risk contracts and preserve by default": [
+      {
+        "executionId": "74eb696b-281f-4e6d-a149-99e8c5c97399",
+        "chatSessionId": "sess_766d279c-a977-4f02-890e-b2a075f8f369",
+        "timestamp": 1784175464491
+      },
+      {
+        "executionId": "74eb696b-281f-4e6d-a149-99e8c5c97399",
+        "chatSessionId": "sess_766d279c-a977-4f02-890e-b2a075f8f369",
+        "timestamp": 1784175691526
+      }
+    ],
+    "3.6 Verify the bug-condition exploration property after each wave": [
+      {
+        "executionId": "97b8e49e-6c4b-45fd-a1bf-0e58e6cf28d2",
+        "chatSessionId": "sess_ea3f4bfb-6aa7-473d-9490-de09dc99e751",
+        "timestamp": 1784175711194
+      }
+    ],
+    "3.7 Verify preservation properties after each wave": [
+      {
+        "executionId": "e237139d-e79c-481f-b746-39c293c4639d",
+        "chatSessionId": "sess_26cd99d2-8b15-4559-958e-c108941659c5",
+        "timestamp": 1784175833649
+      },
+      {
+        "executionId": "e237139d-e79c-481f-b746-39c293c4639d",
+        "chatSessionId": "sess_26cd99d2-8b15-4559-958e-c108941659c5",
+        "timestamp": 1784176139915
+      }
+    ],
+    "3.8 Exercise and document rollback for each isolated wave": [
+      {
+        "executionId": "77cec472-8941-471f-b46d-a8a5281b38ec",
+        "chatSessionId": "sess_af8a11b2-3370-4da2-b913-b8ef9e203293",
+        "timestamp": 1784176152543
+      },
+      {
+        "executionId": "77cec472-8941-471f-b46d-a8a5281b38ec",
+        "chatSessionId": "sess_af8a11b2-3370-4da2-b913-b8ef9e203293",
+        "timestamp": 1784176499860
+      }
+    ],
+    "4. Checkpoint and publish the final audit/cleanup report": [
+      {
+        "executionId": "13846459-e02b-4fc7-9cd6-5c562cd574ed",
+        "chatSessionId": "sess_bc1ea1de-f474-4ab2-9632-5018530756dc",
+        "timestamp": 1784176534574
+      },
+      {
+        "executionId": "13846459-e02b-4fc7-9cd6-5c562cd574ed",
+        "chatSessionId": "sess_bc1ea1de-f474-4ab2-9632-5018530756dc",
+        "timestamp": 1784176813444
+      }
+    ]
+  }
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { getSupabase, type ProfileLite } from '../nhwd-shared/client';
+import type { IntakeHistoryEvent } from '../quotes/types';
 
 export type CsIntakeStatus =
   | 'draft'
@@ -8,7 +9,8 @@ export type CsIntakeStatus =
   | 'claimed'
   | 'converted'
   | 'returned'
-  | 'rejected';
+  | 'rejected'
+  | 'deleted';
 export type CsIntakePriority = 'normal' | 'high' | 'urgent';
 export type CsIntakeLob = 'personal_auto' | 'commercial_auto' | 'auto';
 export type DesiredCoverage = 'liability_only' | 'full_coverage' | 'unsure';
@@ -337,6 +339,89 @@ export async function rejectIntake(id: string, actorId: string, reason: string):
     detail: { reason },
   });
   throwIfError(eventError);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW: Customer Intakes (v1.0.0 - Structured Intake Table)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Update fields on a customer_intake via the update_customer_intake RPC */
+export async function updateCustomerIntake(
+  intakeId: string,
+  changes: Record<string, unknown>,
+  reason?: string,
+): Promise<{ success: boolean; affected_ids?: string[]; error?: string }> {
+  const { data, error } = await getSupabase().rpc('update_customer_intake', {
+    p_intake_id: intakeId,
+    p_changes: changes,
+    p_reason: reason ?? null,
+  });
+  throwIfError(error);
+  return data as { success: boolean; affected_ids?: string[]; error?: string };
+}
+
+/** Submit a new customer_intake (transition from draft to submitted) */
+export async function submitCustomerIntake(intakeId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('submit_customer_intake', {
+    p_intake_id: intakeId,
+  });
+  throwIfError(error);
+}
+
+/** Get the history events for a customer_intake */
+export async function getCustomerIntakeHistory(intakeId: string): Promise<IntakeHistoryEvent[]> {
+  const { data, error } = await getSupabase()
+    .from('intake_history_events')
+    .select('*')
+    .eq('intake_id', intakeId)
+    .order('created_at', { ascending: false });
+  throwIfError(error);
+  return (data ?? []) as IntakeHistoryEvent[];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Manager Actions (v1.0.0 - Customer Intakes)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Manager assigns a customer_intake to an agent. Returns the quote ID. */
+export async function assignCustomerIntake(
+  intakeId: string,
+  agentId: string,
+  reason?: string,
+): Promise<string> {
+  const { data, error } = await getSupabase().rpc('assign_customer_intake', {
+    p_intake_id: intakeId,
+    p_agent_id: agentId,
+    p_reason: reason ?? null,
+  });
+  throwIfError(error);
+  return data as string;
+}
+
+/** Manager soft-deletes a customer_intake */
+export async function deleteCustomerIntake(
+  intakeId: string,
+  reason: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { data, error } = await getSupabase().rpc('delete_customer_intake', {
+    p_intake_id: intakeId,
+    p_reason: reason,
+  });
+  throwIfError(error);
+  return data as { success: boolean; error?: string };
+}
+
+/** Manager restores a soft-deleted customer_intake */
+export async function restoreCustomerIntake(
+  intakeId: string,
+  reason: string,
+): Promise<{ success: boolean; restored_status?: string; error?: string }> {
+  const { data, error } = await getSupabase().rpc('restore_customer_intake', {
+    p_intake_id: intakeId,
+    p_reason: reason,
+  });
+  throwIfError(error);
+  return data as { success: boolean; restored_status?: string; error?: string };
 }
 
 export function profileName(profiles: ProfileLite[], id: string | null): string {
