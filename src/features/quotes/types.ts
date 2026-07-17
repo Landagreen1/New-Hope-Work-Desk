@@ -22,6 +22,15 @@ export type QuoteStatus =
   | 'duplicate_review'
   | 'merged_duplicate';
 
+/**
+ * Decision on a finalized quote outcome.
+ * When decision changes, `finalized_at` is updated — use `finalized_at` as the canonical
+ * reporting date for period attribution, not `quote_created_at`.
+ */
+export type QuoteDecision = 'sold' | 'not_sold';
+
+export type { NotSoldReason } from '@/lib/types';
+
 export type AssignmentMethod =
   | 'ringcentral_claim'
   | 'manager_assignment'
