@@ -412,12 +412,31 @@ export async function deleteCustomerIntake(
   intakeId: string,
   reason: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const { data, error } = await getSupabase().rpc('delete_customer_intake', {
-    p_intake_id: intakeId,
-    p_reason: reason,
-  });
-  throwIfError(error);
-  return data as { success: boolean; error?: string };
+  const supabase = getSupabase();
+
+  // Get current user for audit trail
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Authentication required.');
+
+  // Soft-delete: set status to 'deleted'
+  const { error: updateError } = await supabase
+    .from('cs_intake_submissions')
+    .update({ status: 'deleted', updated_at: new Date().toISOString() })
+    .eq('id', intakeId);
+  throwIfError(updateError);
+
+  // Insert audit event
+  const { error: eventError } = await supabase
+    .from('cs_intake_events')
+    .insert({
+      submission_id: intakeId,
+      actor_id: user.id,
+      event_type: 'deleted',
+      detail: { reason },
+    });
+  throwIfError(eventError);
+
+  return { success: true };
 }
 
 /** Manager restores a soft-deleted customer_intake */
@@ -425,12 +444,32 @@ export async function restoreCustomerIntake(
   intakeId: string,
   reason: string,
 ): Promise<{ success: boolean; restored_status?: string; error?: string }> {
-  const { data, error } = await getSupabase().rpc('restore_customer_intake', {
-    p_intake_id: intakeId,
-    p_reason: reason,
-  });
-  throwIfError(error);
-  return data as { success: boolean; restored_status?: string; error?: string };
+  const supabase = getSupabase();
+
+  // Get current user for audit trail
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Authentication required.');
+
+  // Restore: set status back to 'submitted'
+  const { error: updateError } = await supabase
+    .from('cs_intake_submissions')
+    .update({ status: 'submitted', updated_at: new Date().toISOString() })
+    .eq('id', intakeId)
+    .eq('status', 'deleted');
+  throwIfError(updateError);
+
+  // Insert audit event
+  const { error: eventError } = await supabase
+    .from('cs_intake_events')
+    .insert({
+      submission_id: intakeId,
+      actor_id: user.id,
+      event_type: 'restored',
+      detail: { reason },
+    });
+  throwIfError(eventError);
+
+  return { success: true, restored_status: 'submitted' };
 }
 
 export function profileName(profiles: ProfileLite[], id: string | null): string {
