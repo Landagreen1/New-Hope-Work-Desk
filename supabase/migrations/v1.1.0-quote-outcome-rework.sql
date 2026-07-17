@@ -2,19 +2,11 @@
 -- Introduces a generalized bidirectional outcome change RPC.
 -- finalized_at is the canonical reporting date; updated on every outcome change.
 
--- Extend event_type check to include 'outcome_change'.
+-- Drop the event_type check constraint entirely.
+-- New event types are added by application functions without constraint updates,
+-- so a hardcoded enum list is not maintainable.
 alter table public.work_item_events
   drop constraint if exists work_item_events_event_type_check;
-
-alter table public.work_item_events
-  add constraint work_item_events_event_type_check check (
-    event_type in (
-      'created', 'assigned', 'accepted', 'reassigned', 'price_sent', 'sold',
-      'not_sold', 'completed', 'cancelled', 'taken', 'activation', 'change',
-      'payment', 'customer_service_handoff', 'created_from_cs_intake',
-      'ringcentral_intake_claim_completed', 'outcome_change'
-    )
-  );
 
 -- Generalized bidirectional outcome change RPC.
 -- Handles sold → not_sold and not_sold → sold with full audit trail.
