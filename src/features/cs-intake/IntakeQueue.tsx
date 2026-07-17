@@ -114,7 +114,7 @@ export default function IntakeQueue({
       setAgents(activeAgents);
       setLastUpdated(new Date());
 
-      // Fetch quote statuses for converted rows
+      // Fetch quote statuses for converted rows that still have work_item_id
       const convertedWorkItemIds = queueRows
         .filter(r => r.status === 'converted' && r.work_item_id)
         .map(r => r.work_item_id!);
@@ -123,6 +123,32 @@ export default function IntakeQueue({
         setQuoteStatuses(statuses);
       } else {
         setQuoteStatuses(new Map());
+      }
+
+      // For converted rows where work_item_id is null (quote moved to pending/outcomes),
+      // look up the original work_item_id from cs_intake_events conversion event.
+      const nulledConversions = queueRows.filter(r => r.converted_at && !r.work_item_id);
+      if (nulledConversions.length) {
+        const supabase = getSupabase();
+        const { data: events } = await supabase
+          .from('cs_intake_events')
+          .select('submission_id, detail')
+          .in('submission_id', nulledConversions.map(r => r.id))
+          .eq('event_type', 'converted');
+        if (events) {
+          for (const ev of events) {
+            const workItemId = (ev.detail as Record<string, unknown>)?.work_item_id as string | undefined;
+            if (workItemId) {
+              const row = queueRows.find(r => r.id === ev.submission_id);
+              if (row) {
+                // Patch the row's work_item_id in-place so Log button works
+                (row as unknown as Record<string, unknown>).work_item_id = workItemId;
+              }
+            }
+          }
+          // Re-set rows to trigger re-render with patched work_item_ids
+          setRows([...queueRows]);
+        }
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to load the Sales Intake Queue.');
@@ -509,8 +535,8 @@ export default function IntakeQueue({
                       <div className="flex min-w-[260px] flex-wrap gap-2">
                         <button type="button" className={ui.btnSecondary} onClick={() => void show(row)}><Eye className="h-4 w-4" />View</button>
 
-                        {/* Log: visible for converted rows with linked work item — all roles */}
-                        {hasLinkedQuote && row.work_item_id ? (
+                        {/* Log: visible for all converted rows — all roles */}
+                        {row.converted_at && row.work_item_id ? (
                           <button
                             type="button"
                             className={ui.btnSecondary}

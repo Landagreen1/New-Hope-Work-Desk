@@ -490,35 +490,68 @@ export interface LinkedQuoteEvent {
  */
 export async function getLinkedQuoteEvents(workItemId: string): Promise<LinkedQuoteEvent[]> {
   const supabase = getSupabase();
-  const { data: events, error } = await supabase
-    .from('work_item_events')
-    .select('id, event_type, details, created_at, actor_profile_id')
-    .eq('source_work_item_id', workItemId)
-    .order('created_at', { ascending: true });
-  throwIfError(error);
-  if (!events?.length) return [];
 
-  // Resolve actor display names
-  const actorIds = [...new Set(events.map(e => e.actor_profile_id).filter(Boolean))] as string[];
+  // Fetch both events and notes in parallel
+  const [eventsResult, notesResult] = await Promise.all([
+    supabase
+      .from('work_item_events')
+      .select('id, event_type, details, created_at, actor_profile_id')
+      .eq('source_work_item_id', workItemId)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('quote_notes')
+      .select('id, author_profile_id, note, created_at')
+      .eq('source_work_item_id', workItemId)
+      .order('created_at', { ascending: true }),
+  ]);
+  throwIfError(eventsResult.error);
+  throwIfError(notesResult.error);
+
+  const events = eventsResult.data ?? [];
+  const notes = notesResult.data ?? [];
+
+  if (!events.length && !notes.length) return [];
+
+  // Resolve actor display names for both events and notes
+  const allActorIds = [
+    ...events.map(e => e.actor_profile_id),
+    ...notes.map(n => n.author_profile_id),
+  ].filter(Boolean);
+  const uniqueActorIds = [...new Set(allActorIds)] as string[];
+
   let actorMap = new Map<string, string>();
-  if (actorIds.length) {
+  if (uniqueActorIds.length) {
     const { data: profiles, error: profileError } = await supabase
       .from('profiles')
       .select('id, display_name')
-      .in('id', actorIds);
+      .in('id', uniqueActorIds);
     throwIfError(profileError);
     for (const p of (profiles ?? [])) {
       actorMap.set(p.id, p.display_name);
     }
   }
 
-  return events.map(e => ({
+  // Build combined timeline
+  const eventItems: LinkedQuoteEvent[] = events.map(e => ({
     id: e.id,
     event_type: e.event_type,
     details: e.details,
     created_at: e.created_at,
     actor_name: actorMap.get(e.actor_profile_id) ?? 'System',
   }));
+
+  const noteItems: LinkedQuoteEvent[] = notes.map(n => ({
+    id: n.id,
+    event_type: 'note',
+    details: { note: n.note },
+    created_at: n.created_at,
+    actor_name: actorMap.get(n.author_profile_id) ?? 'Unknown',
+  }));
+
+  // Merge and sort chronologically
+  return [...eventItems, ...noteItems].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
 }
 
 /**

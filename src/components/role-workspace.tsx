@@ -136,9 +136,15 @@ export function RoleWorkspace({
         },
         {
           id: "quote_intake",
-          label: "Customer Quote",
+          label: "Create Intake",
           description: "Collect quote information",
           icon: Headphones,
+        },
+        {
+          id: "customer_service",
+          label: "Sales Queue",
+          description: "Shared intake queue",
+          icon: ClipboardCheck,
         },
         {
           id: "renewals",
@@ -158,8 +164,14 @@ export function RoleWorkspace({
           icon: LayoutDashboard,
         },
         {
+          id: "quote_intake",
+          label: "Create Intake",
+          description: "Submit a new quote intake",
+          icon: Headphones,
+        },
+        {
           id: "customer_service",
-          label: "Customer Service",
+          label: "Sales Queue",
           description: "Intakes and Sales handoff",
           icon: UsersRound,
         },
@@ -178,6 +190,7 @@ export function RoleWorkspace({
       ];
     }
 
+    // Agent
     return [
       {
         id: "desk",
@@ -186,8 +199,14 @@ export function RoleWorkspace({
         icon: LayoutDashboard,
       },
       {
+        id: "quote_intake",
+        label: "Create Intake",
+        description: "Submit a new quote intake",
+        icon: Headphones,
+      },
+      {
         id: "customer_service",
-        label: "Customer Service",
+        label: "Sales Queue",
         description: "Intake queue and claims",
         icon: ClipboardCheck,
       },

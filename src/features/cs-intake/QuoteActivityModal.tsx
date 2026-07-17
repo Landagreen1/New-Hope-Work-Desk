@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock, DollarSign, FileText, Phone, Send, X, XCircle } from 'lucide-react';
+import { Clock, DollarSign, FileText, MessageCircle, Phone, Send, X, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { ui } from '../nhwd-shared/ui';
@@ -25,11 +25,20 @@ interface QuoteActivityModalProps {
 function eventLabel(eventType: string): string {
   const labels: Record<string, string> = {
     created_from_cs_intake: 'Created from CS Intake',
+    created: 'Quote Created',
+    assigned: 'Assigned',
+    accepted: 'Accepted',
+    reassigned: 'Reassigned',
     price_sent: 'Pricing Sent',
     sold: 'Sold',
     not_sold: 'Not Sold',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    note: 'Note Added',
     customer_contacted: 'Customer Contacted',
     cancelled_from_cs_queue: 'Cancelled from CS Queue',
+    ringcentral_intake_claim_completed: 'RC Intake Claimed',
+    outcome_change: 'Outcome Changed',
   };
   return labels[eventType] ?? eventType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 }
@@ -39,16 +48,25 @@ function eventColor(eventType: string): { dot: string; text: string } {
   switch (eventType) {
     case 'created_from_cs_intake':
       return { dot: 'bg-indigo-500 ring-indigo-100', text: 'text-indigo-700' };
+    case 'created':
+    case 'assigned':
+    case 'accepted':
+      return { dot: 'bg-blue-500 ring-blue-100', text: 'text-blue-700' };
     case 'price_sent':
       return { dot: 'bg-violet-500 ring-violet-100', text: 'text-violet-700' };
     case 'sold':
       return { dot: 'bg-emerald-600 ring-emerald-100', text: 'text-emerald-700' };
     case 'not_sold':
       return { dot: 'bg-rose-500 ring-rose-100', text: 'text-rose-700' };
+    case 'note':
+      return { dot: 'bg-amber-500 ring-amber-100', text: 'text-amber-700' };
     case 'customer_contacted':
       return { dot: 'bg-sky-500 ring-sky-100', text: 'text-sky-700' };
     case 'cancelled_from_cs_queue':
+    case 'cancelled':
       return { dot: 'bg-orange-500 ring-orange-100', text: 'text-orange-700' };
+    case 'outcome_change':
+      return { dot: 'bg-purple-500 ring-purple-100', text: 'text-purple-700' };
     default:
       return { dot: 'bg-slate-400 ring-slate-100', text: 'text-slate-600' };
   }
@@ -65,6 +83,8 @@ function eventIcon(eventType: string) {
       return <DollarSign className="h-4 w-4" />;
     case 'not_sold':
       return <XCircle className="h-4 w-4" />;
+    case 'note':
+      return <MessageCircle className="h-4 w-4" />;
     case 'customer_contacted':
       return <Phone className="h-4 w-4" />;
     case 'cancelled_from_cs_queue':
