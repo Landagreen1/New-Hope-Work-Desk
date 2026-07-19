@@ -23,6 +23,7 @@ export interface CsIntakeSubmission {
   line_of_business: CsIntakeLob;
   quote_kind: QuoteKind;
   source_renewal_id: string | null;
+  source_type: string | null;
   created_by: string;
   claimed_by: string | null;
   claimed_at: string | null;

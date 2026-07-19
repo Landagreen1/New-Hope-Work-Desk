@@ -148,6 +148,19 @@ begin
   where id = p_intake_id;
 
   -- ─────────────────────────────────────────────────────────────────────────
+  -- 6b. Sync cs_intake_submissions (if a matching row exists)
+  --     Handles gracefully when no cs_intake_submissions row exists (e.g.
+  --     intakes created directly in customer_intakes without a legacy submission).
+  --     Req 2.1, 2.2 — ensures the IntakeQueue UI reflects the conversion.
+  -- ─────────────────────────────────────────────────────────────────────────
+  update cs_intake_submissions set
+    status = 'converted',
+    converted_at = now(),
+    work_item_id = v_quote_id,
+    updated_at = now()
+  where id = p_intake_id;
+
+  -- ─────────────────────────────────────────────────────────────────────────
   -- 7. INSERT intake_note_log as first quote_history_events entry (Req 11.5)
   -- ─────────────────────────────────────────────────────────────────────────
   insert into quote_history_events (

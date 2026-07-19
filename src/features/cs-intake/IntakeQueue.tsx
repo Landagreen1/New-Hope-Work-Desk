@@ -295,16 +295,11 @@ export default function IntakeQueue({
     setHistoryEvents([]);
   }
 
-  // Determine if a row is RingCentral-sourced (heuristic based on available data)
+  // Determine if a row is RingCentral-sourced using the source_type column.
+  // Previously used Boolean(row.work_item_id) which was incorrect — work_item_id
+  // is only set after cs_intake_convert, not after claim_ringcentral_intake.
   function isRingcentralSource(row: CsIntakeSubmission): boolean {
-    // Check if source metadata indicates RingCentral
-    // The intake may store source info in csr_notes, quote_kind, or we detect by absence of dealer
-    // For now, we check for 'ringcentral' marker. In the full implementation, the customer_intakes
-    // table has a source_type column. For cs_intake_submissions, we use a heuristic:
-    // If there's no dealer and no business_name and quote_kind is 'new_quote', could be RC.
-    // This will be refined when the full customer_intakes table is integrated.
-    // For the queue view, we look at whether a work_item_id is present (RC call ID).
-    return Boolean(row.work_item_id);
+    return row.source_type === 'ringcentral';
   }
 
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9] font-black text-slate-500">Loading Sales Intake Queue…</div>;
@@ -538,7 +533,7 @@ export default function IntakeQueue({
                           </button>
                         ) : null}
 
-                        {canConvert && row.status === 'claimed' && !isDeleted ? (
+                        {canConvert && row.status === 'claimed' && !isDeleted && !hasLinkedQuote ? (
                           <button
                             type="button"
                             className={ui.btnPrimary}
@@ -602,7 +597,7 @@ export default function IntakeQueue({
                   {!isRingcentralSource(selected.submission) && selected.submission.status === 'submitted' && profile.role === 'agent' ? (
                     <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void handleClaimGeneral(selected.submission)}><UserCheck className="h-4 w-4" />Claim Intake</button>
                   ) : null}
-                  {(selected.submission.claimed_by === profile.id || isManager) && selected.submission.status === 'claimed' ? (
+                  {(selected.submission.claimed_by === profile.id || isManager) && selected.submission.status === 'claimed' && !Boolean(selected.submission.converted_at) ? (
                     <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void action(selected.submission.id, async () => { await convertIntake(selected.submission.id); }, 'Quote created in Quotes Database.')}><CheckCircle2 className="h-4 w-4" />Create Quote</button>
                   ) : null}
                   {/* Manager: Open Linked Quote from modal */}

@@ -463,6 +463,7 @@ as $$
 declare
   v_row public.cs_intake_submissions%rowtype;
   v_work_item_id uuid;
+  v_existing_quote_id uuid;
   v_customer_name text;
   v_agent_name text;
   v_details jsonb;
@@ -475,6 +476,30 @@ begin
   if not found then raise exception 'Intake not found.'; end if;
   if v_row.status::text <> 'claimed' or v_row.claimed_by is null then raise exception 'Claim or assign this intake first.'; end if;
   if public.nhwd_role() <> 'manager' and v_row.claimed_by <> auth.uid() then raise exception 'This intake belongs to another Sales Agent.'; end if;
+
+  -- ─────────────────────────────────────────────────────────────────────────
+  -- Idempotency guard: If an operational_quotes record already exists for this
+  -- intake (e.g. created by claim_ringcentral_intake), sync cs_intake_submissions
+  -- and return the existing quote ID without creating a duplicate work_items record.
+  -- This handles the race condition where cs_intake_submissions wasn't synced but
+  -- an operational quote already exists. (Req 2.3)
+  -- ─────────────────────────────────────────────────────────────────────────
+  select id into v_existing_quote_id
+  from public.operational_quotes
+  where customer_intake_id = p_submission_id
+  limit 1;
+
+  if v_existing_quote_id is not null then
+    -- Sync cs_intake_submissions to reflect the existing conversion
+    update public.cs_intake_submissions
+    set status = 'converted',
+        work_item_id = v_existing_quote_id,
+        converted_at = now(),
+        updated_at = now()
+    where id = p_submission_id;
+
+    return v_existing_quote_id;
+  end if;
 
   v_customer_name := coalesce(nullif(trim(v_row.business_name), ''), trim(v_row.insured_first_name || ' ' || v_row.insured_last_name));
 
