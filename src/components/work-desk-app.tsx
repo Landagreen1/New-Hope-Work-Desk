@@ -4899,6 +4899,7 @@ export function WorkDeskApp({
               managerUpdateCustomerServiceOverflow
             }
             workloadDatabaseContent={workloadDatabaseContent}
+            forceManagerTab={forceManagerTab}
           />
         )}
       </main>
@@ -5604,6 +5605,7 @@ function ManagerView({
   onSetQueueOrder,
   onUpdateCustomerServiceOverflow,
   workloadDatabaseContent,
+  forceManagerTab,
 }: {
   agentList: Agent[];
   customerServiceUsers: CustomerServiceUser[];
@@ -5647,6 +5649,7 @@ function ManagerView({
     profileId: string | null,
   ) => Promise<void>;
   workloadDatabaseContent?: React.ReactNode;
+  forceManagerTab?: ManagerTab;
 }) {
   const [reportView, setReportView] = useState<ReportView>("executive");
   const [workView, setWorkView] = useState<"tasks" | "pricing" | "workload">("tasks");
@@ -6898,7 +6901,7 @@ function ManagerView({
 
   return (
     <div className="space-y-5">
-      <TabBar tabs={tabs} value={managerTab} onChange={setManagerTab} />
+      {!forceManagerTab && <TabBar tabs={tabs} value={managerTab} onChange={setManagerTab} />}
 
       {managerTab === "work" ? (
         <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
