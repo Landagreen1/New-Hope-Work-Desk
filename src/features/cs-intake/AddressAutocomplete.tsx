@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { ui } from '../nhwd-shared/ui';
 
 interface AddressComponents {
@@ -12,52 +12,50 @@ interface AddressComponents {
 }
 
 interface AddressAutocompleteProps {
-  value: string;
+  defaultValue: string;
   disabled?: boolean;
   onAddressSelected: (components: AddressComponents) => void;
   onChange: (value: string) => void;
 }
 
-// Load Google Maps script once
+// Load Google Maps script once globally
 let googleMapsPromise: Promise<void> | null = null;
+let googleMapsLoaded = false;
 
 function loadGoogleMaps(apiKey: string): Promise<void> {
+  if (googleMapsLoaded) return Promise.resolve();
   if (googleMapsPromise) return googleMapsPromise;
   if (typeof window !== 'undefined' && window.google?.maps?.places) {
-    googleMapsPromise = Promise.resolve();
-    return googleMapsPromise;
+    googleMapsLoaded = true;
+    return Promise.resolve();
   }
   googleMapsPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
     script.async = true;
-    script.onload = () => resolve();
+    script.onload = () => { googleMapsLoaded = true; resolve(); };
     script.onerror = () => reject(new Error('Failed to load Google Maps'));
     document.head.appendChild(script);
   });
   return googleMapsPromise;
 }
 
-export default function AddressAutocomplete({ value, disabled, onAddressSelected, onChange }: AddressAutocompleteProps) {
+export default function AddressAutocomplete({ defaultValue, disabled, onAddressSelected, onChange }: AddressAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const onAddressSelectedRef = useRef(onAddressSelected);
+  onAddressSelectedRef.current = onAddressSelected;
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
-  useEffect(() => {
-    if (!apiKey || typeof window === 'undefined') return;
-    loadGoogleMaps(apiKey).then(() => setLoaded(true)).catch(() => {});
-  }, [apiKey]);
-
   const initAutocomplete = useCallback(() => {
-    if (!loaded || !inputRef.current || autocompleteRef.current) return;
+    if (!inputRef.current || autocompleteRef.current) return;
     if (!window.google?.maps?.places) return;
 
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
       componentRestrictions: { country: 'us' },
       types: ['address'],
-      fields: ['address_components', 'formatted_address'],
+      fields: ['address_components'],
     });
 
     autocomplete.addListener('place_changed', () => {
@@ -82,22 +80,29 @@ export default function AddressAutocomplete({ value, disabled, onAddressSelected
       }
 
       const street = streetNumber && route ? `${streetNumber} ${route}` : route || streetNumber;
-      onAddressSelected({ street, unit, city, state, zip });
+
+      // Update the input display value
+      if (inputRef.current) {
+        inputRef.current.value = street;
+      }
+
+      onAddressSelectedRef.current({ street, unit, city, state, zip });
     });
 
     autocompleteRef.current = autocomplete;
-  }, [loaded, onAddressSelected]);
+  }, []);
 
   useEffect(() => {
-    initAutocomplete();
-  }, [initAutocomplete]);
+    if (!apiKey || typeof window === 'undefined') return;
+    loadGoogleMaps(apiKey).then(() => initAutocomplete()).catch(() => {});
+  }, [apiKey, initAutocomplete]);
 
   return (
     <input
       ref={inputRef}
       className={ui.input}
       disabled={disabled}
-      value={value}
+      defaultValue={defaultValue}
       onChange={(e) => onChange(e.target.value)}
       placeholder="Start typing an address…"
       autoComplete="off"
