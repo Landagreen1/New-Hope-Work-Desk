@@ -49,6 +49,8 @@ import { useRouter } from "next/navigation";
 
 import { loadDashboardData } from "@/lib/dashboard-data";
 import { createClient } from "@/lib/supabase/client";
+import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
+import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type {
   Agent,
   CustomerServiceUser,
@@ -203,10 +205,11 @@ type ModalType =
   | "customer_service_pass"
   | "reopen_not_sold"
   | null;
-type AgentTab = "desk" | "pricing" | "quotes" | "team" | "performance";
+type AgentTab = "desk" | "pricing" | "intake_queue" | "quotes" | "team" | "performance";
 type ManagerTab =
   | "overview"
   | "work"
+  | "intake_queue"
   | "quotes"
   | "reports"
   | "team"
@@ -2689,6 +2692,20 @@ export function WorkDeskApp({
   const myPendingPricing = currentUser
     ? pendingPricing.filter((item) => item.assignedProfileId === currentUserId)
     : [];
+
+  // Unclaimed intakes count for agent Intake Queue badge
+  const [unclaimedIntakeCount, setUnclaimedIntakeCount] = useState(0);
+  useEffect(() => {
+    if (sessionProfile.role !== 'agent') return;
+    fetch('/api/intakes')
+      .then((r) => r.json())
+      .then((body) => {
+        const intakes = (body.intakes ?? []) as Array<{ status: string }>;
+        setUnclaimedIntakeCount(intakes.filter((i) => i.status === 'submitted' || i.status === 'waiting_for_claim').length);
+      })
+      .catch(() => {});
+  }, [sessionProfile.role]);
+
   const myRecentActivity = workItems
     .filter(
       (item) =>
@@ -3790,6 +3807,12 @@ export function WorkDeskApp({
       icon: <Clock3 className="h-4 w-4" />,
       badge: myPendingPricing.length,
     },
+    {
+      id: "intake_queue",
+      label: "Intake Queue",
+      icon: <ClipboardList className="h-4 w-4" />,
+      badge: unclaimedIntakeCount || undefined,
+    },
     { id: "team", label: "My Team", icon: <UsersRound className="h-4 w-4" /> },
     {
       id: "quotes",
@@ -4491,6 +4514,10 @@ export function WorkDeskApp({
                   )}
                 </div>
               </section>
+            ) : null}
+
+            {agentTab === "intake_queue" ? (
+              <IntakeQueue initialProfile={{ id: sessionProfile.id, display_name: sessionProfile.displayName, initials: sessionProfile.initials, role: sessionProfile.role as "agent" | "customer_service" | "manager" | "commercial", is_active: true }} embedded />
             ) : null}
 
             {agentTab === "quotes" ? (
@@ -7051,21 +7078,29 @@ function ManagerView({
             </div>
           </details>
 
-          <details className="rounded-[24px] border border-slate-200 bg-white shadow-sm" open>
-            <summary className="cursor-pointer list-none px-4 py-3 [&::-webkit-details-marker]:hidden">
-              <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.14em] text-[#223f7a]">Team Controls</p><p className="mt-1 text-sm font-bold text-slate-600">Availability and rotation eligibility</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{agentList.filter((agent) => agent.availability === "available").length} available</span></div>
-            </summary>
-            <div className="grid gap-2 border-t border-slate-100 p-3 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="rounded-[24px] border border-slate-200 bg-white shadow-sm p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-[#223f7a]">Team Availability</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-500">Who's clocked in and ready</p>
+              </div>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700 ring-1 ring-emerald-200">{agentList.filter((agent) => agent.availability === "available").length} available</span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {agentList.map((agent) => (
-                <div key={agent.id} className="rounded-2xl bg-slate-50 p-3">
-                  <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><Avatar agent={agent} size="sm" /><div><p className="text-sm font-black">{agent.name}</p><p className="text-[10px] font-bold capitalize text-slate-400">{agent.availability === "break" ? "Break / Lunch" : agent.availability}</p></div></div><StatusDot status={agent.availability} /></div>
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {([['WA', agent.whatsappActive], ['RC', agent.ringCentralActive], ['WL', agent.workloadActive]] as const).map(([label, active]) => <span key={label} className={cn("rounded-full px-2 py-1 text-[10px] font-black", active ? "bg-emerald-50 text-emerald-700" : "bg-slate-200 text-slate-500")}>{label}</span>)}
+                <div key={agent.id} className="flex items-center gap-2 rounded-xl bg-slate-50 p-2.5">
+                  <StatusDot status={agent.availability} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-black text-slate-800">{agent.name}</p>
+                    <p className="text-[10px] font-bold capitalize text-slate-400">{agent.availability === "break" ? "Break" : agent.availability}</p>
+                  </div>
+                  <div className="flex gap-0.5">
+                    {([['WA', agent.whatsappActive], ['RC', agent.ringCentralActive], ['WL', agent.workloadActive]] as const).map(([label, active]) => <span key={label} className={cn("rounded px-1 py-0.5 text-[8px] font-black", active ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-400")}>{label}</span>)}
                   </div>
                 </div>
               ))}
             </div>
-          </details>
+          </section>
 
           <section>
             <div className="mb-4">
