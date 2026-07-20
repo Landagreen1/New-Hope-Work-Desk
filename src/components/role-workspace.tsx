@@ -225,8 +225,8 @@ export function RoleWorkspace({
     const sharedTabs: TabDefinition[] = [
       {
         id: "desk",
-        label: "Work Desk",
-        shortLabel: "Desk",
+        label: "Sales",
+        shortLabel: "Sales",
         description:
           sessionProfile.role === "manager"
             ? "Queues, quotes and reports"
@@ -266,8 +266,8 @@ export function RoleWorkspace({
       return [
         {
           id: "desk" as WorkspaceTab,
-          label: "Work Desk",
-          shortLabel: "Desk",
+          label: "Sales",
+          shortLabel: "Sales",
           description: "Turns, quotes and reports",
           icon: LayoutDashboard,
         },
@@ -303,16 +303,9 @@ export function RoleWorkspace({
       ];
     }
 
-    // Commercial role: only the Commercial Board + Work Desk
+    // Commercial role: only the Commercial Board (no Sales workspace)
     if (sessionProfile.role === "commercial") {
       return [
-        {
-          id: "desk" as WorkspaceTab,
-          label: "Work Desk",
-          shortLabel: "Desk",
-          description: "Your commercial workspace",
-          icon: LayoutDashboard,
-        },
         {
           id: "commercial_board" as WorkspaceTab,
           label: "Commercial Board",

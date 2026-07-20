@@ -9130,7 +9130,7 @@ function UserAdminPanel() {
             </div>
             <Field label="Role">
               <select name="role" className="field">
-                <option value="agent">Agent</option>
+                <option value="agent">Sales</option>
                 <option value="customer_service">Customer Service</option>
                 <option value="commercial">Commercial</option>
                 <option value="manager">Manager / Admin</option>
@@ -9240,7 +9240,7 @@ function UserAdminPanel() {
                               ? "Customer Service"
                               : user.role === "commercial"
                                 ? "Commercial"
-                                : "Agent"}
+                                : "Sales"}
                         </span>
                       </td>
                       <td className="px-5 py-4">
