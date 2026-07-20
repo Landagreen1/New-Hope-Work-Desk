@@ -8122,6 +8122,7 @@ function ManagerView({
                   <AfterHoursReport
                     quotes={reportData.quotes}
                     timingRows={reportData.timingRows}
+                    serviceItems={reportData.service}
                     agentList={agentList}
                     sourceList={sourceList}
                     openQuoteLog={onOpenQuoteLog}
@@ -10387,6 +10388,7 @@ type AfterHoursQuote = {
 function AfterHoursReport({
   quotes,
   timingRows,
+  serviceItems,
   agentList,
   sourceList,
   openQuoteLog,
@@ -10424,6 +10426,7 @@ function AfterHoursReport({
     timeToFinal: number | null;
     totalCycle: number | null;
   }>;
+  serviceItems: WorkItem[];
   agentList: Agent[];
   sourceList: SourceOption[];
   openQuoteLog: (sourceWorkItemId: string) => void;
@@ -10444,6 +10447,16 @@ function AfterHoursReport({
     }
     return result;
   }, [timingRows, mode, agentFilter, sourceFilter]);
+
+  // Filter service (non-quote) items by after-hours or sunday
+  const filteredService = useMemo(() => {
+    const filterFn = mode === "sunday" ? isSunday : isAfterHours;
+    let result = serviceItems.filter((item) => filterFn(item.createdAt));
+    if (agentFilter !== "all") {
+      result = result.filter((item) => item.assignedAgent === agentFilter);
+    }
+    return result;
+  }, [serviceItems, mode, agentFilter]);
 
   // Metrics
   const incoming = filteredQuotes.length;
@@ -10595,6 +10608,9 @@ function AfterHoursReport({
                   <th className="px-5 py-3 text-right">Sold</th>
                   <th className="px-5 py-3 text-right">Not Sold</th>
                   <th className="px-5 py-3 text-right">Pending</th>
+                  <th className="px-5 py-3 text-right">Activations</th>
+                  <th className="px-5 py-3 text-right">Changes</th>
+                  <th className="px-5 py-3 text-right">Workload</th>
                   <th className="px-5 py-3 text-right">Avg Time to Price</th>
                 </tr>
               </thead>
@@ -10602,7 +10618,11 @@ function AfterHoursReport({
                 {agentList
                   .map((agent) => {
                     const rows = filteredQuotes.filter((q) => q.agent === agent.name);
-                    if (rows.length === 0) return null;
+                    const svcRows = filteredService.filter((item) => item.assignedAgent === agent.name);
+                    const activations = svcRows.filter((item) => item.workType === "activation").length;
+                    const changes = svcRows.filter((item) => item.workType === "change").length;
+                    const workload = svcRows.length;
+                    if (rows.length === 0 && workload === 0) return null;
                     const agentSold = rows.filter((q) => q.lifecycle === "Sold").length;
                     const agentNotSold = rows.filter((q) => q.lifecycle === "Not Sold").length;
                     const agentPending = rows.filter((q) => q.lifecycle === "Price Sent").length;
@@ -10621,6 +10641,9 @@ function AfterHoursReport({
                         <td className="px-5 py-4 text-right font-bold text-emerald-700">{agentSold}</td>
                         <td className="px-5 py-4 text-right font-bold text-rose-700">{agentNotSold}</td>
                         <td className="px-5 py-4 text-right font-bold text-violet-700">{agentPending}</td>
+                        <td className="px-5 py-4 text-right font-bold text-sky-700">{activations}</td>
+                        <td className="px-5 py-4 text-right font-bold text-amber-700">{changes}</td>
+                        <td className="px-5 py-4 text-right font-bold">{workload}</td>
                         <td className="px-5 py-4 text-right font-bold">{formatDuration(avgPrice)}</td>
                       </tr>
                     );
