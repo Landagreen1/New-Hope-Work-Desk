@@ -80,7 +80,7 @@ export interface CsIntakeDriver {
   last_name: string;
   dob: string | null;
   relationship: string | null;
-  document_type: 'driver_license' | 'state_id';
+  document_type: 'driver_license' | 'state_id' | 'passport';
   license_number: string | null;
   license_state: string | null;
   license_status: string | null;
