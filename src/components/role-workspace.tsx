@@ -247,13 +247,6 @@ export function RoleWorkspace({
             : "My renewal follow-up",
         icon: FileSpreadsheet,
       },
-      {
-        id: "time_attendance",
-        label: "Time & Attendance",
-        shortLabel: "Clock",
-        description: "Clock in, schedule, PTO",
-        icon: Clock,
-      },
     ];
 
     // --- Management layout: streamlined tabs ---
@@ -305,7 +298,7 @@ export function RoleWorkspace({
       ];
     }
 
-    // Commercial role: Commercial Board + Time & Attendance
+    // Commercial role: Commercial Board only
     if (sessionProfile.role === "commercial") {
       return [
         {
@@ -314,13 +307,6 @@ export function RoleWorkspace({
           shortLabel: "Commercial",
           description: "Your commercial policies pipeline",
           icon: Building2,
-        },
-        {
-          id: "time_attendance" as WorkspaceTab,
-          label: "Time & Attendance",
-          shortLabel: "Clock",
-          description: "Clock in, schedule, PTO",
-          icon: Clock,
         },
       ];
     }
