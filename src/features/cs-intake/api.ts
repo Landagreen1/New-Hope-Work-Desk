@@ -22,6 +22,7 @@ export interface CsIntakeSubmission {
   priority: CsIntakePriority;
   line_of_business: CsIntakeLob;
   quote_kind: QuoteKind;
+  intake_channel?: 'ringcentral' | 'manual';
   source_renewal_id: string | null;
   source_type: string | null;
   created_by: string;
@@ -287,6 +288,14 @@ export async function submitIntake(id: string): Promise<void> {
 export async function claimIntake(id: string): Promise<void> {
   const { error } = await getSupabase().rpc('cs_intake_claim', { p_submission_id: id });
   throwIfError(error);
+}
+
+export async function claimRingcentralQueueIntake(id: string): Promise<string> {
+  const { data, error } = await getSupabase().rpc('cs_intake_claim_ringcentral', {
+    p_submission_id: id,
+  });
+  throwIfError(error);
+  return data as string;
 }
 
 export async function managerAssignIntake(id: string, agentId: string): Promise<void> {
