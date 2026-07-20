@@ -10655,6 +10655,90 @@ function AfterHoursReport({
         </section>
       )}
 
+      {/* Peak Hours breakdown */}
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+            {mode === "sunday" ? "Sunday" : "After Hours"} · Peak Times
+          </p>
+          <h3 className="mt-1 text-xl font-black">Activity by Hour (EST)</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Shows when quotes arrive so you can identify peak after-hours windows.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+              <tr>
+                <th className="px-5 py-3">Time Slot (EST)</th>
+                <th className="px-5 py-3 text-right">Quotes</th>
+                <th className="px-5 py-3 text-right">Workload</th>
+                <th className="px-5 py-3 text-right">Total</th>
+                <th className="px-5 py-3" style={{ minWidth: 200 }}>Volume</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {(() => {
+                // Build hourly buckets
+                const hourBuckets = Array.from({ length: 24 }, (_, i) => ({
+                  hour: i,
+                  quotes: 0,
+                  service: 0,
+                }));
+                filteredQuotes.forEach((q) => {
+                  const { hour } = getEstTime(q.createdAt);
+                  hourBuckets[hour].quotes += 1;
+                });
+                filteredService.forEach((item) => {
+                  const { hour } = getEstTime(item.createdAt);
+                  hourBuckets[hour].service += 1;
+                });
+                const activeBuckets = hourBuckets.filter((b) => b.quotes > 0 || b.service > 0);
+                const maxTotal = Math.max(...activeBuckets.map((b) => b.quotes + b.service), 1);
+                if (activeBuckets.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-12 text-center text-sm font-semibold text-slate-400">
+                        No activity to display for the selected period.
+                      </td>
+                    </tr>
+                  );
+                }
+                return activeBuckets
+                  .sort((a, b) => (b.quotes + b.service) - (a.quotes + a.service))
+                  .map((bucket) => {
+                    const total = bucket.quotes + bucket.service;
+                    const pct = (total / maxTotal) * 100;
+                    const startHour = bucket.hour;
+                    const endHour = (bucket.hour + 1) % 24;
+                    const fmt = (h: number) => {
+                      const suffix = h >= 12 ? "PM" : "AM";
+                      const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
+                      return `${display}:00 ${suffix}`;
+                    };
+                    return (
+                      <tr key={bucket.hour} className="hover:bg-slate-50">
+                        <td className="px-5 py-3 font-bold text-slate-700">
+                          {fmt(startHour)} – {fmt(endHour)}
+                        </td>
+                        <td className="px-5 py-3 text-right font-bold">{bucket.quotes}</td>
+                        <td className="px-5 py-3 text-right font-bold">{bucket.service}</td>
+                        <td className="px-5 py-3 text-right font-black">{total}</td>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-5 rounded-full bg-[#223f7a]" style={{ width: `${pct}%`, minWidth: 4 }} />
+                            <span className="text-xs font-semibold text-slate-400">{Math.round(pct)}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+              })()}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* Source breakdown */}
       {sourceFilter === "all" && (
         <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
