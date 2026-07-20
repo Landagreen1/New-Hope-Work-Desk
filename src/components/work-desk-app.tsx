@@ -25,6 +25,7 @@ import {
   ListChecks,
   LogOut,
   MessageCircleMore,
+  Moon,
   PhoneCall,
   Pencil,
   PieChart,
@@ -415,6 +416,13 @@ const reportNavigationGroups: ReportNavigationGroup[] = [
         description:
           "Detailed operational activity for deeper review and export.",
         icon: Activity,
+      },
+      {
+        id: "after_hours",
+        label: "After Hours",
+        description:
+          "Incoming quotes, outcomes, and timing outside regular business hours (Mon–Sat 08:30–17:30 EST) and Sundays.",
+        icon: Moon,
       },
     ],
   },
@@ -8110,6 +8118,15 @@ function ManagerView({
                 {reportView === "activity" ? (
                   <ServiceActivityReport items={reportData.service} />
                 ) : null}
+                {reportView === "after_hours" ? (
+                  <AfterHoursReport
+                    quotes={reportData.quotes}
+                    timingRows={reportData.timingRows}
+                    agentList={agentList}
+                    sourceList={sourceList}
+                    openQuoteLog={onOpenQuoteLog}
+                  />
+                ) : null}
               </div>
 
               <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -10317,6 +10334,437 @@ function ServiceActivityReport({ items }: { items: WorkItem[] }) {
         </table>
       </div>
     </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  After Hours Report                                                        */
+/* -------------------------------------------------------------------------- */
+
+type AfterHoursMode = "after_hours" | "sunday";
+
+/** Returns the EST hour and day-of-week for a given ISO timestamp. */
+function getEstTime(iso: string) {
+  const date = new Date(iso);
+  // Convert to America/New_York (EST/EDT)
+  const estString = date.toLocaleString("en-US", { timeZone: "America/New_York" });
+  const estDate = new Date(estString);
+  return { hour: estDate.getHours(), minute: estDate.getMinutes(), dayOfWeek: estDate.getDay() };
+}
+
+/** Check if a timestamp falls outside regular business hours (Mon-Sat 08:30-17:30 EST). Sunday excluded. */
+function isAfterHours(iso: string): boolean {
+  const { hour, minute, dayOfWeek } = getEstTime(iso);
+  // Sunday = 0 is handled separately
+  if (dayOfWeek === 0) return false;
+  // Mon(1) - Sat(6): before 08:30 or after 17:30 = after hours
+  const timeVal = hour * 60 + minute;
+  return timeVal < 510 || timeVal >= 1050; // 510 = 8:30, 1050 = 17:30
+}
+
+/** Check if a timestamp falls on a Sunday (EST). */
+function isSunday(iso: string): boolean {
+  const { dayOfWeek } = getEstTime(iso);
+  return dayOfWeek === 0;
+}
+
+type AfterHoursQuote = {
+  sourceWorkItemId: string;
+  createdAt: string;
+  assignedAt: string;
+  acceptedAt?: string;
+  priceSentAt?: string;
+  finalizedAt?: string;
+  customer: string;
+  dealer: string;
+  agent: string;
+  lifecycle: string;
+  channel: string;
+  workType: string;
+  timeToPrice?: number | null;
+};
+
+function AfterHoursReport({
+  quotes,
+  timingRows,
+  agentList,
+  sourceList,
+  openQuoteLog,
+}: {
+  quotes: Array<{
+    sourceWorkItemId: string;
+    createdAt: string;
+    assignedAt: string;
+    acceptedAt?: string;
+    priceSentAt?: string;
+    finalizedAt?: string;
+    customer: string;
+    dealer: string;
+    agent: string;
+    lifecycle: string;
+    channel: string;
+    workType: string;
+    method: string;
+  }>;
+  timingRows: Array<{
+    sourceWorkItemId: string;
+    createdAt: string;
+    assignedAt: string;
+    acceptedAt?: string;
+    priceSentAt?: string;
+    finalizedAt?: string;
+    customer: string;
+    dealer: string;
+    agent: string;
+    lifecycle: string;
+    channel: string;
+    workType: string;
+    timeToAccept: number | null;
+    timeToPrice: number | null;
+    timeToFinal: number | null;
+    totalCycle: number | null;
+  }>;
+  agentList: Agent[];
+  sourceList: SourceOption[];
+  openQuoteLog: (sourceWorkItemId: string) => void;
+}) {
+  const [mode, setMode] = useState<AfterHoursMode>("after_hours");
+  const [agentFilter, setAgentFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
+
+  // Filter quotes by after-hours or sunday
+  const filteredQuotes = useMemo(() => {
+    const filterFn = mode === "sunday" ? isSunday : isAfterHours;
+    let result = timingRows.filter((q) => filterFn(q.createdAt));
+    if (agentFilter !== "all") {
+      result = result.filter((q) => q.agent === agentFilter);
+    }
+    if (sourceFilter !== "all") {
+      result = result.filter((q) => q.dealer === sourceFilter);
+    }
+    return result;
+  }, [timingRows, mode, agentFilter, sourceFilter]);
+
+  // Metrics
+  const incoming = filteredQuotes.length;
+  const sold = filteredQuotes.filter((q) => q.lifecycle === "Sold").length;
+  const notSold = filteredQuotes.filter((q) => q.lifecycle === "Not Sold").length;
+  const pendingPricing = filteredQuotes.filter((q) => q.lifecycle === "Price Sent").length;
+  const active = filteredQuotes.filter((q) => q.lifecycle === "Active").length;
+  const finalized = sold + notSold;
+  const conversion = finalized ? ((sold / finalized) * 100).toFixed(1) : "—";
+
+  // Avg time to pricing (minutes)
+  const pricingTimes = filteredQuotes
+    .map((q) => q.timeToPrice)
+    .filter((v): v is number => v !== null && v !== undefined);
+  const avgTimeToPricing = pricingTimes.length
+    ? pricingTimes.reduce((sum, v) => sum + v, 0) / pricingTimes.length
+    : null;
+
+  return (
+    <div className="space-y-6">
+      {/* Controls */}
+      <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Mode toggle */}
+          <div className="flex rounded-xl border border-slate-200 p-1">
+            <button
+              type="button"
+              onClick={() => setMode("after_hours")}
+              className={cn(
+                "rounded-lg px-4 py-2 text-sm font-bold transition-colors",
+                mode === "after_hours"
+                  ? "bg-[#223f7a] text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-100",
+              )}
+            >
+              After Hours
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("sunday")}
+              className={cn(
+                "rounded-lg px-4 py-2 text-sm font-bold transition-colors",
+                mode === "sunday"
+                  ? "bg-[#223f7a] text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-100",
+              )}
+            >
+              Sunday
+            </button>
+          </div>
+
+          {/* Agent filter */}
+          <select
+            value={agentFilter}
+            onChange={(e) => setAgentFilter(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm"
+          >
+            <option value="all">All Agents</option>
+            {agentList.map((agent) => (
+              <option key={agent.id} value={agent.name}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Source filter */}
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm"
+          >
+            <option value="all">All Sources</option>
+            {sourceList.map((source) => (
+              <option key={source.id} value={source.name}>
+                {source.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <p className="mt-3 text-xs font-semibold text-slate-400">
+          {mode === "after_hours"
+            ? "Regular hours: Mon–Sat 08:30–17:30 EST. Showing activity outside these hours (excluding Sundays)."
+            : "Showing all activity on Sundays (EST timezone)."}
+        </p>
+      </section>
+
+      {/* Summary Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <SummaryCard
+          label="Incoming"
+          value={incoming}
+          icon={<FileText className="h-5 w-5 text-blue-600" />}
+          tone="bg-blue-50"
+          note="Total quotes received"
+        />
+        <SummaryCard
+          label="Active"
+          value={active}
+          icon={<Clock3 className="h-5 w-5 text-amber-600" />}
+          tone="bg-amber-50"
+          note="Currently in progress"
+        />
+        <SummaryCard
+          label="Sold"
+          value={sold}
+          icon={<DollarSign className="h-5 w-5 text-emerald-600" />}
+          tone="bg-emerald-50"
+          note={`${conversion}% conversion`}
+        />
+        <SummaryCard
+          label="Not Sold"
+          value={notSold}
+          icon={<XCircle className="h-5 w-5 text-rose-600" />}
+          tone="bg-rose-50"
+        />
+        <SummaryCard
+          label="Pending Pricing"
+          value={pendingPricing}
+          icon={<Send className="h-5 w-5 text-violet-600" />}
+          tone="bg-violet-50"
+          note="Price sent, awaiting decision"
+        />
+        <SummaryCard
+          label="Avg Time to Price"
+          value={avgTimeToPricing !== null ? formatDuration(avgTimeToPricing) : "—"}
+          icon={<Clock3 className="h-5 w-5 text-indigo-600" />}
+          tone="bg-indigo-50"
+          note="From acceptance to pricing"
+        />
+      </div>
+
+      {/* Agent breakdown */}
+      {agentFilter === "all" && (
+        <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 p-6">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+              {mode === "sunday" ? "Sunday" : "After Hours"} · By Agent
+            </p>
+            <h3 className="mt-1 text-xl font-black">Agent Breakdown</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th className="px-5 py-3">Agent</th>
+                  <th className="px-5 py-3 text-right">Incoming</th>
+                  <th className="px-5 py-3 text-right">Active</th>
+                  <th className="px-5 py-3 text-right">Sold</th>
+                  <th className="px-5 py-3 text-right">Not Sold</th>
+                  <th className="px-5 py-3 text-right">Pending</th>
+                  <th className="px-5 py-3 text-right">Avg Time to Price</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {agentList
+                  .map((agent) => {
+                    const rows = filteredQuotes.filter((q) => q.agent === agent.name);
+                    if (rows.length === 0) return null;
+                    const agentSold = rows.filter((q) => q.lifecycle === "Sold").length;
+                    const agentNotSold = rows.filter((q) => q.lifecycle === "Not Sold").length;
+                    const agentPending = rows.filter((q) => q.lifecycle === "Price Sent").length;
+                    const agentActive = rows.filter((q) => q.lifecycle === "Active").length;
+                    const prices = rows
+                      .map((q) => q.timeToPrice)
+                      .filter((v): v is number => v !== null);
+                    const avgPrice = prices.length
+                      ? prices.reduce((s, v) => s + v, 0) / prices.length
+                      : null;
+                    return (
+                      <tr key={agent.id} className="hover:bg-slate-50">
+                        <td className="px-5 py-4 font-black">{agent.name}</td>
+                        <td className="px-5 py-4 text-right font-bold">{rows.length}</td>
+                        <td className="px-5 py-4 text-right font-bold">{agentActive}</td>
+                        <td className="px-5 py-4 text-right font-bold text-emerald-700">{agentSold}</td>
+                        <td className="px-5 py-4 text-right font-bold text-rose-700">{agentNotSold}</td>
+                        <td className="px-5 py-4 text-right font-bold text-violet-700">{agentPending}</td>
+                        <td className="px-5 py-4 text-right font-bold">{formatDuration(avgPrice)}</td>
+                      </tr>
+                    );
+                  })
+                  .filter(Boolean)}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Source breakdown */}
+      {sourceFilter === "all" && (
+        <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 p-6">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+              {mode === "sunday" ? "Sunday" : "After Hours"} · By Source
+            </p>
+            <h3 className="mt-1 text-xl font-black">Source Breakdown</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th className="px-5 py-3">Source</th>
+                  <th className="px-5 py-3 text-right">Incoming</th>
+                  <th className="px-5 py-3 text-right">Sold</th>
+                  <th className="px-5 py-3 text-right">Not Sold</th>
+                  <th className="px-5 py-3 text-right">Pending</th>
+                  <th className="px-5 py-3 text-right">Conversion</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(() => {
+                  const sourceMap = new Map<string, { name: string; total: number; sold: number; notSold: number; pending: number }>();
+                  filteredQuotes.forEach((q) => {
+                    const row = sourceMap.get(q.dealer) || { name: q.dealer, total: 0, sold: 0, notSold: 0, pending: 0 };
+                    row.total += 1;
+                    if (q.lifecycle === "Sold") row.sold += 1;
+                    if (q.lifecycle === "Not Sold") row.notSold += 1;
+                    if (q.lifecycle === "Price Sent") row.pending += 1;
+                    sourceMap.set(q.dealer, row);
+                  });
+                  return Array.from(sourceMap.values())
+                    .sort((a, b) => b.total - a.total)
+                    .map((row) => {
+                      const fin = row.sold + row.notSold;
+                      const conv = fin ? ((row.sold / fin) * 100).toFixed(1) : "—";
+                      return (
+                        <tr key={row.name} className="hover:bg-slate-50">
+                          <td className="px-5 py-4 font-black">{row.name}</td>
+                          <td className="px-5 py-4 text-right font-bold">{row.total}</td>
+                          <td className="px-5 py-4 text-right font-bold text-emerald-700">{row.sold}</td>
+                          <td className="px-5 py-4 text-right font-bold text-rose-700">{row.notSold}</td>
+                          <td className="px-5 py-4 text-right font-bold text-violet-700">{row.pending}</td>
+                          <td className="px-5 py-4 text-right font-bold">{conv}%</td>
+                        </tr>
+                      );
+                    });
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Full quote list */}
+      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+            {mode === "sunday" ? "Sunday" : "After Hours"} · All Quotes
+          </p>
+          <h3 className="mt-1 text-xl font-black">
+            {incoming} quote{incoming !== 1 ? "s" : ""} received {mode === "sunday" ? "on Sundays" : "after hours"}
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+              <tr>
+                <th className="px-5 py-3">Date / Time</th>
+                <th className="px-5 py-3">Customer</th>
+                <th className="px-5 py-3">Source</th>
+                <th className="px-5 py-3">Agent</th>
+                <th className="px-5 py-3">Channel</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3 text-right">Time to Price</th>
+                <th className="px-5 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredQuotes.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-12 text-center text-sm font-semibold text-slate-400">
+                    No {mode === "sunday" ? "Sunday" : "after-hours"} quotes found for the selected period and filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredQuotes
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                  .map((q) => (
+                    <tr key={q.sourceWorkItemId} className="hover:bg-slate-50">
+                      <td className="px-5 py-4 text-xs text-slate-500">
+                        {formatDateTime(q.createdAt)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="font-black">{q.customer}</p>
+                      </td>
+                      <td className="px-5 py-4 font-bold text-slate-600">{q.dealer}</td>
+                      <td className="px-5 py-4 font-bold">{q.agent}</td>
+                      <td className="px-5 py-4 text-xs font-semibold text-slate-500">{q.channel}</td>
+                      <td className="px-5 py-4">
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ring-1",
+                            q.lifecycle === "Sold" && "bg-emerald-50 text-emerald-700 ring-emerald-200",
+                            q.lifecycle === "Not Sold" && "bg-rose-50 text-rose-700 ring-rose-200",
+                            q.lifecycle === "Price Sent" && "bg-violet-50 text-violet-700 ring-violet-200",
+                            q.lifecycle === "Active" && "bg-blue-50 text-blue-700 ring-blue-200",
+                          )}
+                        >
+                          {q.lifecycle}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right font-bold">
+                        {formatDuration(q.timeToPrice)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <button
+                          type="button"
+                          onClick={() => openQuoteLog(q.sourceWorkItemId)}
+                          className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200"
+                        >
+                          Log
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   );
 }
 
