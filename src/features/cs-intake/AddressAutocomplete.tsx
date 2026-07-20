@@ -55,7 +55,7 @@ export default function AddressAutocomplete({ defaultValue, disabled, onAddressS
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyAx1suQvn2_gb9fS4WpmFpFbfx5q1JaSV4';
 
   useEffect(() => {
     if (!apiKey || typeof window === 'undefined') return;
