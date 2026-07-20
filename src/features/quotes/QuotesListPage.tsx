@@ -1,16 +1,17 @@
 'use client';
 
-import { AlertCircle, Filter, Link2, RefreshCw } from 'lucide-react';
+import { AlertCircle, Filter, Link2, RefreshCw, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { ProfileLite } from '../nhwd-shared/client';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { ui } from '../nhwd-shared/ui';
-import { changeQuoteStatus, flagQuoteDuplicate, getMyQuotes } from './api';
+import { changeQuoteStatus, flagQuoteDuplicate, getMyQuotes, getQuoteHistory } from './api';
 import DuplicateFlagForm from './DuplicateFlagForm';
 import QuoteCard from './QuoteCard';
-import type { OperationalQuote, QuoteStatus } from './types';
+import QuoteHistory from './QuoteHistory';
+import type { OperationalQuote, QuoteHistoryEvent, QuoteStatus } from './types';
 
 interface QuotesListPageProps {
   initialProfile: ProfileLite;
@@ -101,6 +102,24 @@ export default function QuotesListPage({ initialProfile }: QuotesListPageProps) 
     router.push(`/tools/quotes/${quoteId}`);
   };
 
+  // Quote Log modal state
+  const [logQuoteId, setLogQuoteId] = useState<string | null>(null);
+  const [logEvents, setLogEvents] = useState<QuoteHistoryEvent[]>([]);
+  const [logLoading, setLogLoading] = useState(false);
+
+  const handleViewLog = async (quoteId: string) => {
+    setLogQuoteId(quoteId);
+    setLogLoading(true);
+    try {
+      const events = await getQuoteHistory(quoteId);
+      setLogEvents(events as QuoteHistoryEvent[]);
+    } catch {
+      setLogEvents([]);
+    } finally {
+      setLogLoading(false);
+    }
+  };
+
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -178,6 +197,7 @@ export default function QuotesListPage({ initialProfile }: QuotesListPageProps) 
               onStatusChange={handleStatusChange}
               onFlagDuplicate={handleFlagDuplicate}
               onOpen={handleOpen}
+              onViewLog={(id) => void handleViewLog(id)}
             />
           ))}
         </div>
@@ -190,6 +210,29 @@ export default function QuotesListPage({ initialProfile }: QuotesListPageProps) 
           onSubmit={handleFlagSubmit}
           onCancel={() => setFlaggingQuoteId(null)}
         />
+      )}
+
+      {/* Quote Log modal */}
+      {logQuoteId && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6" onMouseDown={() => { setLogQuoteId(null); setLogEvents([]); }}>
+          <div className="mx-auto max-w-6xl rounded-[30px] bg-[#f3f5f9] p-3 shadow-2xl sm:p-5" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-black text-slate-900">Quote Activity</h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">Read-only timeline of all events for this quote.</p>
+              </div>
+              <button className={ui.btnGhost} onClick={() => { setLogQuoteId(null); setLogEvents([]); }}><X className="h-4 w-4" />Close</button>
+            </div>
+            {logLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className="h-5 w-5 animate-spin text-slate-400" />
+                <span className="ml-2 text-sm font-semibold text-slate-500">Loading history...</span>
+              </div>
+            ) : (
+              <QuoteHistory quoteId={logQuoteId} events={logEvents} />
+            )}
+          </div>
+        </div>
       )}
     </ModuleShell>
   );

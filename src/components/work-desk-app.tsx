@@ -8009,7 +8009,7 @@ function ManagerView({
                   <ExecutiveReport reportData={reportData} />
                 ) : null}
                 {reportView === "not_sold" ? (
-                  <NotSoldReport rows={reportData.notSoldRows} onExport={exportNotSoldQuotes} />
+                  <NotSoldReport rows={reportData.notSoldRows} onExport={exportNotSoldQuotes} onOpenLog={openQuoteLog} />
                 ) : null}
                 {reportView === "exceptions" ? (
                   <ExceptionCenterReport items={reportData.exceptionItems} />
@@ -10460,6 +10460,7 @@ function EmptyReport({ title, note }: { title: string; note: string }) {
 function NotSoldReport({
   rows,
   onExport,
+  onOpenLog,
 }: {
   rows: Array<{
     id: string;
@@ -10483,6 +10484,7 @@ function NotSoldReport({
     latestNoteAt?: string;
   }>;
   onExport: () => void;
+  onOpenLog: (sourceWorkItemId: string) => void;
 }) {
   const topReason = Array.from(
     rows.reduce((map, row) => {
@@ -10505,7 +10507,7 @@ function NotSoldReport({
       </div>
       <ReportShell eyebrow="Not Sold Report" title="Lost quote details" note="Customer, source, salesperson, agent, timing, reason, and documentation for every Not Sold decision.">
         <div className="mb-4 flex justify-end"><button type="button" onClick={onExport} disabled={!rows.length} className="inline-flex items-center gap-2 rounded-xl bg-[#223f7a] px-4 py-2.5 text-xs font-black text-white disabled:opacity-50"><Download className="h-4 w-4" />Export Not Sold CSV</button></div>
-        {rows.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3 pr-5">Decision</th><th className="py-3 pr-5">Customer</th><th className="py-3 pr-5">Source / Salesperson</th><th className="py-3 pr-5">Agent / Input</th><th className="py-3 pr-5">Reason</th><th className="py-3 pr-5">Timing</th><th className="py-3">Documentation</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.id}><td className="py-4 pr-5"><p className="font-black">{row.finalizedAt ? formatDate(row.finalizedAt) : '—'}</p><p className="mt-1 text-xs font-semibold text-slate-400">Created {formatDate(row.createdAt)}</p></td><td className="py-4 pr-5"><p className="font-black text-slate-900">{row.customer}</p><p className="mt-1 text-xs font-semibold text-slate-500">{workTypeLabels[row.workType]}</p></td><td className="py-4 pr-5"><p className="font-bold">{row.dealer}</p><p className="mt-1 text-xs text-slate-500">{row.salesperson}</p></td><td className="py-4 pr-5"><p className="font-bold">{row.agent}</p><p className="mt-1 text-xs text-slate-500">{row.channel}</p></td><td className="py-4 pr-5"><span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-700">{row.notSoldReason || 'Unknown'}</span></td><td className="py-4 pr-5 text-xs font-semibold text-slate-600"><p>Take → Price: {formatDuration(row.timeToPrice)}</p><p className="mt-1">Price → Decision: {formatDuration(row.priceToDecision)}</p><p className="mt-1">Total: {formatDuration(row.totalCycle)}</p></td><td className="max-w-sm py-4"><p className="font-black">{row.noteCount} note{row.noteCount === 1 ? '' : 's'}</p><p className="mt-1 line-clamp-2 text-xs font-semibold text-slate-500">{row.latestNote || 'No quote note recorded'}</p>{row.latestNoteBy ? <p className="mt-1 text-[11px] font-bold text-slate-400">{row.latestNoteBy}{row.latestNoteAt ? ` · ${formatDateTime(row.latestNoteAt)}` : ''}</p> : null}</td></tr>)}</tbody></table></div> : <EmptyReport title="No Not Sold quotes" note="No quotes were marked Not Sold in the selected date range." />}
+        {rows.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-[11px] font-black uppercase tracking-wider text-slate-400"><tr><th className="py-3 pr-5">Decision</th><th className="py-3 pr-5">Customer</th><th className="py-3 pr-5">Source / Salesperson</th><th className="py-3 pr-5">Agent / Input</th><th className="py-3 pr-5">Reason</th><th className="py-3 pr-5">Timing</th><th className="py-3 pr-5">Documentation</th><th className="py-3">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.id}><td className="py-4 pr-5"><p className="font-black">{row.finalizedAt ? formatDate(row.finalizedAt) : '—'}</p><p className="mt-1 text-xs font-semibold text-slate-400">Created {formatDate(row.createdAt)}</p></td><td className="py-4 pr-5"><p className="font-black text-slate-900">{row.customer}</p><p className="mt-1 text-xs font-semibold text-slate-500">{workTypeLabels[row.workType]}</p></td><td className="py-4 pr-5"><p className="font-bold">{row.dealer}</p><p className="mt-1 text-xs text-slate-500">{row.salesperson}</p></td><td className="py-4 pr-5"><p className="font-bold">{row.agent}</p><p className="mt-1 text-xs text-slate-500">{row.channel}</p></td><td className="py-4 pr-5"><span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-700">{row.notSoldReason || 'Unknown'}</span></td><td className="py-4 pr-5 text-xs font-semibold text-slate-600"><p>Take → Price: {formatDuration(row.timeToPrice)}</p><p className="mt-1">Price → Decision: {formatDuration(row.priceToDecision)}</p><p className="mt-1">Total: {formatDuration(row.totalCycle)}</p></td><td className="max-w-sm py-4 pr-5"><p className="font-black">{row.noteCount} note{row.noteCount === 1 ? '' : 's'}</p><p className="mt-1 line-clamp-2 text-xs font-semibold text-slate-500">{row.latestNote || 'No quote note recorded'}</p>{row.latestNoteBy ? <p className="mt-1 text-[11px] font-bold text-slate-400">{row.latestNoteBy}{row.latestNoteAt ? ` · ${formatDateTime(row.latestNoteAt)}` : ''}</p> : null}</td><td className="py-4"><button type="button" onClick={() => onOpenLog(row.id)} className="rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-3 py-2 text-xs font-black text-[#223f7a]">Log</button></td></tr>)}</tbody></table></div> : <EmptyReport title="No Not Sold quotes" note="No quotes were marked Not Sold in the selected date range." />}
       </ReportShell>
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, Clock, ExternalLink, Flag } from 'lucide-react';
+import { AlertTriangle, BookOpen, Clock, ExternalLink, Flag } from 'lucide-react';
 
 import { statusLabel, ui } from '../nhwd-shared/ui';
 import {
@@ -16,6 +16,7 @@ export interface QuoteCardProps {
   onStatusChange: (quoteId: string, newStatus: QuoteStatus) => Promise<void>;
   onFlagDuplicate: (quoteId: string) => void;
   onOpen: (quoteId: string) => void;
+  onViewLog?: (quoteId: string) => void;
 }
 
 const STATUS_TONE: Record<QuoteStatus, string> = {
@@ -69,7 +70,7 @@ function transitionLabel(status: QuoteStatus): string {
   return labels[status] || statusLabel(status);
 }
 
-export default function QuoteCard({ quote, onStatusChange, onFlagDuplicate, onOpen }: QuoteCardProps) {
+export default function QuoteCard({ quote, onStatusChange, onFlagDuplicate, onOpen, onViewLog }: QuoteCardProps) {
   const urgency = calculateUrgency(quote);
   const urgencyStyle = URGENCY_STYLES[urgency];
   const validTransitions = QUOTE_TRANSITIONS[quote.status] ?? [];
@@ -130,6 +131,18 @@ export default function QuoteCard({ quote, onStatusChange, onFlagDuplicate, onOp
 
       {/* Footer: actions */}
       <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-5 py-3">
+        {/* Log button */}
+        {onViewLog && (
+          <button
+            type="button"
+            className={ui.btnSecondary}
+            onClick={() => onViewLog(quote.id)}
+          >
+            <BookOpen className="h-4 w-4" />
+            Log
+          </button>
+        )}
+
         {/* Open button */}
         <button
           type="button"
