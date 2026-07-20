@@ -9131,6 +9131,7 @@ function UserAdminPanel() {
               <select name="role" className="field">
                 <option value="agent">Agent</option>
                 <option value="customer_service">Customer Service</option>
+                <option value="commercial">Commercial</option>
                 <option value="manager">Manager / Admin</option>
               </select>
             </Field>
@@ -9227,14 +9228,18 @@ function UserAdminPanel() {
                               ? "bg-[#eef3fb] text-[#223f7a]"
                               : user.role === "customer_service"
                                 ? "bg-cyan-50 text-cyan-700"
-                                : "bg-slate-100 text-slate-600",
+                                : user.role === "commercial"
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-slate-100 text-slate-600",
                           )}
                         >
                           {user.role === "manager"
                             ? "Manager / Admin"
                             : user.role === "customer_service"
                               ? "Customer Service"
-                              : "Agent"}
+                              : user.role === "commercial"
+                                ? "Commercial"
+                                : "Agent"}
                         </span>
                       </td>
                       <td className="px-5 py-4">
