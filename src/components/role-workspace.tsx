@@ -7,7 +7,7 @@ import {
   Headphones,
   LayoutDashboard,
   RefreshCw,
-  UploadCloud,
+  UserCog,
   UsersRound,
 } from "lucide-react";
 import { Suspense, useMemo, useState } from "react";
@@ -17,7 +17,6 @@ import CommercialWorkspace from "@/features/commercial/CommercialWorkspace";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type { ProfileLite } from "@/features/nhwd-shared/types";
-import PowerBiRenewalImport from "@/features/renewals/PowerBiRenewalImport";
 import RenewalsPage from "@/features/renewals/RenewalsPage";
 import WorkloadLog from "@/features/workload/WorkloadLog";
 import type { DashboardData, SessionProfile } from "@/lib/types";
@@ -28,8 +27,8 @@ type WorkspaceTab =
   | "intake_queue"
   | "customer_service"
   | "renewals"
-  | "powerbi"
-  | "commercial_board";
+  | "commercial_board"
+  | "user_admin";
 
 interface TabDefinition {
   id: WorkspaceTab;
@@ -262,34 +261,44 @@ export function RoleWorkspace({
       },
     ];
 
-    // --- Management layout: shared tabs + admin tools (with divider) ---
+    // --- Management layout: streamlined tabs ---
     if (sessionProfile.role === "manager") {
       return [
-        sharedTabs[0], // Work Desk
-        sharedTabs[1], // Customer Quote
-        sharedTabs[2], // Intake Queue
-        sharedTabs[3], // Renewals
+        {
+          id: "desk" as WorkspaceTab,
+          label: "Work Desk",
+          shortLabel: "Desk",
+          description: "Turns, quotes and reports",
+          icon: LayoutDashboard,
+        },
+        {
+          id: "customer_service" as WorkspaceTab,
+          label: "Customer Service",
+          shortLabel: "CS",
+          description: "Quote intake and sales handoff",
+          icon: UsersRound,
+        },
         {
           id: "commercial_board" as WorkspaceTab,
           label: "Commercial Board",
           shortLabel: "Commercial",
           description: "Commercial policies Kanban",
           icon: Building2,
+        },
+        {
+          id: "renewals" as WorkspaceTab,
+          label: "Renewals",
+          shortLabel: "Renewals",
+          description: "Pipeline, assignments and import",
+          icon: FileSpreadsheet,
+        },
+        {
+          id: "user_admin" as WorkspaceTab,
+          label: "User Admin",
+          shortLabel: "Users",
+          description: "Users, access and sources",
+          icon: UserCog,
           dividerBefore: true,
-        },
-        {
-          id: "customer_service" as WorkspaceTab,
-          label: "Customer Service",
-          shortLabel: "CS Mgmt",
-          description: "Intakes oversight and Sales handoff",
-          icon: UsersRound,
-        },
-        {
-          id: "powerbi" as WorkspaceTab,
-          label: "Power BI Upload",
-          shortLabel: "Power BI",
-          description: "Import renewal data",
-          icon: UploadCloud,
         },
       ];
     }
@@ -338,12 +347,8 @@ export function RoleWorkspace({
         initialProfile={profile}
         embedded
         initialTab={sessionProfile.role === "manager" ? "pipeline" : "overview"}
-        showImportTab={false}
+        showImportTab={sessionProfile.role === "manager"}
       />
-    );
-  } else if (activeTab === "powerbi") {
-    externalWorkspaceContent = (
-      <PowerBiRenewalImport initialProfile={profile} embedded />
     );
   } else if (activeTab === "commercial_board") {
     externalWorkspaceContent = (
@@ -353,10 +358,14 @@ export function RoleWorkspace({
     );
   }
 
+  // When user_admin tab is selected, we tell WorkDeskApp to show its administration panel
+  const forceManagerTab = activeTab === "user_admin" ? "administration" as const : undefined;
+
   return (
     <WorkDeskApp
       sessionProfile={sessionProfile}
       initialData={initialData}
+      forceManagerTab={forceManagerTab}
       workspaceTabs={
         <WorkspaceTabs
           tabs={tabs}

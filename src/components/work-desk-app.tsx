@@ -2543,12 +2543,14 @@ export function WorkDeskApp({
   workspaceTabs,
   externalWorkspaceContent,
   workloadDatabaseContent,
+  forceManagerTab,
 }: {
   sessionProfile: SessionProfile;
   initialData: DashboardData;
   workspaceTabs?: React.ReactNode;
   externalWorkspaceContent?: React.ReactNode;
   workloadDatabaseContent?: React.ReactNode;
+  forceManagerTab?: "overview" | "work" | "quotes" | "reports" | "team" | "administration";
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -2594,7 +2596,13 @@ export function WorkDeskApp({
     initialData.passEvents,
   );
   const [agentTab, setAgentTab] = useState<AgentTab>("desk");
-  const [managerTab, setManagerTab] = useState<ManagerTab>("overview");
+  const [managerTab, setManagerTab] = useState<ManagerTab>(forceManagerTab ?? "overview");
+
+  // Sync forceManagerTab from parent (top-level tab navigation)
+  useEffect(() => {
+    if (forceManagerTab) setManagerTab(forceManagerTab);
+  }, [forceManagerTab]);
+
   const [whatsappCurrentId, setWhatsappCurrentId] = useState(
     initialData.rotations.whatsapp,
   );
@@ -5645,7 +5653,7 @@ function ManagerView({
   const [managerDatabaseView, setManagerDatabaseView] = useState<"quotes" | "workloads">("quotes");
   const [administrationView, setAdministrationView] = useState<
     "controls" | "users" | "sources"
-  >("controls");
+  >("users");
   const selectedReport =
     reportNavigationItems.find((item) => item.id === reportView) ??
     reportNavigationItems[0];
@@ -5826,11 +5834,6 @@ function ManagerView({
       id: "reports",
       label: "Reports",
       icon: <BarChart3 className="h-4 w-4" />,
-    },
-    {
-      id: "administration",
-      label: "Team & Access",
-      icon: <UsersRound className="h-4 w-4" />,
     },
   ];
 
@@ -6952,25 +6955,13 @@ function ManagerView({
         <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-              Team & Access
+              User Administration
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-500">
-              Rotation controls, users, permissions, sources and salespeople in one compact workspace.
+              Users, permissions, sources and salespeople management.
             </p>
           </div>
           <div className="flex flex-wrap gap-1 rounded-2xl bg-slate-100 p-1.5">
-            <button
-              type="button"
-              onClick={() => setAdministrationView("controls")}
-              className={cn(
-                "rounded-xl px-4 py-2.5 text-xs font-black transition",
-                administrationView === "controls"
-                  ? "bg-[#223f7a] text-white shadow-sm"
-                  : "text-slate-500 hover:bg-white",
-              )}
-            >
-              Team Controls
-            </button>
             <button
               type="button"
               onClick={() => setAdministrationView("users")}
