@@ -445,36 +445,35 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
             className={addressVerified ? "inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-black text-emerald-700" : "inline-flex items-center gap-2 rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-4 py-2.5 text-xs font-black text-[#223f7a] hover:bg-[#e4ecf7] disabled:opacity-50 disabled:cursor-not-allowed"}
             onClick={async () => {
               setVerifyingAddress(true);
+              setError(null);
               try {
-                const street = encodeURIComponent(submission.addr_street || '');
-                const city = encodeURIComponent(submission.addr_city || '');
-                const state = encodeURIComponent(submission.addr_state || '');
-                const zip = encodeURIComponent(submission.addr_zip || '');
-                const url = `https://geocoding.geo.census.gov/geocoder/onelineaddress/addressMatches?address=${street},+${city},+${state}+${zip}&benchmark=Public_AR_Current&format=json`;
-                const res = await fetch(url);
-                if (res.ok) {
-                  const data = await res.json();
-                  const match = data?.result?.addressMatches?.[0];
-                  if (match) {
-                    const parts = match.matchedAddress?.split(',').map((s: string) => s.trim()) || [];
-                    if (parts.length >= 3) {
-                      const matchedStreet = parts[0];
-                      const matchedCity = parts[1];
-                      const stateZip = parts[2].split(' ');
-                      const matchedState = stateZip[0];
-                      const matchedZip = stateZip[1];
-                      patch({
-                        addr_street: matchedStreet || submission.addr_street,
-                        addr_city: matchedCity || submission.addr_city,
-                        addr_state: matchedState || submission.addr_state,
-                        addr_zip: matchedZip || submission.addr_zip,
-                      });
-                    }
+                const res = await fetch('/api/address/validate', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    street: submission.addr_street || '',
+                    city: submission.addr_city || '',
+                    state: submission.addr_state || '',
+                    zip: submission.addr_zip || '',
+                  }),
+                });
+                const data = await res.json();
+                if (res.ok && data.street) {
+                  patch({
+                    addr_street: data.street || submission.addr_street,
+                    addr_city: data.city || submission.addr_city,
+                    addr_state: data.state || submission.addr_state,
+                    addr_zip: data.zip || submission.addr_zip,
+                  });
+                  if (data.verified) {
                     setAddressVerified(true);
                   } else {
-                    setAddressVerified(false);
-                    setError('Address could not be verified. Please check the street, city, state and ZIP.');
+                    setAddressVerified(true);
+                    setNotice('Address was corrected but has unconfirmed components. Please review.');
                   }
+                } else {
+                  setAddressVerified(false);
+                  setError(data.error || 'Address could not be verified. Please check the street, city, state and ZIP.');
                 }
               } catch {
                 setError('Address verification service unavailable. Please verify manually.');
@@ -485,7 +484,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
           >
             {verifyingAddress ? 'Verifying…' : addressVerified ? <><CheckCircle2 className="h-4 w-4" /> Address Verified</> : 'Verify Address'}
           </button>
-          {addressVerified ? <span className="text-xs font-semibold text-emerald-600">Standardized by USPS/Census</span> : <span className="text-xs font-semibold text-slate-400">Validates and corrects formatting</span>}
+          {addressVerified ? <span className="text-xs font-semibold text-emerald-600">Standardized via Google Address Validation</span> : <span className="text-xs font-semibold text-slate-400">Validates and corrects formatting via USPS</span>}
         </div>
       </Section>
 
