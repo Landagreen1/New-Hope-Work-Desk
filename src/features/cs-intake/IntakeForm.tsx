@@ -140,6 +140,8 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [addressVerified, setAddressVerified] = useState(false);
+  const [verifyingAddress, setVerifyingAddress] = useState(false);
 
   const isCommercial = submission.line_of_business === 'commercial_auto';
   const disabled = readOnly || busy;
@@ -241,7 +243,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
     if (!drivers.length) return 'Add at least one person or driver.';
     for (const [index, driver] of drivers.entries()) {
       if (!driver.first_name || !driver.last_name || !driver.dob || !driver.license_number || !driver.license_state) {
-        return `Complete the name, DOB, ${driver.document_type === 'state_id' ? 'ID' : 'license'} number and state for person ${index + 1}.`;
+        return `Complete the name, DOB, ${driver.document_type === 'state_id' ? 'ID' : driver.document_type === 'passport' ? 'passport' : 'license'} number and state for person ${index + 1}.`;
       }
     }
     if (!vehicles.length) return 'Add at least one vehicle.';
@@ -337,13 +339,6 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
               <option value="requote">Requote</option>
             </select>
           </Field>
-          <Field label="Priority" required>
-            <select className={ui.select} disabled={disabled} value={submission.priority} onChange={(event) => patch({ priority: event.target.value as CsIntakePriority })}>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </Field>
           <Field label="Dealer / source">
             <select
               className={ui.select}
@@ -416,14 +411,15 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
           <Field label="Preferred contact"><select className={ui.select} disabled={disabled} value={submission.preferred_contact || ''} onChange={(event) => patch({ preferred_contact: event.target.value || null })}><option value="">Not specified</option><option value="Call">Call</option><option value="SMS">SMS</option><option value="WhatsApp">WhatsApp</option><option value="Email">Email</option></select></Field>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="lg:col-span-2"><Field label="Street address" required><input className={ui.input} disabled={disabled} value={submission.addr_street || ''} onChange={(event) => patch({ addr_street: event.target.value || null })} /></Field></div>
-          <Field label="Unit / Apt"><input className={ui.input} disabled={disabled} value={submission.addr_unit || ''} onChange={(event) => patch({ addr_unit: event.target.value || null })} /></Field>
-          <Field label="City" required><input className={ui.input} disabled={disabled} value={submission.addr_city || ''} onChange={(event) => patch({ addr_city: event.target.value || null })} /></Field>
+          <div className="lg:col-span-2"><Field label="Street address" required><input className={ui.input} disabled={disabled} value={submission.addr_street || ''} onChange={(event) => { patch({ addr_street: event.target.value || null }); setAddressVerified(false); }} /></Field></div>
+          <Field label="Unit / Apt"><input className={ui.input} disabled={disabled} value={submission.addr_unit || ''} onChange={(event) => { patch({ addr_unit: event.target.value || null }); setAddressVerified(false); }} /></Field>
+          <Field label="City" required><input className={ui.input} disabled={disabled} value={submission.addr_city || ''} onChange={(event) => { patch({ addr_city: event.target.value || null }); setAddressVerified(false); }} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="State" required><select className={ui.select} disabled={disabled} value={submission.addr_state || ''} onChange={(event) => patch({ addr_state: event.target.value || null })}><option value="">—</option>{US_STATES.map((state) => <option key={state}>{state}</option>)}</select></Field>
+            <Field label="State" required><select className={ui.select} disabled={disabled} value={submission.addr_state || ''} onChange={(event) => { patch({ addr_state: event.target.value || null }); setAddressVerified(false); }}><option value="">—</option>{US_STATES.map((state) => <option key={state}>{state}</option>)}</select></Field>
             <Field label="ZIP" required><input className={ui.input} disabled={disabled} value={submission.addr_zip || ''} onChange={(event) => {
               const zip = event.target.value || null;
               patch({ addr_zip: zip });
+              setAddressVerified(false);
               // Auto-fill city and state from ZIP using Zippopotam API
               if (zip && zip.length === 5 && /^\d{5}$/.test(zip)) {
                 fetch(`https://api.zippopotam.us/us/${zip}`)
@@ -441,6 +437,55 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
               }
             }} /></Field>
           </div>
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            type="button"
+            disabled={disabled || verifyingAddress || !submission.addr_street || !submission.addr_zip}
+            className={addressVerified ? "inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-black text-emerald-700" : "inline-flex items-center gap-2 rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-4 py-2.5 text-xs font-black text-[#223f7a] hover:bg-[#e4ecf7] disabled:opacity-50 disabled:cursor-not-allowed"}
+            onClick={async () => {
+              setVerifyingAddress(true);
+              try {
+                const street = encodeURIComponent(submission.addr_street || '');
+                const city = encodeURIComponent(submission.addr_city || '');
+                const state = encodeURIComponent(submission.addr_state || '');
+                const zip = encodeURIComponent(submission.addr_zip || '');
+                const url = `https://geocoding.geo.census.gov/geocoder/onelineaddress/addressMatches?address=${street},+${city},+${state}+${zip}&benchmark=Public_AR_Current&format=json`;
+                const res = await fetch(url);
+                if (res.ok) {
+                  const data = await res.json();
+                  const match = data?.result?.addressMatches?.[0];
+                  if (match) {
+                    const parts = match.matchedAddress?.split(',').map((s: string) => s.trim()) || [];
+                    if (parts.length >= 3) {
+                      const matchedStreet = parts[0];
+                      const matchedCity = parts[1];
+                      const stateZip = parts[2].split(' ');
+                      const matchedState = stateZip[0];
+                      const matchedZip = stateZip[1];
+                      patch({
+                        addr_street: matchedStreet || submission.addr_street,
+                        addr_city: matchedCity || submission.addr_city,
+                        addr_state: matchedState || submission.addr_state,
+                        addr_zip: matchedZip || submission.addr_zip,
+                      });
+                    }
+                    setAddressVerified(true);
+                  } else {
+                    setAddressVerified(false);
+                    setError('Address could not be verified. Please check the street, city, state and ZIP.');
+                  }
+                }
+              } catch {
+                setError('Address verification service unavailable. Please verify manually.');
+              } finally {
+                setVerifyingAddress(false);
+              }
+            }}
+          >
+            {verifyingAddress ? 'Verifying…' : addressVerified ? <><CheckCircle2 className="h-4 w-4" /> Address Verified</> : 'Verify Address'}
+          </button>
+          {addressVerified ? <span className="text-xs font-semibold text-emerald-600">Standardized by USPS/Census</span> : <span className="text-xs font-semibold text-slate-400">Validates and corrects formatting</span>}
         </div>
       </Section>
 
@@ -467,9 +512,9 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
                     <Field label="Relationship"><select className={ui.select} disabled={disabled} value={driver.relationship || 'other'} onChange={(event) => patchDriver(index, { relationship: event.target.value })}><option value="spouse">Spouse</option><option value="child">Child</option><option value="employee">Employee</option><option value="other">Other</option></select></Field>
                   </>
                 )}
-                <Field label="Document type" required><select className={ui.select} disabled={disabled} value={driver.document_type || 'driver_license'} onChange={(event) => patchDriver(index, { document_type: event.target.value as 'driver_license' | 'state_id' })}><option value="driver_license">Driver License</option><option value="state_id">State ID</option></select></Field>
-                <Field label={driver.document_type === 'state_id' ? 'ID number' : 'License number'} required><input className={ui.input} disabled={disabled} value={driver.license_number || ''} onChange={(event) => patchDriver(index, { license_number: event.target.value || null })} /></Field>
-                <Field label="Issuing state" required><select className={ui.select} disabled={disabled} value={driver.license_state || ''} onChange={(event) => patchDriver(index, { license_state: event.target.value || null })}><option value="">Select</option>{US_STATES.map((state) => <option key={state}>{state}</option>)}<option value="Foreign">Foreign</option></select></Field>
+                <Field label="Document type" required><select className={ui.select} disabled={disabled} value={driver.document_type || 'driver_license'} onChange={(event) => { const docType = event.target.value as 'driver_license' | 'state_id' | 'passport'; patchDriver(index, { document_type: docType, ...(docType === 'passport' ? { license_state: 'Foreign' } : {}) }); }}><option value="driver_license">Driver License</option><option value="state_id">State ID</option><option value="passport">Passport</option></select></Field>
+                <Field label={driver.document_type === 'state_id' ? 'ID number' : driver.document_type === 'passport' ? 'Passport number' : 'License number'} required><input className={ui.input} disabled={disabled} value={driver.license_number || ''} onChange={(event) => patchDriver(index, { license_number: event.target.value || null })} /></Field>
+                <Field label="Issuing state" required><select className={ui.select} disabled={disabled || driver.document_type === 'passport'} value={driver.license_state || ''} onChange={(event) => patchDriver(index, { license_state: event.target.value || null })}><option value="">Select</option>{US_STATES.map((state) => <option key={state}>{state}</option>)}<option value="Foreign">Foreign</option></select></Field>
                 <Field label="License status"><select className={ui.select} disabled={disabled} value={driver.license_status || 'valid'} onChange={(event) => patchDriver(index, { license_status: event.target.value })}><option value="valid">Valid</option><option value="permit">Permit</option><option value="foreign">Foreign</option><option value="suspended">Suspended</option><option value="not_licensed">Not licensed / ID only</option></select></Field>
                 <Field label="Years licensed"><input type="number" min="0" className={ui.input} disabled={disabled} value={driver.years_licensed ?? ''} onChange={(event) => patchDriver(index, { years_licensed: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
               </div>
