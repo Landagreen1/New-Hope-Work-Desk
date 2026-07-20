@@ -12,9 +12,9 @@
 --   - RLS: agents see only own cards, managers + commercial role see all (mirrored view)
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- 0. Add 'commercial' role to app_role enum
+-- 0. The 'commercial' role was added in v1.0.9-add-commercial-role.sql
+--    (ALTER TYPE ADD VALUE must be committed before use)
 -- ═══════════════════════════════════════════════════════════════════════════════
-alter type public.app_role add value if not exists 'commercial';
 
 begin;
 
