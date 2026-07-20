@@ -27,7 +27,7 @@ export default function BoardColumnComponent({
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-[290px] shrink-0 flex-col rounded-2xl border transition-colors ${
+      className={`flex w-full flex-col rounded-2xl border transition-colors ${
         isOver
           ? 'border-[#223f7a] bg-[#f0f4fb]'
           : 'border-slate-200 bg-[#f5f7fa]'

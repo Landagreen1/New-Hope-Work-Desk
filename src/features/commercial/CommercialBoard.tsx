@@ -22,7 +22,7 @@ import BoardColumnComponent from './BoardColumn';
 import CommercialCardPreview from './CommercialCardPreview';
 import NewCardForm from './NewCardForm';
 import type { BoardColumn, CommercialQuote } from './types';
-import { BOARD_COLUMNS } from './types';
+import { AGENT_ALLOWED_COLUMNS, BOARD_COLUMNS, LOCKED_COLUMNS, MANAGER_ONLY_COLUMNS } from './types';
 
 interface CommercialBoardProps {
   initialProfile: ProfileLite;
@@ -75,9 +75,28 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
 
   // ─── Drag handlers ──────────────────────────────────────────────────────────
 
+  /** Check if a move is allowed based on role */
+  const isMoveAllowed = (fromColumn: BoardColumn, toColumn: BoardColumn): boolean => {
+    if (isManager) return true; // Managers can move anywhere
+
+    // Agents cannot move cards FROM locked columns
+    if (LOCKED_COLUMNS.includes(fromColumn)) return false;
+
+    // Agents cannot move cards TO manager-only columns
+    if (MANAGER_ONLY_COLUMNS.includes(toColumn)) return false;
+
+    // Agents can only move within allowed columns
+    return AGENT_ALLOWED_COLUMNS.includes(toColumn);
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     const card = quotes.find((q) => q.id === event.active.id);
-    setActiveCard(card ?? null);
+    if (!card) return;
+
+    // Don't allow dragging locked cards (for agents)
+    if (!isManager && LOCKED_COLUMNS.includes(card.board_column)) return;
+
+    setActiveCard(card);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -92,6 +111,9 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
     const targetColumn = overQuote ? overQuote.board_column : (over.id as BoardColumn);
 
     if (activeQuote.board_column !== targetColumn && BOARD_COLUMNS.some((c) => c.id === targetColumn)) {
+      // Check if move is allowed
+      if (!isMoveAllowed(activeQuote.board_column, targetColumn)) return;
+
       // Optimistically move the card to the new column in local state
       setQuotes((prev) =>
         prev.map((q) =>
@@ -115,6 +137,12 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
     const targetColumn = overQuote ? overQuote.board_column : (over.id as BoardColumn);
 
     if (!BOARD_COLUMNS.some((c) => c.id === targetColumn)) return;
+
+    // Validate move is allowed
+    if (!isMoveAllowed(activeQuote.board_column, targetColumn)) {
+      await fetchQuotes(); // revert
+      return;
+    }
 
     // API call to persist the move
     try {
@@ -181,7 +209,7 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#526b9a]">
             {isManager ? 'Management Overview' : 'Commercial Department'}
           </p>
-          <h2 className={ui.pageTitle}>Commercial Quotes Board</h2>
+          <h2 className={ui.pageTitle}>Better Trello</h2>
           <p className={ui.pageSubtitle}>
             {isManager
               ? 'All commercial policy quotes across the team'
@@ -244,8 +272,8 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="overflow-x-auto pb-4">
-            <div className="flex gap-4" style={{ minWidth: `${visibleColumns.length * 300}px` }}>
+          <div className="pb-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
               {visibleColumns.map((column) => (
                 <BoardColumnComponent
                   key={column.id}

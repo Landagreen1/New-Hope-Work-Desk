@@ -7,7 +7,7 @@ import { useState } from 'react';
 
 import CommercialCardDetail from './CommercialCardDetail';
 import type { CommercialQuote } from './types';
-import { RISK_STYLES, STATUS_STYLES } from './types';
+import { LOCKED_COLUMNS, RISK_STYLES, STATUS_STYLES } from './types';
 
 interface CommercialCardPreviewProps {
   quote: CommercialQuote;
@@ -64,8 +64,11 @@ export default function CommercialCardPreview({
 }: CommercialCardPreviewProps) {
   const [showDetail, setShowDetail] = useState(false);
 
+  const isLocked = !isManager && LOCKED_COLUMNS.includes(quote.board_column);
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: quote.id,
+    disabled: isLocked,
   });
 
   const style = {
@@ -97,9 +100,13 @@ export default function CommercialCardPreview({
         ref={setNodeRef}
         style={style}
         {...attributes}
-        {...listeners}
+        {...(isLocked ? {} : listeners)}
         onClick={() => setShowDetail(true)}
-        className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-[#7890bc] hover:shadow-md"
+        className={`rounded-xl border bg-white p-3 shadow-sm transition ${
+          isLocked
+            ? 'cursor-default border-slate-300 opacity-75'
+            : 'cursor-pointer border-slate-200 hover:border-[#7890bc] hover:shadow-md'
+        }`}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
@@ -117,6 +124,11 @@ export default function CommercialCardPreview({
           {quote.is_mirrored && isManager && (
             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
               Mirrored
+            </span>
+          )}
+          {isLocked && (
+            <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
+              View Only
             </span>
           )}
         </div>

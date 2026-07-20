@@ -484,7 +484,7 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
                         >
                           <Paperclip className="h-3.5 w-3.5" />
                         </button>
-                        {!quote.is_deleted && (
+                        {!quote.is_deleted && isManager && (
                           <button
                             type="button"
                             onClick={() => setDeleteConfirmId(quote.id)}

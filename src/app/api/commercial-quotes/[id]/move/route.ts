@@ -14,13 +14,32 @@ const VALID_COLUMNS = [
   "not_sold",
   "commission_approved",
   "commission_not_approved",
-  "to_do",
+  "archive",
+];
+
+// Columns agents are allowed to move cards TO
+const AGENT_ALLOWED_TARGETS = [
+  "quote_intake",
+  "quoting",
+  "price_sent",
+  "sold",
+  "not_sold",
+];
+
+// Columns that are locked (agents cannot move cards FROM these)
+const LOCKED_COLUMNS = [
+  "commission_approved",
+  "commission_not_approved",
   "archive",
 ];
 
 /**
  * PATCH /api/commercial-quotes/:id/move
  * Move a card to a different column (drag-and-drop) and/or reorder within column.
+ * Enforces flow rules:
+ *   - Agents: can move between quote_intake, quoting, price_sent, sold, not_sold
+ *   - Managers: can move anywhere (including commission_approved/denied, archive)
+ *   - Cards in locked columns cannot be moved by agents
  */
 export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
@@ -42,6 +61,15 @@ export async function PATCH(request: Request, context: RouteContext) {
       { status: 401 },
     );
   }
+
+  // Get user role
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const isManager = profile?.role === "manager";
 
   let body: Record<string, unknown>;
   try {
@@ -74,6 +102,25 @@ export async function PATCH(request: Request, context: RouteContext) {
   const fromColumn = currentCard.board_column;
   const isColumnChange = fromColumn !== toColumn;
 
+  // ─── Flow rule enforcement ────────────────────────────────────────────────
+  if (!isManager) {
+    // Agents cannot move cards FROM locked columns
+    if (LOCKED_COLUMNS.includes(fromColumn)) {
+      return Response.json(
+        { error: "This card is locked and cannot be moved." },
+        { status: 403 },
+      );
+    }
+
+    // Agents cannot move cards TO manager-only columns
+    if (!AGENT_ALLOWED_TARGETS.includes(toColumn)) {
+      return Response.json(
+        { error: "You don't have permission to move cards to this column." },
+        { status: 403 },
+      );
+    }
+  }
+
   // Build update payload
   const updates: Record<string, unknown> = {
     board_column: toColumn,
@@ -97,6 +144,12 @@ export async function PATCH(request: Request, context: RouteContext) {
   // If changing columns, update column_entered_at for time-in-list tracking
   if (isColumnChange) {
     updates.column_entered_at = new Date().toISOString();
+
+    // When moved to sold, record sold_at and set commission_status to pending
+    if (toColumn === "sold") {
+      updates.sold_at = new Date().toISOString();
+      updates.commission_status = "pending";
+    }
 
     // Archive tracking
     if (toColumn === "archive") {
@@ -122,6 +175,14 @@ export async function PATCH(request: Request, context: RouteContext) {
       from_column: fromColumn,
       to_column: toColumn,
       moved_by: user.id,
+    });
+
+    // Record activity log
+    await supabase.from("commercial_quote_activity_log").insert({
+      quote_id: id,
+      actor_id: user.id,
+      event_type: "column_moved",
+      details: { from_column: fromColumn, to_column: toColumn },
     });
   }
 

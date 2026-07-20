@@ -8,7 +8,6 @@ export type BoardColumn =
   | 'not_sold'
   | 'commission_approved'
   | 'commission_not_approved'
-  | 'to_do'
   | 'archive';
 
 export type RiskLevel = 'low' | 'medium' | 'high';
@@ -142,8 +141,22 @@ export const BOARD_COLUMNS: { id: BoardColumn; label: string; color: string }[] 
   { id: 'not_sold', label: 'Not Sold', color: 'bg-rose-500' },
   { id: 'commission_approved', label: 'Commission Approved', color: 'bg-green-600' },
   { id: 'commission_not_approved', label: 'Commission Not Approved', color: 'bg-orange-500' },
-  { id: 'to_do', label: 'To Do', color: 'bg-slate-500' },
   { id: 'archive', label: 'Archive', color: 'bg-gray-400' },
+];
+
+// Agent-allowed transitions: agents can move cards through these columns
+export const AGENT_ALLOWED_COLUMNS: BoardColumn[] = [
+  'quote_intake', 'quoting', 'price_sent', 'sold', 'not_sold',
+];
+
+// Manager-only columns: only managers can move cards here
+export const MANAGER_ONLY_COLUMNS: BoardColumn[] = [
+  'commission_approved', 'commission_not_approved', 'archive',
+];
+
+// Columns where cards are locked (view-only for agents)
+export const LOCKED_COLUMNS: BoardColumn[] = [
+  'commission_approved', 'commission_not_approved', 'archive',
 ];
 
 export const RISK_STYLES: Record<RiskLevel, { bg: string; text: string; label: string }> = {
