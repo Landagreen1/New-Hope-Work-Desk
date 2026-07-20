@@ -241,7 +241,8 @@ type ReportView =
   | "integrity"
   | "system"
   | "timing"
-  | "activity";
+  | "activity"
+  | "after_hours";
 
 type ReportNavigationItem = {
   id: ReportView;

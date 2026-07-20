@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { ui } from '../nhwd-shared/ui';
 import VinDecoder from './VinDecoder';
+import AddressAutocomplete from './AddressAutocomplete';
 import {
   type CsIntakeDriver,
   type CsIntakeLob,
@@ -140,8 +141,6 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [addressVerified, setAddressVerified] = useState(false);
-  const [verifyingAddress, setVerifyingAddress] = useState(false);
 
   const isCommercial = submission.line_of_business === 'commercial_auto';
   const disabled = readOnly || busy;
@@ -411,15 +410,14 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
           <Field label="Preferred contact"><select className={ui.select} disabled={disabled} value={submission.preferred_contact || ''} onChange={(event) => patch({ preferred_contact: event.target.value || null })}><option value="">Not specified</option><option value="Call">Call</option><option value="SMS">SMS</option><option value="WhatsApp">WhatsApp</option><option value="Email">Email</option></select></Field>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="lg:col-span-2"><Field label="Street address" required><input className={ui.input} disabled={disabled} value={submission.addr_street || ''} onChange={(event) => { patch({ addr_street: event.target.value || null }); setAddressVerified(false); }} /></Field></div>
-          <Field label="Unit / Apt"><input className={ui.input} disabled={disabled} value={submission.addr_unit || ''} onChange={(event) => { patch({ addr_unit: event.target.value || null }); setAddressVerified(false); }} /></Field>
-          <Field label="City" required><input className={ui.input} disabled={disabled} value={submission.addr_city || ''} onChange={(event) => { patch({ addr_city: event.target.value || null }); setAddressVerified(false); }} /></Field>
+          <div className="lg:col-span-2"><Field label="Street address" required><AddressAutocomplete value={submission.addr_street || ''} disabled={disabled} onChange={(val) => patch({ addr_street: val || null })} onAddressSelected={({ street, unit, city, state, zip }) => patch({ addr_street: street || null, addr_unit: unit, addr_city: city || null, addr_state: state || null, addr_zip: zip || null })} /></Field></div>
+          <Field label="Unit / Apt"><input className={ui.input} disabled={disabled} value={submission.addr_unit || ''} onChange={(event) => patch({ addr_unit: event.target.value || null })} /></Field>
+          <Field label="City" required><input className={ui.input} disabled={disabled} value={submission.addr_city || ''} onChange={(event) => patch({ addr_city: event.target.value || null })} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="State" required><select className={ui.select} disabled={disabled} value={submission.addr_state || ''} onChange={(event) => { patch({ addr_state: event.target.value || null }); setAddressVerified(false); }}><option value="">—</option>{US_STATES.map((state) => <option key={state}>{state}</option>)}</select></Field>
+            <Field label="State" required><select className={ui.select} disabled={disabled} value={submission.addr_state || ''} onChange={(event) => patch({ addr_state: event.target.value || null })}><option value="">—</option>{US_STATES.map((state) => <option key={state}>{state}</option>)}</select></Field>
             <Field label="ZIP" required><input className={ui.input} disabled={disabled} value={submission.addr_zip || ''} onChange={(event) => {
               const zip = event.target.value || null;
               patch({ addr_zip: zip });
-              setAddressVerified(false);
               // Auto-fill city and state from ZIP using Zippopotam API
               if (zip && zip.length === 5 && /^\d{5}$/.test(zip)) {
                 fetch(`https://api.zippopotam.us/us/${zip}`)
@@ -437,54 +435,6 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
               }
             }} /></Field>
           </div>
-        </div>
-        <div className="mt-3 flex items-center gap-3">
-          <button
-            type="button"
-            disabled={disabled || verifyingAddress || !submission.addr_street || !submission.addr_zip}
-            className={addressVerified ? "inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-black text-emerald-700" : "inline-flex items-center gap-2 rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-4 py-2.5 text-xs font-black text-[#223f7a] hover:bg-[#e4ecf7] disabled:opacity-50 disabled:cursor-not-allowed"}
-            onClick={async () => {
-              setVerifyingAddress(true);
-              setError(null);
-              try {
-                const res = await fetch('/api/address/validate', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    street: submission.addr_street || '',
-                    city: submission.addr_city || '',
-                    state: submission.addr_state || '',
-                    zip: submission.addr_zip || '',
-                  }),
-                });
-                const data = await res.json();
-                if (res.ok && data.street) {
-                  patch({
-                    addr_street: data.street || submission.addr_street,
-                    addr_city: data.city || submission.addr_city,
-                    addr_state: data.state || submission.addr_state,
-                    addr_zip: data.zip || submission.addr_zip,
-                  });
-                  if (data.verified) {
-                    setAddressVerified(true);
-                  } else {
-                    setAddressVerified(true);
-                    setNotice('Address was corrected but has unconfirmed components. Please review.');
-                  }
-                } else {
-                  setAddressVerified(false);
-                  setError(data.error || 'Address could not be verified. Please check the street, city, state and ZIP.');
-                }
-              } catch {
-                setError('Address verification service unavailable. Please verify manually.');
-              } finally {
-                setVerifyingAddress(false);
-              }
-            }}
-          >
-            {verifyingAddress ? 'Verifying…' : addressVerified ? <><CheckCircle2 className="h-4 w-4" /> Address Verified</> : 'Verify Address'}
-          </button>
-          {addressVerified ? <span className="text-xs font-semibold text-emerald-600">Standardized via Google Address Validation</span> : <span className="text-xs font-semibold text-slate-400">Validates and corrects formatting via USPS</span>}
         </div>
       </Section>
 
