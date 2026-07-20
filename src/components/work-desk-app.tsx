@@ -15,7 +15,9 @@ import {
   CircleDollarSign,
   ClipboardList,
   Clock3,
+  DollarSign,
   Download,
+  FileText,
   FilePlus2,
   Gauge,
   KeyRound,
@@ -1303,6 +1305,69 @@ function PendingNotesPanel({
   );
 }
 
+/** Returns Tailwind color classes for the quote log timeline dot based on event type. */
+function logEventColor(eventType: string): { dot: string; text: string } {
+  switch (eventType) {
+    case "created_from_cs_intake":
+      return { dot: "bg-indigo-500 ring-indigo-100", text: "text-indigo-700" };
+    case "created":
+    case "assigned":
+    case "accepted":
+      return { dot: "bg-blue-500 ring-blue-100", text: "text-blue-700" };
+    case "price_sent":
+      return { dot: "bg-violet-500 ring-violet-100", text: "text-violet-700" };
+    case "sold":
+      return { dot: "bg-emerald-600 ring-emerald-100", text: "text-emerald-700" };
+    case "not_sold":
+      return { dot: "bg-rose-500 ring-rose-100", text: "text-rose-700" };
+    case "taken":
+    case "timer_claimed":
+      return { dot: "bg-amber-500 ring-amber-100", text: "text-amber-700" };
+    case "customer_service_handoff":
+      return { dot: "bg-cyan-500 ring-cyan-100", text: "text-cyan-700" };
+    case "ringcentral_intake_claim_completed":
+      return { dot: "bg-indigo-500 ring-indigo-100", text: "text-indigo-700" };
+    case "outcome_change":
+      return { dot: "bg-purple-500 ring-purple-100", text: "text-purple-700" };
+    case "note":
+      return { dot: "bg-blue-500 ring-blue-100", text: "text-blue-700" };
+    default:
+      return { dot: "bg-slate-400 ring-slate-100", text: "text-slate-600" };
+  }
+}
+
+/** Returns the icon for a quote log event type. */
+function logEventIcon(eventType: string) {
+  switch (eventType) {
+    case "created_from_cs_intake":
+      return <FileText className="h-3.5 w-3.5" />;
+    case "created":
+    case "assigned":
+      return <FilePlus2 className="h-3.5 w-3.5" />;
+    case "accepted":
+      return <CheckCircle2 className="h-3.5 w-3.5" />;
+    case "price_sent":
+      return <Send className="h-3.5 w-3.5" />;
+    case "sold":
+      return <DollarSign className="h-3.5 w-3.5" />;
+    case "not_sold":
+      return <XCircle className="h-3.5 w-3.5" />;
+    case "taken":
+    case "timer_claimed":
+      return <Zap className="h-3.5 w-3.5" />;
+    case "customer_service_handoff":
+      return <UsersRound className="h-3.5 w-3.5" />;
+    case "ringcentral_intake_claim_completed":
+      return <PhoneCall className="h-3.5 w-3.5" />;
+    case "note":
+      return <MessageCircleMore className="h-3.5 w-3.5" />;
+    case "outcome_change":
+      return <Activity className="h-3.5 w-3.5" />;
+    default:
+      return <Clock3 className="h-3.5 w-3.5" />;
+  }
+}
+
 function QuoteLogPanel({
   quote,
   activities,
@@ -1400,93 +1465,112 @@ function QuoteLogPanel({
         </div>
       </div>
 
-      <div className="max-h-[52vh] space-y-3 overflow-auto pr-1">
+      <div className="max-h-[52vh] overflow-auto pr-1">
         {timeline.length ? (
-          timeline.map((entry) => {
-            if (entry.kind === "note") {
-              return (
-                <div
-                  key={`note-${entry.id}`}
-                  className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-black uppercase tracking-[0.12em] text-blue-700">
-                      Note
-                    </p>
-                    <p className="text-[10px] font-bold text-slate-400">
-                      {formatDateTime(entry.note.createdAt)}
-                    </p>
-                  </div>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-700">
-                    {entry.note.note}
-                  </p>
-                  <p className="mt-2 text-xs font-black text-[#223f7a]">
-                    @{entry.note.authorUsername} · {entry.note.authorName}
-                  </p>
-                </div>
-              );
-            }
+          <div className="relative">
+            {/* Vertical timeline line */}
+            <div className="absolute left-[19px] top-6 bottom-6 w-0.5 bg-slate-200" aria-hidden="true" />
 
-            const detailReason =
-              typeof entry.activity.details?.reason === "string"
-                ? entry.activity.details.reason
-                : undefined;
-            const detailChange =
-              typeof entry.activity.details?.change_type === "string"
-                ? entry.activity.details.change_type
-                : undefined;
-            const detailNote =
-              typeof entry.activity.details?.note === "string"
-                ? entry.activity.details.note
-                : undefined;
-            return (
-              <div
-                key={`activity-${entry.id}`}
-                className="rounded-2xl border border-slate-200 bg-white p-4"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-black text-slate-900">
-                    {quoteActivityLabels[entry.activity.eventType] ||
-                      entry.activity.eventType}
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-400">
-                    {formatDateTime(entry.activity.createdAt)}
-                  </p>
-                </div>
-                <p className="mt-1 text-xs font-black text-slate-500">
-                  @{entry.activity.actorUsername} · {entry.activity.actorName}
-                </p>
-                {entry.activity.assignedAgent ? (
-                  <p className="mt-2 text-xs font-semibold text-slate-500">
-                    Assigned agent: {entry.activity.assignedAgent}
-                  </p>
-                ) : null}
-                {detailReason ? (
-                  <p className="mt-2 text-sm font-semibold text-slate-700">
-                    Reason: {detailReason}
-                  </p>
-                ) : null}
-                {detailChange ? (
-                  <p className="mt-2 text-sm font-semibold text-slate-700">
-                    Change type: {detailChange}
-                  </p>
-                ) : null}
-                {detailNote ? (
-                  <p className="mt-2 text-sm font-semibold text-slate-700">
-                    {detailNote}
-                  </p>
-                ) : null}
-                {entry.activity.eventType === "created_from_cs_intake" &&
-                  entry.activity.details ? (
-                  <div className="mt-3">
-                    <IntakeDataDisplay
-                      details={entry.activity.details as unknown as IntakeDataDetails}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            );
-          })
+            <ul className="relative space-y-4">
+              {timeline.map((entry) => {
+                const eventType = entry.kind === "note" ? "note" : entry.activity.eventType;
+                const color = logEventColor(eventType);
+
+                if (entry.kind === "note") {
+                  return (
+                    <li key={`note-${entry.id}`} className="relative pl-12">
+                      {/* Timeline dot */}
+                      <div className={`absolute left-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full ring-4 ${color.dot}`}>
+                        <span className="text-white">{logEventIcon("note")}</span>
+                      </div>
+                      {/* Note card */}
+                      <div className="rounded-2xl border border-blue-100 bg-blue-50/50 px-4 py-3 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className={`text-xs font-black uppercase tracking-wide ${color.text}`}>
+                            Note
+                          </span>
+                          <span className="text-xs font-semibold text-slate-400">
+                            {formatDateTime(entry.note.createdAt)}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm font-bold text-slate-800">
+                          @{entry.note.authorUsername} · {entry.note.authorName}
+                        </p>
+                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-700">
+                          {entry.note.note}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                }
+
+                const detailReason =
+                  typeof entry.activity.details?.reason === "string"
+                    ? entry.activity.details.reason
+                    : undefined;
+                const detailChange =
+                  typeof entry.activity.details?.change_type === "string"
+                    ? entry.activity.details.change_type
+                    : undefined;
+                const detailNote =
+                  typeof entry.activity.details?.note === "string"
+                    ? entry.activity.details.note
+                    : undefined;
+
+                return (
+                  <li key={`activity-${entry.id}`} className="relative pl-12">
+                    {/* Timeline dot */}
+                    <div className={`absolute left-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full ring-4 ${color.dot}`}>
+                      <span className="text-white">{logEventIcon(entry.activity.eventType)}</span>
+                    </div>
+                    {/* Event card */}
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className={`text-xs font-black uppercase tracking-wide ${color.text}`}>
+                          {quoteActivityLabels[entry.activity.eventType] ||
+                            entry.activity.eventType}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-400">
+                          {formatDateTime(entry.activity.createdAt)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm font-bold text-slate-800">
+                        {entry.activity.actorName}
+                      </p>
+                      {entry.activity.assignedAgent ? (
+                        <p className="mt-1 text-sm font-semibold text-slate-600">
+                          Assigned agent: {entry.activity.assignedAgent}
+                        </p>
+                      ) : null}
+                      {detailReason ? (
+                        <p className="mt-1 text-sm font-semibold text-slate-600">
+                          <span className="font-bold text-slate-700">Reason:</span> {detailReason}
+                        </p>
+                      ) : null}
+                      {detailChange ? (
+                        <p className="mt-1 text-sm font-semibold text-slate-600">
+                          <span className="font-bold text-slate-700">Change type:</span> {detailChange}
+                        </p>
+                      ) : null}
+                      {detailNote ? (
+                        <p className="mt-1 text-sm font-semibold text-slate-600">
+                          {detailNote}
+                        </p>
+                      ) : null}
+                      {entry.activity.eventType === "created_from_cs_intake" &&
+                        entry.activity.details ? (
+                        <div className="mt-3">
+                          <IntakeDataDisplay
+                            details={entry.activity.details as unknown as IntakeDataDetails}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         ) : (
           <p className="rounded-2xl bg-slate-50 p-6 text-center text-sm font-semibold text-slate-400">
             No activity has been recorded yet.
