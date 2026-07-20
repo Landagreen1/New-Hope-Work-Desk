@@ -1,4 +1,4 @@
-export type ModuleRole = 'agent' | 'manager' | 'customer_service';
+export type ModuleRole = 'agent' | 'manager' | 'customer_service' | 'commercial';
 export type ModuleStatus = 'active' | 'planned';
 
 export interface AppModule {
@@ -49,6 +49,14 @@ export const appModules: AppModule[] = [
     description: 'Import, assign, document, monitor, and re-quote renewals.',
     route: '/tools/renewals',
     roles: ['agent', 'manager', 'customer_service'],
+    status: 'active',
+  },
+  {
+    id: 'commercial-board',
+    name: 'Commercial Quotes Board',
+    description: 'Kanban board for managing commercial policy quotes pipeline.',
+    route: '/',
+    roles: ['commercial', 'manager'],
     status: 'active',
   },
 ];

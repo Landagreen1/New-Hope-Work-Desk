@@ -7,7 +7,7 @@ import { createClient as createSessionClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
-type AppRole = "agent" | "manager" | "customer_service";
+type AppRole = "agent" | "manager" | "customer_service" | "commercial";
 
 type RequestBody = Record<string, unknown>;
 
@@ -130,9 +130,9 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (!(["agent", "manager", "customer_service"] as AppRole[]).includes(role)) {
+  if (!(["agent", "manager", "customer_service", "commercial"] as AppRole[]).includes(role)) {
     return Response.json(
-      { error: "Role must be Agent, Customer Service, or Manager." },
+      { error: "Role must be Agent, Customer Service, Commercial, or Manager." },
       { status: 400 },
     );
   }
@@ -196,6 +196,7 @@ export async function POST(request: Request) {
 
   const rotationPosition = Number(lastPosition?.rotation_position ?? 0) + 1;
   const isAgent = role === "agent";
+  const isCommercial = role === "commercial";
   const { data: queuePositions, error: queuePositionError } =
     await authorization.admin
       .from("profiles")

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Building2,
   ClipboardCheck,
   FileSpreadsheet,
   Headphones,
@@ -12,6 +13,7 @@ import {
 import { Suspense, useMemo, useState } from "react";
 
 import { WorkDeskApp } from "@/components/work-desk-app";
+import CommercialWorkspace from "@/features/commercial/CommercialWorkspace";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type { ProfileLite } from "@/features/nhwd-shared/types";
@@ -26,7 +28,8 @@ type WorkspaceTab =
   | "intake_queue"
   | "customer_service"
   | "renewals"
-  | "powerbi";
+  | "powerbi"
+  | "commercial_board";
 
 interface TabDefinition {
   id: WorkspaceTab;
@@ -192,7 +195,9 @@ export function RoleWorkspace({
   sessionProfile: SessionProfile;
   initialData: DashboardData;
 }) {
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("desk");
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(
+    sessionProfile.role === "commercial" ? "commercial_board" : "desk",
+  );
 
   const profile = useMemo<ProfileLite>(
     () => ({
@@ -265,12 +270,19 @@ export function RoleWorkspace({
         sharedTabs[2], // Intake Queue
         sharedTabs[3], // Renewals
         {
+          id: "commercial_board" as WorkspaceTab,
+          label: "Commercial Board",
+          shortLabel: "Commercial",
+          description: "Commercial policies Kanban",
+          icon: Building2,
+          dividerBefore: true,
+        },
+        {
           id: "customer_service" as WorkspaceTab,
           label: "Customer Service",
           shortLabel: "CS Mgmt",
           description: "Intakes oversight and Sales handoff",
           icon: UsersRound,
-          dividerBefore: true,
         },
         {
           id: "powerbi" as WorkspaceTab,
@@ -278,6 +290,26 @@ export function RoleWorkspace({
           shortLabel: "Power BI",
           description: "Import renewal data",
           icon: UploadCloud,
+        },
+      ];
+    }
+
+    // Commercial role: only the Commercial Board + Work Desk
+    if (sessionProfile.role === "commercial") {
+      return [
+        {
+          id: "desk" as WorkspaceTab,
+          label: "Work Desk",
+          shortLabel: "Desk",
+          description: "Your commercial workspace",
+          icon: LayoutDashboard,
+        },
+        {
+          id: "commercial_board" as WorkspaceTab,
+          label: "Commercial Board",
+          shortLabel: "Commercial",
+          description: "Your commercial policies pipeline",
+          icon: Building2,
         },
       ];
     }
@@ -312,6 +344,12 @@ export function RoleWorkspace({
   } else if (activeTab === "powerbi") {
     externalWorkspaceContent = (
       <PowerBiRenewalImport initialProfile={profile} embedded />
+    );
+  } else if (activeTab === "commercial_board") {
+    externalWorkspaceContent = (
+      <Suspense fallback={<LoadingWorkspace label="Commercial Board" />}>
+        <CommercialWorkspace initialProfile={profile} embedded />
+      </Suspense>
     );
   }
 

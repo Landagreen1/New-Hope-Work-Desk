@@ -22,7 +22,7 @@ export function getSupabase(): SupabaseClient {
   return browserClient;
 }
 
-export type AppRole = "agent" | "customer_service" | "manager";
+export type AppRole = "agent" | "customer_service" | "manager" | "commercial";
 
 export interface ProfileLite {
   id: string;
