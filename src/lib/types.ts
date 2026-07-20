@@ -1,3 +1,15 @@
+/**
+ * Database roles — kept as-is for Supabase auth compatibility.
+ * Logical department mapping:
+ *   'agent'            → Sales department
+ *   'manager'          → Management department
+ *   'customer_service' → Customer Service department
+ *
+ * Cross-cutting tools available to ALL departments:
+ *   - Customer Quote intake forms
+ *   - Intake Queue (sales handoff from CS)
+ *   - Renewals
+ */
 export type AppRole = "agent" | "manager" | "customer_service";
 export type AvailabilityStatus = "available" | "break" | "unavailable";
 export type RotationKind = "whatsapp" | "ringcentral" | "workload";
