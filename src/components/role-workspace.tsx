@@ -311,7 +311,22 @@ export function RoleWorkspace({
       ];
     }
 
-    // Sales (agent) and Customer Service get the shared tabs
+    // Customer Service: shared tabs + Customer Service tab for intakes/queue
+    if (sessionProfile.role === "customer_service") {
+      return [
+        sharedTabs[0], // Sales
+        {
+          id: "customer_service" as WorkspaceTab,
+          label: "Customer Service",
+          shortLabel: "CS",
+          description: "Quote intake and sales queue",
+          icon: UsersRound,
+        },
+        sharedTabs[1], // Renewals
+      ];
+    }
+
+    // Sales (agent) get the shared tabs only
     return sharedTabs;
   }, [sessionProfile.role]);
 

@@ -74,6 +74,8 @@ import type {
   WorkType,
 } from "@/lib/types";
 
+import IntakeDataDisplay, { type IntakeDataDetails } from "@/features/cs-intake/IntakeDataDisplay";
+
 const workTypeLabels: Record<WorkType, string> = {
   new_quote: "New Quote",
   requote: "Requote",
@@ -674,6 +676,9 @@ const quoteActivityLabels: Record<string, string> = {
   activation: "Activation logged",
   change: "Change logged",
   payment: "Payment logged",
+  created_from_cs_intake: "Created from CS Intake",
+  ringcentral_intake_claim_completed: "RC Intake Claimed & Converted",
+  outcome_change: "Outcome Changed",
 };
 
 function formatDateTime(value: string) {
@@ -1459,6 +1464,14 @@ function QuoteLogPanel({
                   <p className="mt-2 text-sm font-semibold text-slate-700">
                     {detailNote}
                   </p>
+                ) : null}
+                {entry.activity.eventType === "created_from_cs_intake" &&
+                  entry.activity.details ? (
+                  <div className="mt-3">
+                    <IntakeDataDisplay
+                      details={entry.activity.details as unknown as IntakeDataDetails}
+                    />
+                  </div>
                 ) : null}
               </div>
             );

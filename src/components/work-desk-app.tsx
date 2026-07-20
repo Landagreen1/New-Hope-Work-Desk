@@ -76,6 +76,8 @@ import type {
   WorkType,
 } from "@/lib/types";
 
+import IntakeDataDisplay, { type IntakeDataDetails } from "@/features/cs-intake/IntakeDataDisplay";
+
 const workTypeLabels: Record<WorkType, string> = {
   new_quote: "New Quote",
   requote: "Requote",
@@ -203,7 +205,7 @@ type ModalType =
   | "take_quote"
   | "quote_log"
   | "customer_service_pass"
-  | "reopen_not_sold"
+  | "change_outcome"
   | null;
 type AgentTab = "desk" | "pricing" | "intake_queue" | "quotes" | "team" | "performance";
 type ManagerTab =
@@ -685,6 +687,9 @@ const quoteActivityLabels: Record<string, string> = {
   activation: "Activation logged",
   change: "Change logged",
   payment: "Payment logged",
+  created_from_cs_intake: "Created from CS Intake",
+  ringcentral_intake_claim_completed: "RC Intake Claimed & Converted",
+  outcome_change: "Outcome Changed",
 };
 
 function formatDateTime(value: string) {
@@ -1470,6 +1475,14 @@ function QuoteLogPanel({
                   <p className="mt-2 text-sm font-semibold text-slate-700">
                     {detailNote}
                   </p>
+                ) : null}
+                {entry.activity.eventType === "created_from_cs_intake" &&
+                  entry.activity.details ? (
+                  <div className="mt-3">
+                    <IntakeDataDisplay
+                      details={entry.activity.details as unknown as IntakeDataDetails}
+                    />
+                  </div>
                 ) : null}
               </div>
             );
@@ -2620,7 +2633,7 @@ export function WorkDeskApp({
     null,
   );
   const [notSoldTarget, setNotSoldTarget] = useState<NotSoldTarget>(null);
-  const [reopenNotSoldRecord, setReopenNotSoldRecord] =
+  const [changeOutcomeRecord, setChangeOutcomeRecord] =
     useState<QuoteRecord | null>(null);
   const [takeRotation, setTakeRotation] = useState<"whatsapp" | null>(null);
   const [customerServicePassItemId, setCustomerServicePassItemId] = useState<
@@ -3321,26 +3334,51 @@ export function WorkDeskApp({
     );
   }
 
-  function requestReopenNotSold(record: QuoteRecord) {
-    setReopenNotSoldRecord(record);
-    setModal("reopen_not_sold");
+  function requestChangeOutcome(record: QuoteRecord) {
+    setChangeOutcomeRecord(record);
+    setModal("change_outcome");
   }
 
-  async function submitReopenNotSold(formData: FormData) {
-    if (!reopenNotSoldRecord) return;
+  async function submitChangeOutcome(formData: FormData) {
+    if (!changeOutcomeRecord) return;
     const note = String(formData.get("note") || "").trim();
     if (!note)
       return showToast(
-        "Enter a note explaining why this previously Not Sold quote is now Sold.",
+        "Enter a note explaining why you're changing this outcome.",
       );
+
+    const targetDecision: "sold" | "not_sold" =
+      changeOutcomeRecord.status === "Sold" ? "not_sold" : "sold";
+
+    let reason: NotSoldReason | null = null;
+    let otherText: string | null = null;
+
+    if (targetDecision === "not_sold") {
+      reason = String(formData.get("reason") || "") as NotSoldReason;
+      if (!reason) {
+        return showToast("Please select a Not Sold reason.");
+      }
+      otherText = String(formData.get("otherReason") || "").trim();
+      if (reason === "other" && !otherText) {
+        return showToast("Please type the Other reason.");
+      }
+    }
+
     const success = await runRpc(
-      "convert_my_not_sold_quote_to_sold",
-      { p_outcome_id: reopenNotSoldRecord.id, p_note: note },
-      `${reopenNotSoldRecord.customer} changed from Not Sold to Sold and the activation was logged.`,
+      "change_quote_outcome",
+      {
+        p_outcome_id: changeOutcomeRecord.id,
+        p_new_decision: targetDecision,
+        p_not_sold_reason: reason,
+        p_not_sold_reason_other:
+          reason === "other" ? otherText : null,
+        p_note: note,
+      },
+      `${changeOutcomeRecord.customer} outcome changed to ${targetDecision === "sold" ? "Sold" : "Not Sold"}.`,
     );
     if (success) {
       setModal(null);
-      setReopenNotSoldRecord(null);
+      setChangeOutcomeRecord(null);
     }
   }
 
@@ -4710,13 +4748,16 @@ export function WorkDeskApp({
                                 >
                                   Log
                                 </button>
-                                {quote.status === "Not Sold" &&
+                                {(quote.status === "Sold" ||
+                                  quote.status === "Not Sold") &&
                                 quote.assignedProfileId === currentUserId ? (
                                   <button
-                                    onClick={() => requestReopenNotSold(quote)}
-                                    className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700"
+                                    onClick={() =>
+                                      requestChangeOutcome(quote)
+                                    }
+                                    className="rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-3 py-2 text-xs font-black text-[#223f7a]"
                                   >
-                                    Mark Sold
+                                    Change Outcome
                                   </button>
                                 ) : null}
                               </div>
@@ -5044,35 +5085,81 @@ export function WorkDeskApp({
       </Modal>
 
       <Modal
-        open={modal === "reopen_not_sold" && reopenNotSoldRecord !== null}
-        title="Change Not Sold to Sold"
-        subtitle="Use this when a previous quote is sold later. The change and activation will be recorded in the quote log."
+        open={modal === "change_outcome" && changeOutcomeRecord !== null}
+        title="Change Outcome"
+        subtitle="Change the finalized outcome of this quote. The change will be recorded in the quote log."
         onClose={() => {
           setModal(null);
-          setReopenNotSoldRecord(null);
+          setChangeOutcomeRecord(null);
         }}
       >
-        {reopenNotSoldRecord ? (
-          <form action={submitReopenNotSold} className="space-y-4 p-6">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="font-black text-emerald-950">
-                {reopenNotSoldRecord.customer}
+        {changeOutcomeRecord ? (
+          <form action={submitChangeOutcome} className="space-y-4 p-6">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="font-black text-slate-950">
+                {changeOutcomeRecord.customer}
               </p>
-              <p className="mt-1 text-sm font-semibold text-emerald-800">
-                {reopenNotSoldRecord.source} · Previously Not Sold
+              <p className="mt-1 text-sm font-semibold text-slate-700">
+                {changeOutcomeRecord.source} · Currently:{" "}
+                <span
+                  className={
+                    changeOutcomeRecord.status === "Sold"
+                      ? "rounded bg-emerald-100 px-2 py-0.5 text-emerald-800"
+                      : "rounded bg-red-100 px-2 py-0.5 text-red-800"
+                  }
+                >
+                  {changeOutcomeRecord.status}
+                </span>
+              </p>
+              <p className="mt-2 text-sm font-semibold text-blue-700">
+                → Change to{" "}
+                {changeOutcomeRecord.status === "Sold"
+                  ? "Not Sold"
+                  : "Sold"}
               </p>
             </div>
-            <Field label="Sale / activation note">
+            {changeOutcomeRecord.status === "Sold" && (
+              <>
+                <Field label="Not Sold reason">
+                  <select
+                    name="reason"
+                    className="field"
+                    defaultValue="price_too_high"
+                  >
+                    <option value="price_too_high">Price too high</option>
+                    <option value="chose_another_option">
+                      Customer chose another option
+                    </option>
+                    <option value="no_response">
+                      No response from customer / source
+                    </option>
+                    <option value="no_longer_needed">
+                      Customer no longer needs coverage
+                    </option>
+                    <option value="other">Other</option>
+                  </select>
+                </Field>
+                <Field label="Other reason (required only when Other is selected)">
+                  <textarea
+                    name="otherReason"
+                    rows={3}
+                    className="field"
+                    placeholder="Type the reason here"
+                  />
+                </Field>
+              </>
+            )}
+            <Field label="Note (required)">
               <textarea
                 name="note"
                 required
                 rows={4}
                 className="field"
-                placeholder="Explain what changed, when it sold, and any activation details."
+                placeholder="Explain why you are changing this outcome. This note is recorded in the quote log."
               />
             </Field>
-            <button className="w-full rounded-xl bg-emerald-600 px-4 py-3 font-black text-white hover:bg-emerald-700">
-              Confirm Sold
+            <button className="w-full rounded-xl bg-blue-600 px-4 py-3 font-black text-white hover:bg-blue-700">
+              Confirm Change
             </button>
           </form>
         ) : null}

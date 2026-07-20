@@ -180,7 +180,7 @@ export async function listAllIntakes(): Promise<CsIntakeSubmission[]> {
     .from('cs_intake_submissions')
     .select(SUBMISSION_COLS)
     .order('updated_at', { ascending: false })
-    .limit(500);
+    .limit(2000);
   throwIfError(error);
   return (data as CsIntakeSubmission[]) ?? [];
 }
@@ -408,32 +408,182 @@ export async function assignCustomerIntake(
   return data as string;
 }
 
-/** Manager soft-deletes a customer_intake */
+/** Manager deletes a cs_intake_submission */
 export async function deleteCustomerIntake(
   intakeId: string,
   reason: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const { data, error } = await getSupabase().rpc('delete_customer_intake', {
-    p_intake_id: intakeId,
-    p_reason: reason,
+  const supabase = getSupabase();
+
+  // Get current user for audit trail
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Authentication required.');
+
+  // Delete child records first (drivers, vehicles, events)
+  await supabase.from('cs_intake_vehicles').delete().eq('submission_id', intakeId);
+  await supabase.from('cs_intake_drivers').delete().eq('submission_id', intakeId);
+  await supabase.from('cs_intake_events').delete().eq('submission_id', intakeId);
+
+  // Hard delete the intake submission
+  const { error: deleteError } = await supabase
+    .from('cs_intake_submissions')
+    .delete()
+    .eq('id', intakeId);
+  throwIfError(deleteError);
+
+  // Log deletion in audit_log for traceability
+  await supabase.from('audit_log').insert({
+    actor_profile_id: user.id,
+    action: 'cs_intake_deleted',
+    entity_type: 'cs_intake_submission',
+    entity_id: intakeId,
+    reason,
   });
-  throwIfError(error);
-  return data as { success: boolean; error?: string };
+
+  return { success: true };
 }
 
-/** Manager restores a soft-deleted customer_intake */
+/** Manager restores a soft-deleted customer_intake — no longer applicable with hard delete */
 export async function restoreCustomerIntake(
-  intakeId: string,
-  reason: string,
+  _intakeId: string,
+  _reason: string,
 ): Promise<{ success: boolean; restored_status?: string; error?: string }> {
-  const { data, error } = await getSupabase().rpc('restore_customer_intake', {
-    p_intake_id: intakeId,
-    p_reason: reason,
-  });
-  throwIfError(error);
-  return data as { success: boolean; restored_status?: string; error?: string };
+  return { success: false, error: 'Hard-deleted records cannot be restored.' };
 }
 
 export function profileName(profiles: ProfileLite[], id: string | null): string {
   return profiles.find((profile) => profile.id === id)?.display_name ?? 'Unassigned';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Quote Visibility (CS Intake → Work Desk link)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Batch-fetches the current status for a set of linked work items (quotes).
+ * Only call with work_item_ids from converted intakes to avoid unnecessary queries.
+ */
+export async function getLinkedQuoteStatuses(workItemIds: string[]): Promise<Map<string, string>> {
+  if (!workItemIds.length) return new Map();
+  const { data, error } = await getSupabase()
+    .from('work_items')
+    .select('id, status')
+    .in('id', workItemIds);
+  throwIfError(error);
+  const map = new Map<string, string>();
+  for (const row of (data ?? [])) {
+    map.set(row.id, row.status);
+  }
+  return map;
+}
+
+export interface LinkedQuoteEvent {
+  id: string;
+  event_type: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+  actor_name: string;
+}
+
+/**
+ * Fetches all work_item_events for a linked quote, ordered chronologically.
+ * Resolves actor display names from the profiles table.
+ */
+export async function getLinkedQuoteEvents(workItemId: string): Promise<LinkedQuoteEvent[]> {
+  const supabase = getSupabase();
+
+  // Fetch both events and notes in parallel
+  const [eventsResult, notesResult] = await Promise.all([
+    supabase
+      .from('work_item_events')
+      .select('id, event_type, details, created_at, actor_profile_id')
+      .eq('source_work_item_id', workItemId)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('quote_notes')
+      .select('id, author_profile_id, note, created_at')
+      .eq('source_work_item_id', workItemId)
+      .order('created_at', { ascending: true }),
+  ]);
+  throwIfError(eventsResult.error);
+  throwIfError(notesResult.error);
+
+  const events = eventsResult.data ?? [];
+  const notes = notesResult.data ?? [];
+
+  if (!events.length && !notes.length) return [];
+
+  // Resolve actor display names for both events and notes
+  const allActorIds = [
+    ...events.map(e => e.actor_profile_id),
+    ...notes.map(n => n.author_profile_id),
+  ].filter(Boolean);
+  const uniqueActorIds = [...new Set(allActorIds)] as string[];
+
+  let actorMap = new Map<string, string>();
+  if (uniqueActorIds.length) {
+    const { data: profiles, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .in('id', uniqueActorIds);
+    throwIfError(profileError);
+    for (const p of (profiles ?? [])) {
+      actorMap.set(p.id, p.display_name);
+    }
+  }
+
+  // Build combined timeline
+  const eventItems: LinkedQuoteEvent[] = events.map(e => ({
+    id: e.id,
+    event_type: e.event_type,
+    details: e.details,
+    created_at: e.created_at,
+    actor_name: actorMap.get(e.actor_profile_id) ?? 'System',
+  }));
+
+  const noteItems: LinkedQuoteEvent[] = notes.map(n => ({
+    id: n.id,
+    event_type: 'note',
+    details: { note: n.note },
+    created_at: n.created_at,
+    actor_name: actorMap.get(n.author_profile_id) ?? 'Unknown',
+  }));
+
+  // Merge and sort chronologically
+  return [...eventItems, ...noteItems].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+}
+
+/**
+ * Soft-deletes a linked work item (quote) by marking it as cancelled.
+ * Creates an audit event in work_item_events with reason and actor.
+ * Manager-only: caller must verify role before invoking.
+ */
+export async function deleteLinkedWorkItem(workItemId: string, reason: string): Promise<{ success: boolean }> {
+  const supabase = getSupabase();
+
+  // Get current user for audit trail
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Authentication required.');
+
+  // Soft-delete: mark work item as cancelled
+  const { error: updateError } = await supabase
+    .from('work_items')
+    .update({ status: 'cancelled' })
+    .eq('id', workItemId);
+  throwIfError(updateError);
+
+  // Insert audit event
+  const { error: eventError } = await supabase
+    .from('work_item_events')
+    .insert({
+      source_work_item_id: workItemId,
+      event_type: 'cancelled_from_cs_queue',
+      details: { reason },
+      actor_profile_id: user.id,
+    });
+  throwIfError(eventError);
+
+  return { success: true };
 }

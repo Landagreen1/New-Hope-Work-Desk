@@ -16,6 +16,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { ui } from '../nhwd-shared/ui';
+import VinDecoder from './VinDecoder';
 import {
   type CsIntakeDriver,
   type CsIntakeLob,
@@ -405,6 +406,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       <Section icon={<UserRound className="h-5 w-5" />} title={isCommercial ? 'Primary contact' : 'Named insured'} subtitle="The person Customer Service is speaking with and the garaging/mailing address.">
         <div className={ui.fieldRow}>
           <Field label="First name" required><input className={ui.input} disabled={disabled} value={submission.insured_first_name} onChange={(event) => patch({ insured_first_name: event.target.value })} /></Field>
+          <Field label="Middle name"><input className={ui.input} disabled={disabled} value={(submission as Record<string, unknown>).insured_middle_name as string || ''} onChange={(event) => patch({ insured_middle_name: event.target.value || null } as Partial<DraftSubmission>)} /></Field>
           <Field label="Last name" required><input className={ui.input} disabled={disabled} value={submission.insured_last_name} onChange={(event) => patch({ insured_last_name: event.target.value })} /></Field>
           <Field label="Date of birth" required><input type="date" className={ui.input} disabled={disabled} value={submission.insured_dob || ''} onChange={(event) => patch({ insured_dob: event.target.value || null })} /></Field>
           <Field label="Primary phone" required><input type="tel" className={ui.input} disabled={disabled} value={submission.insured_phone_primary || ''} onChange={(event) => patch({ insured_phone_primary: event.target.value || null })} /></Field>
@@ -419,7 +421,25 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
           <Field label="City" required><input className={ui.input} disabled={disabled} value={submission.addr_city || ''} onChange={(event) => patch({ addr_city: event.target.value || null })} /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="State" required><select className={ui.select} disabled={disabled} value={submission.addr_state || ''} onChange={(event) => patch({ addr_state: event.target.value || null })}><option value="">—</option>{US_STATES.map((state) => <option key={state}>{state}</option>)}</select></Field>
-            <Field label="ZIP" required><input className={ui.input} disabled={disabled} value={submission.addr_zip || ''} onChange={(event) => patch({ addr_zip: event.target.value || null })} /></Field>
+            <Field label="ZIP" required><input className={ui.input} disabled={disabled} value={submission.addr_zip || ''} onChange={(event) => {
+              const zip = event.target.value || null;
+              patch({ addr_zip: zip });
+              // Auto-fill city and state from ZIP using Zippopotam API
+              if (zip && zip.length === 5 && /^\d{5}$/.test(zip)) {
+                fetch(`https://api.zippopotam.us/us/${zip}`)
+                  .then(r => r.ok ? r.json() : null)
+                  .then(data => {
+                    if (data?.places?.[0]) {
+                      const place = data.places[0];
+                      patch({
+                        addr_city: place['place name'] || submission.addr_city,
+                        addr_state: place['state abbreviation'] || submission.addr_state,
+                      });
+                    }
+                  })
+                  .catch(() => {});
+              }
+            }} /></Field>
           </div>
         </div>
       </Section>
@@ -460,7 +480,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         {!readOnly ? <button type="button" className={`${ui.btnSecondary} mt-4`} onClick={() => setDrivers((current) => [...current, emptyDriver(current.length + 1)])}><Plus className="h-4 w-4" /> Add another person</button> : null}
       </Section>
 
-      <Section icon={<Car className="h-5 w-5" />} title={`Vehicles (${vehicles.length})`} subtitle="Add every vehicle the customer wants quoted. VIN can be marked pending when it is not immediately available.">
+      <Section icon={<Car className="h-5 w-5" />} title={`Vehicles (${vehicles.length})`} subtitle="Add every vehicle the customer wants quoted. Enter the VIN to auto-fill year, make, and model.">
         <div className="space-y-4">
           {vehicles.map((vehicle, index) => (
             <div key={vehicle.id || `vehicle-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
@@ -469,17 +489,26 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
                 {!readOnly && vehicles.length > 1 ? <button type="button" className={ui.btnDanger} onClick={() => setVehicles((current) => current.filter((_, currentIndex) => currentIndex !== index).map((row, currentIndex) => ({ ...row, position: currentIndex + 1 })))}><Trash2 className="h-4 w-4" /> Remove</button> : null}
               </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {/* VIN first with decoder */}
+                <div className="sm:col-span-2">
+                  <VinDecoder
+                    vin={vehicle.vin || ''}
+                    disabled={disabled || vehicle.vin_pending}
+                    onVinChange={(vin) => patchVehicle(index, { vin: vin || null })}
+                    onDecoded={({ year, make, model }) => patchVehicle(index, { year, make, model })}
+                  />
+                </div>
+                <label className={`${ui.checkboxRow} self-end`}><input type="checkbox" disabled={disabled} checked={vehicle.vin_pending} onChange={(event) => patchVehicle(index, { vin_pending: event.target.checked, vin: event.target.checked ? null : vehicle.vin })} /> VIN pending</label>
+                <div />
                 <Field label="Year" required><input type="number" min="1900" max="2100" className={ui.input} disabled={disabled} value={vehicle.year ?? ''} onChange={(event) => patchVehicle(index, { year: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
                 <Field label="Make" required><input className={ui.input} disabled={disabled} value={vehicle.make || ''} onChange={(event) => patchVehicle(index, { make: event.target.value || null })} /></Field>
                 <Field label="Model" required><input className={ui.input} disabled={disabled} value={vehicle.model || ''} onChange={(event) => patchVehicle(index, { model: event.target.value || null })} /></Field>
-                <Field label="VIN" required={!vehicle.vin_pending}><input className={ui.input} disabled={disabled || vehicle.vin_pending} value={vehicle.vin || ''} onChange={(event) => patchVehicle(index, { vin: event.target.value.toUpperCase() || null })} /></Field>
                 <Field label="Ownership"><select className={ui.select} disabled={disabled} value={vehicle.ownership || 'owned'} onChange={(event) => patchVehicle(index, { ownership: event.target.value })}><option value="owned">Owned</option><option value="financed">Financed</option><option value="leased">Leased</option></select></Field>
                 <Field label="Lienholder"><input className={ui.input} disabled={disabled} value={vehicle.lienholder || ''} onChange={(event) => patchVehicle(index, { lienholder: event.target.value || null })} /></Field>
                 <Field label="Use"><select className={ui.select} disabled={disabled} value={vehicle.usage || 'commute'} onChange={(event) => patchVehicle(index, { usage: event.target.value })}><option value="commute">Commute</option><option value="pleasure">Pleasure</option><option value="business">Business</option><option value="delivery">Delivery</option><option value="rideshare">Rideshare</option></select></Field>
                 <Field label="Annual mileage"><input type="number" min="0" className={ui.input} disabled={disabled} value={vehicle.annual_mileage ?? ''} onChange={(event) => patchVehicle(index, { annual_mileage: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
                 <Field label="Garaging ZIP"><input className={ui.input} disabled={disabled} value={vehicle.garaging_zip || submission.addr_zip || ''} onChange={(event) => patchVehicle(index, { garaging_zip: event.target.value || null })} /></Field>
               </div>
-              <label className={`${ui.checkboxRow} mt-4`}><input type="checkbox" disabled={disabled} checked={vehicle.vin_pending} onChange={(event) => patchVehicle(index, { vin_pending: event.target.checked, vin: event.target.checked ? null : vehicle.vin })} /> VIN pending — Sales must obtain it before binding</label>
             </div>
           ))}
         </div>

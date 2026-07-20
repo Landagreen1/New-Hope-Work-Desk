@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Edit3, ExternalLink, Eye, History, RefreshCw, RotateCcw, Search, Trash2, UserCheck, X } from 'lucide-react';
+import { CheckCircle2, Edit3, ExternalLink, Eye, FileText, RefreshCw, RotateCcw, Search, Trash2, UserCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getSupabase, listActiveAgents } from '../nhwd-shared/client';
@@ -8,17 +8,17 @@ import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { csIntakeStatusTone, statusLabel, ui } from '../nhwd-shared/ui';
 import { subscribeToRotationChanges } from '../notifications/api';
-import type { IntakeHistoryEvent } from '../quotes/types';
 import IntakeEditForm from './IntakeEditForm';
 import IntakeForm from './IntakeForm';
-import IntakeHistory from './IntakeHistory';
+import QuoteActivityModal from './QuoteActivityModal';
 import {
   claimIntake,
   claimRingcentralQueueIntake,
   convertIntake,
   deleteCustomerIntake,
-  getCustomerIntakeHistory,
+  deleteLinkedWorkItem,
   getIntake,
+  getLinkedQuoteStatuses,
   listAllIntakes,
   listQueue,
   managerAssignIntake,
@@ -36,7 +36,7 @@ type LoadedIntake = {
   vehicles: CsIntakeVehicle[];
 };
 
-type ModalMode = 'view' | 'edit' | 'history';
+type ModalMode = 'view' | 'edit';
 
 // Source display helper
 function sourceLabel(row: CsIntakeSubmission, dealers: { id: string; name: string }[]): string {
@@ -47,6 +47,18 @@ function sourceLabel(row: CsIntakeSubmission, dealers: { id: string; name: strin
   // Fallback to line_of_business / generic source info
   if (row.business_name) return 'Commercial';
   return 'Direct';
+}
+
+function quoteStatusTone(status: string | undefined): string {
+  switch (status) {
+    case 'active': return ui.badgeTone.info;
+    case 'price_sent': return ui.badgeTone.violet;
+    case 'sold': return ui.badgeTone.success;
+    case 'not_sold': return ui.badgeTone.danger;
+    case 'completed': return ui.badgeTone.success;
+    case 'cancelled': return ui.badgeTone.danger;
+    default: return ui.badgeTone.neutral;
+  }
 }
 
 function QueueModal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
@@ -72,11 +84,11 @@ export default function IntakeQueue({
   const [rows, setRows] = useState<CsIntakeSubmission[]>([]);
   const [selected, setSelected] = useState<LoadedIntake | null>(null);
   const [modalMode, setModalMode] = useState<ModalMode>('view');
-  const [historyEvents, setHistoryEvents] = useState<IntakeHistoryEvent[]>([]);
   const [search, setSearch] = useState('');
   const [coverage, setCoverage] = useState('all');
   const [priority, setPriority] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateRange, setDateRange] = useState<'today' | 'week' | 'all'>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -85,23 +97,65 @@ export default function IntakeQueue({
 
   // RingCentral rotation state
   const [rcTurnHolderId, setRcTurnHolderId] = useState<string | null>(null);
+  const [quoteStatuses, setQuoteStatuses] = useState<Map<string, string>>(new Map());
+
+  // Quote Activity Modal state
+  const [selectedQuoteWorkItemId, setSelectedQuoteWorkItemId] = useState<string | null>(null);
+  const [isQuoteActivityOpen, setIsQuoteActivityOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
       setError(null);
       const [queueRows, activeAgents] = await Promise.all([
-        profile.role === 'manager' ? listAllIntakes() : listQueue(),
+        listAllIntakes(),
         listActiveAgents(),
       ]);
       setRows(queueRows);
       setAgents(activeAgents);
       setLastUpdated(new Date());
+
+      // Fetch quote statuses for converted rows that still have work_item_id
+      const convertedWorkItemIds = queueRows
+        .filter(r => r.status === 'converted' && r.work_item_id)
+        .map(r => r.work_item_id!);
+      if (convertedWorkItemIds.length) {
+        const statuses = await getLinkedQuoteStatuses(convertedWorkItemIds);
+        setQuoteStatuses(statuses);
+      } else {
+        setQuoteStatuses(new Map());
+      }
+
+      // For converted rows where work_item_id is null (quote moved to pending/outcomes),
+      // look up the original work_item_id from cs_intake_events conversion event.
+      const nulledConversions = queueRows.filter(r => r.converted_at && !r.work_item_id);
+      if (nulledConversions.length) {
+        const supabase = getSupabase();
+        const { data: events } = await supabase
+          .from('cs_intake_events')
+          .select('submission_id, detail')
+          .in('submission_id', nulledConversions.map(r => r.id))
+          .eq('event_type', 'converted');
+        if (events) {
+          for (const ev of events) {
+            const workItemId = (ev.detail as Record<string, unknown>)?.work_item_id as string | undefined;
+            if (workItemId) {
+              const row = queueRows.find(r => r.id === ev.submission_id);
+              if (row) {
+                // Patch the row's work_item_id in-place so Log button works
+                (row as unknown as Record<string, unknown>).work_item_id = workItemId;
+              }
+            }
+          }
+          // Re-set rows to trigger re-render with patched work_item_ids
+          setRows([...queueRows]);
+        }
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to load the Sales Intake Queue.');
     } finally {
       setLoading(false);
     }
-  }, [profile.role]);
+  }, []);
 
   // Load current rotation state on mount
   useEffect(() => {
@@ -126,12 +180,17 @@ export default function IntakeQueue({
   useEffect(() => { void refresh(); }, [refresh]);
 
   // Real-time: queue updates
+  // Task 6.4: The refresh() function atomically fetches both intake data and quote statuses
+  // for converted rows, so any subscription that triggers refresh() will update quote visibility.
+  // We also subscribe to work_items changes so quote status updates (e.g., active → price_sent)
+  // from the Sales side are reflected promptly without waiting for the 60s polling interval.
   useEffect(() => {
     const supabase = getSupabase();
     const channel = supabase
       .channel('sales-intake-queue-v1')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cs_intake_submissions' }, () => void refresh())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_intakes' }, () => void refresh())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'work_items' }, () => void refresh())
       .subscribe();
     const interval = window.setInterval(() => void refresh(), 60_000);
     const onFocus = () => void refresh();
@@ -173,7 +232,19 @@ export default function IntakeQueue({
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Sunday
+
     return rows.filter((row) => {
+      // Date range filter
+      if (dateRange !== 'all') {
+        const rowDate = new Date(row.submitted_at || row.created_at);
+        if (dateRange === 'today' && rowDate < startOfToday) return false;
+        if (dateRange === 'week' && rowDate < startOfWeek) return false;
+      }
+
       const matchesSearch = !needle || [row.insured_first_name, row.insured_last_name, row.business_name, row.insured_phone_primary, row.dot_number].some((value) => value?.toLowerCase().includes(needle));
       const matchesCoverage = coverage === 'all'
         || (coverage === 'personal_auto' && ['auto', 'personal_auto'].includes(row.line_of_business))
@@ -181,7 +252,7 @@ export default function IntakeQueue({
       const matchesStatus = statusFilter === 'all' || row.status === statusFilter;
       return matchesSearch && matchesCoverage && matchesStatus && (priority === 'all' || row.priority === priority);
     });
-  }, [coverage, priority, rows, search, statusFilter]);
+  }, [coverage, dateRange, priority, rows, search, statusFilter]);
 
   async function show(row: CsIntakeSubmission) {
     try {
@@ -268,18 +339,16 @@ export default function IntakeQueue({
     }, 'Intake restored to its previous status.');
   }
 
-  async function handleViewHistory(row: CsIntakeSubmission) {
-    try {
-      const events = await getCustomerIntakeHistory(row.id);
-      setHistoryEvents(events);
-      const detail = await getIntake(row.id);
-      if (detail) {
-        setSelected({ submission: detail.submission, drivers: detail.drivers, vehicles: detail.vehicles });
-        setModalMode('history');
-      }
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to load intake history.');
+  async function handleDeleteQuote(row: CsIntakeSubmission) {
+    if (!row.work_item_id) return;
+    const reason = window.prompt('Provide a reason for deleting this linked quote (min 5 characters):');
+    if (!reason?.trim() || reason.trim().length < 5) {
+      if (reason !== null) setError('Delete reason must be at least 5 characters.');
+      return;
     }
+    await action(row.id, async () => {
+      await deleteLinkedWorkItem(row.work_item_id!, reason.trim());
+    }, 'Linked quote cancelled successfully.');
   }
 
   async function handleEdit(row: CsIntakeSubmission) {
@@ -305,7 +374,6 @@ export default function IntakeQueue({
   function closeModal() {
     setSelected(null);
     setModalMode('view');
-    setHistoryEvents([]);
   }
 
   // Determine if a row is RingCentral-sourced
@@ -316,11 +384,6 @@ export default function IntakeQueue({
   }
 
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9] font-black text-slate-500">Loading Sales Intake Queue…</div>;
-  if (!['agent', 'manager'].includes(profile.role)) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9]"><div className={ui.error}>The Sales Intake Queue is available to Agents and Managers.</div></div>;
-
-  const submittedCount = rows.filter((row) => row.status === 'submitted').length;
-  const claimedCount = rows.filter((row) => row.status === 'claimed').length;
-  const mine = rows.filter((row) => row.claimed_by === profile.id).length;
 
   return (
     <ModuleShell
@@ -353,32 +416,26 @@ export default function IntakeQueue({
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <div className={ui.stat}><p className={ui.statLabel}>Unclaimed</p><p className={ui.statValue}>{submittedCount}</p><p className="mt-1 text-xs font-semibold text-slate-500">Available to eligible Sales Agents</p></div>
-        <div className={ui.stat}><p className={ui.statLabel}>Claimed</p><p className={ui.statValue}>{claimedCount}</p><p className="mt-1 text-xs font-semibold text-slate-500">Waiting to convert into Quotes Database</p></div>
-        <div className={ui.stat}><p className={ui.statLabel}>Assigned to Me</p><p className={ui.statValue}>{mine}</p><p className="mt-1 text-xs font-semibold text-slate-500">You become Sales owner after conversion</p></div>
-      </section>
-
       <section className={`${ui.card} mt-5 overflow-hidden`}>
         <div className={ui.cardHeader}>
           <div><p className={ui.sectionTitle}>Shared Queue</p><h2 className="mt-1 text-xl font-black">Customer Service submissions</h2><p className="mt-1 text-sm font-semibold text-slate-500">Claiming is atomic—only one Agent can win when multiple people click at the same time.</p></div>
           <button type="button" className={ui.btnSecondary} onClick={() => void refresh()}><RefreshCw className="h-4 w-4" />Refresh</button>
         </div>
-        <div className={`grid gap-3 border-b border-slate-100 p-4 ${isManager ? 'md:grid-cols-[1fr_180px_180px_180px]' : 'md:grid-cols-[1fr_210px_180px]'}`}>
+        <div className={`grid gap-3 border-b border-slate-100 p-4 md:grid-cols-[1fr_160px_160px_160px_160px]`}>
           <label className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm font-semibold outline-none focus:border-[#7890bc]" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer, business, phone or DOT" /></label>
-          <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={coverage} onChange={(event) => setCoverage(event.target.value)}><option value="all">All coverage types</option><option value="personal_auto">Personal Auto</option><option value="commercial_auto">Commercial Auto</option></select>
-          {isManager && (
-            <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">All statuses</option>
-              <option value="draft">Draft</option>
-              <option value="submitted">Submitted</option>
-              <option value="claimed">Claimed</option>
-              <option value="converted">Converted</option>
-              <option value="returned">Returned</option>
-              <option value="rejected">Rejected</option>
-              <option value="deleted">Deleted</option>
-            </select>
-          )}
+          <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={dateRange} onChange={(event) => setDateRange(event.target.value as 'today' | 'week' | 'all')}>
+            <option value="all">All time</option>
+            <option value="today">Today</option>
+            <option value="week">This week</option>
+          </select>
+          <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={coverage} onChange={(event) => setCoverage(event.target.value)}><option value="all">All coverage</option><option value="personal_auto">Personal Auto</option><option value="commercial_auto">Commercial Auto</option></select>
+          <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="submitted">Submitted</option>
+            <option value="claimed">Claimed</option>
+            <option value="converted">Converted</option>
+            <option value="returned">Returned</option>
+          </select>
           <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={priority} onChange={(event) => setPriority(event.target.value)}><option value="all">All priorities</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option></select>
         </div>
         <div className="overflow-x-auto">
@@ -389,9 +446,8 @@ export default function IntakeQueue({
                 <th className={ui.th}>Customer Name</th>
                 <th className={ui.th}>Submitted</th>
                 <th className={ui.th}>Status</th>
-                {isManager && <th className={ui.th}>Creator</th>}
-                <th className={ui.th}>RC Agent</th>
-                {isManager && <th className={ui.th}>Linked Quote</th>}
+                <th className={ui.th}>Quote Status</th>
+                <th className={ui.th}>Agent</th>
                 <th className={ui.th}>Actions</th>
               </tr>
             </thead>
@@ -447,66 +503,71 @@ export default function IntakeQueue({
                       </div>
                     </td>
 
-                    {/* Creator (Manager only) */}
-                    {isManager && (
-                      <td className={ui.td}>
-                        <p className="text-xs font-bold text-slate-600">{profileName(agents, row.created_by)}</p>
-                      </td>
-                    )}
-
-                    {/* Current RC Agent (turn holder for unclaimed RC intakes) */}
+                    {/* Quote Status (only for converted rows with linked work item) */}
                     <td className={ui.td}>
-                      {isRc && row.status === 'submitted' ? (
+                      {hasLinkedQuote && row.work_item_id ? (
+                        <span className={`${ui.badge} ${quoteStatusTone(quoteStatuses.get(row.work_item_id))}`}>
+                          {statusLabel(quoteStatuses.get(row.work_item_id) ?? 'unknown')}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+
+                    {/* Agent (who claimed or is assigned) */}
+                    <td className={ui.td}>
+                      {row.claimed_by ? (
+                        <p className="font-bold text-slate-700">{profileName(agents, row.claimed_by)}</p>
+                      ) : isRc && row.status === 'submitted' ? (
                         <div>
                           <p className="font-bold text-slate-700">{rcTurnHolderName}</p>
-                          {!canClaimRc && (
-                            <p className="mt-0.5 text-xs text-amber-600 font-semibold">Their turn</p>
-                          )}
                           {isCurrentRcAgent && (
                             <p className="mt-0.5 text-xs text-emerald-600 font-semibold">Your turn</p>
                           )}
                         </div>
-                      ) : row.claimed_by ? (
-                        <p className="font-bold text-slate-700">{profileName(agents, row.claimed_by)}</p>
                       ) : (
-                        <p className="text-xs text-slate-400">—</p>
+                        <p className="text-xs text-slate-400">Unassigned</p>
                       )}
                     </td>
-
-                    {/* Linked Quote (Manager only) - Req 24.6 */}
-                    {isManager && (
-                      <td className={ui.td}>
-                        {hasLinkedQuote ? (
-                          <button
-                            type="button"
-                            className="text-xs font-bold text-blue-600 underline hover:text-blue-800"
-                            disabled={isDeleted}
-                            onClick={() => handleOpenLinkedQuote(row)}
-                          >
-                            Open Quote
-                          </button>
-                        ) : (
-                          <p className="text-xs text-slate-400">—</p>
-                        )}
-                      </td>
-                    )}
 
                     {/* Actions */}
                     <td className={ui.td}>
                       <div className="flex min-w-[260px] flex-wrap gap-2">
                         <button type="button" className={ui.btnSecondary} onClick={() => void show(row)}><Eye className="h-4 w-4" />View</button>
 
-                        {/* Manager: Edit (disabled for deleted intakes per Req 24.2) */}
-                        {isManager && !isDeleted ? (
-                          <button type="button" className={ui.btnSecondary} disabled={busyId === row.id} onClick={() => void handleEdit(row)}>
-                            <Edit3 className="h-4 w-4" />Edit
+                        {/* Log: visible for all converted rows — all roles */}
+                        {row.converted_at && row.work_item_id ? (
+                          <button
+                            type="button"
+                            className={ui.btnSecondary}
+                            onClick={() => {
+                              setSelectedQuoteWorkItemId(row.work_item_id);
+                              setIsQuoteActivityOpen(true);
+                            }}
+                          >
+                            <FileText className="h-4 w-4" />Log
                           </button>
                         ) : null}
 
-                        {/* Manager: View History (always available per Req 24.2) */}
-                        {isManager ? (
-                          <button type="button" className={ui.btnSecondary} onClick={() => void handleViewHistory(row)}>
-                            <History className="h-4 w-4" />History
+                        {/* Delete Quote: Manager only */}
+                        {isManager && hasLinkedQuote && row.work_item_id ? (
+                          <button
+                            type="button"
+                            className={ui.btnDanger}
+                            disabled={busyId === row.id}
+                            onClick={() => void handleDeleteQuote(row)}
+                          >
+                            <Trash2 className="h-4 w-4" />Delete Quote
+                          </button>
+                        ) : null}
+
+                        {/* Edit: Manager can always edit; agent who created can edit if not yet assigned to another agent */}
+                        {!isDeleted && (
+                          isManager
+                          || (profile.role === 'agent' && row.created_by === profile.id && (!row.claimed_by || row.claimed_by === profile.id))
+                        ) ? (
+                          <button type="button" className={ui.btnSecondary} disabled={busyId === row.id} onClick={() => void handleEdit(row)}>
+                            <Edit3 className="h-4 w-4" />Edit
                           </button>
                         ) : null}
 
@@ -523,7 +584,7 @@ export default function IntakeQueue({
                         ) : null}
 
                         {/* RingCentral-sourced unclaimed but NOT current agent: show disabled with tooltip */}
-                        {isRc && row.status === 'submitted' && !canClaimRc ? (
+                        {isRc && row.status === 'submitted' && !canClaimRc && !isManager ? (
                           <button
                             type="button"
                             className={ui.btnPrimary}
@@ -557,7 +618,7 @@ export default function IntakeQueue({
                           </button>
                         ) : null}
 
-                        {/* Manager: Assign (disabled for deleted or already-linked intakes per Req 24.2, 24.6) */}
+                        {/* Manager: Assign */}
                         {canAssign ? (
                           <select className="rounded-xl border border-[#c9d5e9] bg-white px-3 py-2 text-xs font-black text-[#223f7a]" defaultValue="" onChange={(event) => void assign(row, event.target.value)}>
                             <option value="" disabled>Assign to…</option>
@@ -570,14 +631,14 @@ export default function IntakeQueue({
                           <button type="button" className={ui.btnDanger} disabled={busyId === row.id} onClick={() => void requestReturn(row)}>Return</button>
                         ) : null}
 
-                        {/* Manager: Delete (disabled for deleted intakes per Req 24.2) */}
+                        {/* Manager: Delete intake */}
                         {isManager && !isDeleted ? (
                           <button type="button" className={ui.btnDanger} disabled={busyId === row.id} onClick={() => void handleDelete(row)}>
                             <Trash2 className="h-4 w-4" />Delete
                           </button>
                         ) : null}
 
-                        {/* Manager: Restore (only for deleted intakes per Req 24.2) */}
+                        {/* Manager: Restore (only for deleted intakes) */}
                         {isManager && isDeleted ? (
                           <button type="button" className={ui.btnSecondary} disabled={busyId === row.id} onClick={() => void handleRestore(row)}>
                             <RotateCcw className="h-4 w-4" />Restore
@@ -634,17 +695,18 @@ export default function IntakeQueue({
                 onCancel={closeModal}
               />
             )}
-
-            {/* History mode: IntakeHistory timeline */}
-            {modalMode === 'history' && (
-              <div>
-                <h3 className="mb-4 text-lg font-black text-slate-900">Intake History</h3>
-                <IntakeHistory intakeId={selected.submission.id} events={historyEvents} />
-              </div>
-            )}
           </div>
         ) : null}
       </QueueModal>
+
+      <QuoteActivityModal
+        workItemId={selectedQuoteWorkItemId}
+        isOpen={isQuoteActivityOpen}
+        onClose={() => {
+          setIsQuoteActivityOpen(false);
+          setSelectedQuoteWorkItemId(null);
+        }}
+      />
     </ModuleShell>
   );
 }
