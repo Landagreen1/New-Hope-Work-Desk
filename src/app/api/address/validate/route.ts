@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * POST /api/address/validate
  * Validates a US address using the Google Address Validation API.
@@ -8,8 +10,9 @@ import { NextResponse } from 'next/server';
  * Requires GOOGLE_MAPS_API_KEY environment variable.
  */
 export async function POST(request: Request) {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY;
   if (!apiKey) {
+    console.error('[Address Validation] GOOGLE_MAPS_API_KEY is not set. Available env keys:', Object.keys(process.env).filter(k => k.includes('GOOGLE')));
     return NextResponse.json(
       { error: 'Address validation is not configured. Contact your administrator.' },
       { status: 503 },
