@@ -461,18 +461,56 @@ export function profileName(profiles: ProfileLite[], id: string | null): string 
 
 /**
  * Batch-fetches the current status for a set of linked work items (quotes).
+ * Checks quote_outcomes for sold/not_sold decisions and pending_pricing for price_sent.
  * Only call with work_item_ids from converted intakes to avoid unnecessary queries.
  */
 export async function getLinkedQuoteStatuses(workItemIds: string[]): Promise<Map<string, string>> {
   if (!workItemIds.length) return new Map();
-  const { data, error } = await getSupabase()
-    .from('work_items')
-    .select('id, status')
-    .in('id', workItemIds);
-  throwIfError(error);
+  const supabase = getSupabase();
+
+  const [workResult, outcomesResult, pricingResult] = await Promise.all([
+    supabase
+      .from('work_items')
+      .select('id, status')
+      .in('id', workItemIds),
+    supabase
+      .from('quote_outcomes')
+      .select('source_work_item_id, decision')
+      .in('source_work_item_id', workItemIds),
+    supabase
+      .from('pending_pricing_quotes')
+      .select('source_work_item_id, price_sent_at')
+      .in('source_work_item_id', workItemIds)
+      .not('price_sent_at', 'is', null),
+  ]);
+  throwIfError(workResult.error);
+  throwIfError(outcomesResult.error);
+  throwIfError(pricingResult.error);
+
+  // Build outcome map (sold/not_sold takes precedence)
+  const outcomeMap = new Map<string, string>();
+  for (const row of (outcomesResult.data ?? [])) {
+    outcomeMap.set(row.source_work_item_id, row.decision);
+  }
+
+  // Build price_sent set
+  const priceSentSet = new Set<string>();
+  for (const row of (pricingResult.data ?? [])) {
+    priceSentSet.add(row.source_work_item_id);
+  }
+
+  // Build final status map with priority: outcome > price_sent > work_item status
   const map = new Map<string, string>();
-  for (const row of (data ?? [])) {
-    map.set(row.id, row.status);
+  for (const row of (workResult.data ?? [])) {
+    const outcome = outcomeMap.get(row.id);
+    if (outcome) {
+      // Use the outcome decision directly (sold / not_sold)
+      map.set(row.id, outcome);
+    } else if (priceSentSet.has(row.id)) {
+      map.set(row.id, 'price_sent');
+    } else {
+      map.set(row.id, row.status);
+    }
   }
   return map;
 }
