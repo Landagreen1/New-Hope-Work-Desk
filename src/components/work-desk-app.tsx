@@ -8842,7 +8842,8 @@ function UserAdminPanel() {
     setSaving(true);
     setError("");
     setCredential(null);
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     try {
       const response = await fetch("/api/admin/users", {
         method: "POST",
@@ -8866,7 +8867,7 @@ function UserAdminPanel() {
         displayName: payload.user.display_name,
         temporaryPassword: payload.temporaryPassword,
       });
-      event.currentTarget.reset();
+      formEl.reset();
       await loadUsers();
     } catch (caught) {
       setError(
