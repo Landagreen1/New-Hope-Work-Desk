@@ -190,6 +190,49 @@ function ManagerCustomerServiceWorkspace({
   );
 }
 
+function IntakeQueueWithCreate({ profile }: { profile: ProfileLite }) {
+  const [view, setView] = useState<"queue" | "create">("queue");
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setView("queue")}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black transition-all ${
+            view === "queue"
+              ? "bg-[#223f7a] text-white shadow-sm"
+              : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+          }`}
+        >
+          <ClipboardCheck className="h-4 w-4" />
+          Intake Queue
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("create")}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black transition-all ${
+            view === "create"
+              ? "bg-[#223f7a] text-white shadow-sm"
+              : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+          }`}
+        >
+          <Headphones className="h-4 w-4" />
+          Create Intake
+        </button>
+      </div>
+
+      {view === "queue" ? (
+        <IntakeQueue initialProfile={profile} embedded />
+      ) : (
+        <Suspense fallback={<LoadingWorkspace label="Quote Intake" />}>
+          <CsIntakeLanding initialProfile={profile} embedded />
+        </Suspense>
+      )}
+    </div>
+  );
+}
+
 export function RoleWorkspace({
   sessionProfile,
   initialData,
@@ -239,17 +282,10 @@ export function RoleWorkspace({
         icon: LayoutDashboard,
       },
       {
-        id: "quote_intake",
-        label: "Customer Quote",
-        shortLabel: "Quote",
-        description: "Collect quote information",
-        icon: Headphones,
-      },
-      {
         id: "intake_queue",
         label: "Intake Queue",
         shortLabel: "Queue",
-        description: "Claim quotes from Customer Service",
+        description: "Create and claim quote intakes",
         icon: ClipboardCheck,
       },
       {
@@ -353,7 +389,9 @@ export function RoleWorkspace({
       </Suspense>
     );
   } else if (activeTab === "intake_queue") {
-    externalWorkspaceContent = <IntakeQueue initialProfile={profile} embedded />;
+    externalWorkspaceContent = (
+      <IntakeQueueWithCreate profile={profile} />
+    );
   } else if (activeTab === "customer_service") {
     externalWorkspaceContent = (
       <ManagerCustomerServiceWorkspace profile={profile} />
