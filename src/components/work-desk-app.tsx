@@ -8009,7 +8009,7 @@ function ManagerView({
                   <ExecutiveReport reportData={reportData} />
                 ) : null}
                 {reportView === "not_sold" ? (
-                  <NotSoldReport rows={reportData.notSoldRows} onExport={exportNotSoldQuotes} onOpenLog={openQuoteLog} />
+                  <NotSoldReport rows={reportData.notSoldRows} onExport={exportNotSoldQuotes} onOpenLog={onOpenQuoteLog} />
                 ) : null}
                 {reportView === "exceptions" ? (
                   <ExceptionCenterReport items={reportData.exceptionItems} />
