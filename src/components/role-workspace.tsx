@@ -3,6 +3,7 @@
 import {
   Building2,
   ClipboardCheck,
+  Clock,
   FileSpreadsheet,
   Headphones,
   LayoutDashboard,
@@ -14,6 +15,7 @@ import { Suspense, useMemo, useState } from "react";
 
 import { WorkDeskApp } from "@/components/work-desk-app";
 import CommercialWorkspace from "@/features/commercial/CommercialWorkspace";
+import TimeAttendanceWorkspace from "@/features/time-attendance/TimeAttendanceWorkspace";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type { ProfileLite } from "@/features/nhwd-shared/types";
@@ -28,7 +30,8 @@ type WorkspaceTab =
   | "customer_service"
   | "renewals"
   | "commercial_board"
-  | "user_admin";
+  | "user_admin"
+  | "time_attendance";
 
 interface TabDefinition {
   id: WorkspaceTab;
@@ -259,6 +262,13 @@ export function RoleWorkspace({
             : "My renewal follow-up",
         icon: FileSpreadsheet,
       },
+      {
+        id: "time_attendance",
+        label: "Time & Attendance",
+        shortLabel: "Clock",
+        description: "Clock in, schedule, PTO",
+        icon: Clock,
+      },
     ];
 
     // --- Management layout: streamlined tabs ---
@@ -293,17 +303,24 @@ export function RoleWorkspace({
           icon: FileSpreadsheet,
         },
         {
+          id: "time_attendance" as WorkspaceTab,
+          label: "Time & Attendance",
+          shortLabel: "Clock",
+          description: "Clock, schedules, PTO, payroll",
+          icon: Clock,
+          dividerBefore: true,
+        },
+        {
           id: "user_admin" as WorkspaceTab,
           label: "User Admin",
           shortLabel: "Users",
           description: "Users, access and sources",
           icon: UserCog,
-          dividerBefore: true,
         },
       ];
     }
 
-    // Commercial role: only the Commercial Board (no Sales workspace)
+    // Commercial role: Commercial Board + Time & Attendance
     if (sessionProfile.role === "commercial") {
       return [
         {
@@ -312,6 +329,13 @@ export function RoleWorkspace({
           shortLabel: "Commercial",
           description: "Your commercial policies pipeline",
           icon: Building2,
+        },
+        {
+          id: "time_attendance" as WorkspaceTab,
+          label: "Time & Attendance",
+          shortLabel: "Clock",
+          description: "Clock in, schedule, PTO",
+          icon: Clock,
         },
       ];
     }
@@ -347,6 +371,12 @@ export function RoleWorkspace({
     externalWorkspaceContent = (
       <Suspense fallback={<LoadingWorkspace label="Commercial Board" />}>
         <CommercialWorkspace initialProfile={profile} embedded />
+      </Suspense>
+    );
+  } else if (activeTab === "time_attendance") {
+    externalWorkspaceContent = (
+      <Suspense fallback={<LoadingWorkspace label="Time & Attendance" />}>
+        <TimeAttendanceWorkspace initialProfile={profile} embedded />
       </Suspense>
     );
   }
