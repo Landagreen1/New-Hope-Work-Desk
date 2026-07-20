@@ -53,6 +53,8 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
     try {
       const params = new URLSearchParams();
       if (showArchive) params.set('board_column', 'archive');
+      // Board view: agents see only their own cards; managers see all
+      if (!isManager) params.set('assigned_to', initialProfile.id);
 
       const res = await fetch(`/api/commercial-quotes?${params.toString()}`);
       if (!res.ok) {
@@ -67,7 +69,7 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
     } finally {
       setLoading(false);
     }
-  }, [showArchive]);
+  }, [showArchive, isManager, initialProfile.id]);
 
   useEffect(() => {
     void fetchQuotes();
