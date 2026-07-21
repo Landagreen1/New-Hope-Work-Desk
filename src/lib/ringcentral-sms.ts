@@ -225,7 +225,7 @@ export function buildRenewalReminderMessage(input: {
 }): string {
   const firstName = input.customerName.split(/[\s,]+/)[0];
   const carrier = input.carrier || 'your insurance';
-  const phone = input.officePhone || '(704) 879-3673';
+  const phone = input.officePhone || '(704) 824-3130';
   const dateFormatted = new Date(`${input.renewalDate}T00:00:00`).toLocaleDateString('en-US', {
     month: '2-digit',
     day: '2-digit',
