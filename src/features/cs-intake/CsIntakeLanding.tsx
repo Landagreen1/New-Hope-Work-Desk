@@ -169,7 +169,7 @@ export default function CsIntakeLanding({
     );
   }
 
-  if (!['customer_service', 'manager', 'agent'].includes(profile.role)) {
+  if (!['customer_service', 'manager', 'agent', 'super_admin'].includes(profile.role)) {
     return (
       <div className="grid min-h-screen place-items-center bg-[#f3f5f9] p-6">
         <div className={ui.error}>This view is not available for your role.</div>

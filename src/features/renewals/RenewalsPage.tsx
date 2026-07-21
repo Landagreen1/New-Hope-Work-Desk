@@ -1343,7 +1343,7 @@ export default function RenewalsPage({
   }, [rows]);
 
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9] font-black text-slate-500">Loading Renewals…</div>;
-  if (!['agent', 'manager', 'customer_service'].includes(profile.role)) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9]"><div className={ui.error}>Your account does not have Renewals access.</div></div>;
+  if (!['agent', 'manager', 'customer_service', 'super_admin'].includes(profile.role)) return <div className="grid min-h-screen place-items-center bg-[#f3f5f9]"><div className={ui.error}>Your account does not have Renewals access.</div></div>;
 
   return (
     <ModuleShell
