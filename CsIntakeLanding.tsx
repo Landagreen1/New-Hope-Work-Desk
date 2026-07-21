@@ -203,7 +203,7 @@ export function RoleWorkspace({
       ];
     }
 
-    if (sessionProfile.role === "manager") {
+    if (sessionProfile.role === "manager" || sessionProfile.role === "super_admin") {
       return [
         {
           id: "desk",
@@ -273,7 +273,7 @@ export function RoleWorkspace({
       <RenewalsPage
         initialProfile={profile}
         embedded
-        initialTab={sessionProfile.role === "manager" ? "pipeline" : "overview"}
+        initialTab={sessionProfile.role === "manager" || sessionProfile.role === "super_admin" ? "pipeline" : "overview"}
         showImportTab={false}
       />
     );
