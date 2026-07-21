@@ -240,7 +240,7 @@ begin
             else record.assigned_at
           end,
           status = case
-            when record.status::text = 'imported' and v_assignee_id is not null then 'assigned'
+            when record.status::text = 'imported' and v_assignee_id is not null then 'assigned'::public.renewal_status
             else record.status
           end,
           -- New HawkSoft fields
@@ -309,7 +309,7 @@ begin
         producer_name, csr_name, policy_status, effective_date, expiration_date,
         inception_date, sold_date, application_type, policy_office
       ) values (
-        case when v_assignee_id is not null then 'assigned' else 'imported' end,
+        case when v_assignee_id is not null then 'assigned'::public.renewal_status else 'imported'::public.renewal_status end,
         nullif(trim(v_row->>'hawksoft_client_id'), ''), v_policy,
         nullif(trim(v_row->>'line_of_business'), ''), nullif(trim(v_row->>'carrier'), ''),
         trim(v_row->>'customer_name'), nullif(trim(v_row->>'customer_phone'), ''),
