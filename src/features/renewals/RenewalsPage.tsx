@@ -1136,6 +1136,7 @@ export default function RenewalsPage({
   const [assignedFilter, setAssignedFilter] = useState('all');
   const [dueFilter, setDueFilter] = useState<'all' | 'active30' | 'overdue'>('active30');
   const [search, setSearch] = useState('');
+  const [phoneFilter, setPhoneFilter] = useState<'all' | 'missing_phone' | 'has_phone'>('all');
   const [agentPriorityFilter, setAgentPriorityFilter] = useState<AgentRenewalPriorityFilter>('all');
   const [managerDueWindow, setManagerDueWindow] = useState<ManagerRenewalDueWindow>(30);
   const [managerReportRows, setManagerReportRows] = useState<RenewalRecord[]>([]);
@@ -1247,9 +1248,18 @@ export default function RenewalsPage({
   }, [rows]);
 
   const displayedRows = useMemo(() => {
-    if (profile.role !== 'agent' || agentPriorityFilter === 'all') return rows;
+    let filtered = rows;
 
-    return rows.filter((row) => {
+    // Manager phone/SMS filter
+    if (profile.role === 'manager' && phoneFilter === 'missing_phone') {
+      filtered = filtered.filter((row) => !row.customer_phone);
+    } else if (profile.role === 'manager' && phoneFilter === 'has_phone') {
+      filtered = filtered.filter((row) => Boolean(row.customer_phone));
+    }
+
+    if (profile.role !== 'agent' || agentPriorityFilter === 'all') return filtered;
+
+    return filtered.filter((row) => {
       if (!OPEN_STATUSES.includes(row.status)) return false;
       const days = daysUntil(row.renewal_date);
 
@@ -1270,7 +1280,7 @@ export default function RenewalsPage({
           return true;
       }
     });
-  }, [agentPriorityFilter, profile.role, rows]);
+  }, [agentPriorityFilter, phoneFilter, profile.role, rows]);
 
   const managerDueMetrics = useMemo(() => {
     const active = managerReportRows.filter((row) => OPEN_STATUSES.includes(row.status));
@@ -1581,6 +1591,7 @@ export default function RenewalsPage({
               </div>
             )}
             {profile.role === 'manager' ? <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={assignedFilter} onChange={(event) => setAssignedFilter(event.target.value)}><option value="all">All assignees</option><option value="unassigned">Unassigned</option>{assignees.map((person) => <option key={person.id} value={person.id}>{person.display_name}</option>)}</select> : <div className="rounded-xl bg-[#eef3fb] px-3 py-2.5 text-sm font-black text-[#223f7a]">Assigned to {profile.display_name}</div>}
+            {profile.role === 'manager' ? <select className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold" value={phoneFilter} onChange={(event) => setPhoneFilter(event.target.value as typeof phoneFilter)}><option value="all">All records</option><option value="missing_phone">Missing phone</option><option value="has_phone">Has phone</option></select> : null}
           </div>
           <div className="overflow-x-auto"><table className={ui.table}><thead><tr><th className={ui.th}>Deadline</th><th className={ui.th}>Customer / Policy</th><th className={ui.th}>Carrier</th><th className={ui.th}>Premium</th><th className={ui.th}>Status</th><th className={ui.th}>Assigned</th><th className={ui.th}>Next follow-up</th><th className={ui.th}>Action</th></tr></thead><tbody>{displayedRows.map((row) => { const warning = warningLabel(row); return <tr key={row.id} className={ui.trHover} onClick={() => setSelectedId(row.id)}><td className={ui.td}><span className={`${ui.badge} ${ui.badgeTone[warning.tone]}`}>{warning.label}</span><p className="mt-2 text-xs font-semibold text-slate-400">{new Date(`${row.renewal_date}T00:00:00`).toLocaleDateString()}</p></td><td className={ui.td}><p className="font-black text-slate-900">{row.customer_name}</p><div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-xs font-semibold text-slate-500">{row.policy_number}</p>{row.requote_requested ? <span className={`${ui.badge} ${ui.badgeTone.progress}`}>Requote flagged</span> : null}{row.source_sync_state === 'missing_from_latest_file' ? <span className={`${ui.badge} ${ui.badgeTone.progress}`}>Missing from latest file</span> : null}</div></td><td className={ui.td}><p className="font-bold">{row.carrier || '—'}</p><p className="mt-1 text-xs text-slate-400">{row.line_of_business || 'Line not recorded'}</p></td><td className={ui.td}><p className="font-black">{money(row.premium_renewal)}</p><p className={`mt-1 text-xs font-black ${premiumDelta(row).startsWith('+') ? 'text-rose-700' : 'text-emerald-700'}`}>{premiumDelta(row)}</p></td><td className={ui.td}><span className={`${ui.badge} ${ui.badgeTone[renewalStatusTone[row.status] || 'neutral']}`}>{statusLabel(row.status)}</span></td><td className={ui.td}><p className="font-bold">{assigneeName(assignees, row.assigned_to)}</p></td><td className={ui.td}><p className="text-xs font-semibold text-slate-500">{row.next_follow_up_at ? new Date(row.next_follow_up_at).toLocaleString() : 'Not scheduled'}</p></td><td className={ui.td}><button className={ui.btnSecondary} onClick={(event) => { event.stopPropagation(); setSelectedId(row.id); }}>Open</button></td></tr>})}</tbody></table>{!displayedRows.length ? <div className={ui.empty}>No renewals match this priority filter.</div> : null}</div>
         </section>
