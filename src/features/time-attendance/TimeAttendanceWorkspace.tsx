@@ -50,7 +50,7 @@ function LoadingFallback() {
 
 export default function TimeAttendanceWorkspace({ initialProfile, embedded = false }: TimeAttendanceWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<TATab>('clock');
-  const isManager = initialProfile.role === 'manager';
+  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
   const visibleTabs = TABS.filter((t) => !t.managerOnly || isManager);
 

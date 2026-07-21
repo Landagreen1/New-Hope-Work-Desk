@@ -220,7 +220,7 @@ export default function IntakeQueue({
 
   // Determine if current user is the RC turn holder or a Manager
   const isCurrentRcAgent = profile.id === rcTurnHolderId;
-  const isManager = profile.role === 'manager';
+  const isManager = profile.role === 'manager' || profile.role === 'super_admin';
   const canClaimRc = isCurrentRcAgent;
 
   // Resolve RC turn holder display name

@@ -25,7 +25,7 @@ export default function PTORequests({ initialProfile }: PTORequestsProps) {
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [denialReason, setDenialReason] = useState('');
 
-  const isManager = initialProfile.role === 'manager';
+  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null);

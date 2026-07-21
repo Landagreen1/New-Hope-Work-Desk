@@ -113,7 +113,7 @@ export default function IntakeEditForm({
   onSave,
   onCancel,
 }: IntakeEditFormProps) {
-  const isManager = profile.role === 'manager';
+  const isManager = profile.role === 'manager' || profile.role === 'super_admin';
 
   // Initialize form values from intake
   const initialValues = useMemo(() => {

@@ -12,23 +12,47 @@ interface ScheduleManagerProps {
   initialProfile: ProfileLite;
 }
 
-function getMonday(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  d.setDate(d.getDate() - diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
+function getFirstDayOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function getLastDayOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
 function formatDate(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function getCalendarDays(monthStart: Date): Date[] {
+  const firstDay = new Date(monthStart);
+  const lastDay = getLastDayOfMonth(monthStart);
+
+  // Start from Monday of the week containing the 1st
+  const startDay = new Date(firstDay);
+  const dow = startDay.getDay();
+  const diff = dow === 0 ? 6 : dow - 1; // Monday = 0 offset
+  startDay.setDate(startDay.getDate() - diff);
+
+  // End on Sunday of the week containing the last day
+  const endDay = new Date(lastDay);
+  const endDow = endDay.getDay();
+  const endDiff = endDow === 0 ? 0 : 7 - endDow;
+  endDay.setDate(endDay.getDate() + endDiff);
+
+  const days: Date[] = [];
+  const current = new Date(startDay);
+  while (current <= endDay) {
+    days.push(new Date(current));
+    current.setDate(current.getDate() + 1);
+  }
+  return days;
+}
+
+const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function ScheduleManager({ initialProfile }: ScheduleManagerProps) {
-  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
+  const [currentMonth, setCurrentMonth] = useState(() => getFirstDayOfMonth(new Date()));
   const [schedules, setSchedules] = useState<EmployeeSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,20 +65,20 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
   const [profiles, setProfiles] = useState<Array<{ id: string; display_name: string }>>([]);
   const [saving, setSaving] = useState(false);
 
-  const isManager = initialProfile.role === 'manager';
+  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
-  const weekDates = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(weekStart);
-      d.setDate(weekStart.getDate() + i);
-      return d;
-    });
-  }, [weekStart]);
+  const calendarDays = useMemo(() => getCalendarDays(currentMonth), [currentMonth]);
 
+  // Fetch schedules for the entire visible range (may span prev/next month padding)
   const fetchSchedules = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const params = new URLSearchParams({ week: formatDate(weekStart) });
+      const rangeStart = calendarDays[0];
+      const rangeEnd = calendarDays[calendarDays.length - 1];
+      const params = new URLSearchParams({
+        month_start: formatDate(rangeStart),
+        month_end: formatDate(rangeEnd),
+      });
       if (!isManager) params.set('profile_id', initialProfile.id);
       const res = await fetch(`/api/schedules?${params}`);
       if (!res.ok) throw new Error('Failed to load schedules.');
@@ -62,7 +86,7 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
       setSchedules(body.schedules as EmployeeSchedule[]);
     } catch (err) { setError(err instanceof Error ? err.message : 'Load failed.'); }
     finally { setLoading(false); }
-  }, [weekStart, isManager, initialProfile.id]);
+  }, [calendarDays, isManager, initialProfile.id]);
 
   useEffect(() => { void fetchSchedules(); }, [fetchSchedules]);
 
@@ -96,72 +120,145 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
     finally { setSaving(false); }
   };
 
-  const prevWeek = () => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d); };
-  const nextWeek = () => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); };
-  const thisWeek = () => setWeekStart(getMonday(new Date()));
+  const prevMonth = () => {
+    const d = new Date(currentMonth);
+    d.setMonth(d.getMonth() - 1);
+    setCurrentMonth(d);
+  };
+  const nextMonth = () => {
+    const d = new Date(currentMonth);
+    d.setMonth(d.getMonth() + 1);
+    setCurrentMonth(d);
+  };
+  const goToday = () => setCurrentMonth(getFirstDayOfMonth(new Date()));
+
+  const todayStr = formatDate(new Date());
+
+  // Group schedules by date for quick lookup
+  const schedulesByDate = useMemo(() => {
+    const map: Record<string, EmployeeSchedule[]> = {};
+    for (const s of schedules) {
+      const key = s.schedule_date;
+      if (!map[key]) map[key] = [];
+      map[key].push(s);
+    }
+    return map;
+  }, [schedules]);
+
+  const monthLabel = currentMonth.toLocaleDateString([], { month: 'long', year: 'numeric' });
 
   return (
     <div className="space-y-5">
       {error && <div className={ui.error}><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
 
-      {/* Week nav */}
+      {/* Month navigation */}
       <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-[#223f7a]" />
-          <h3 className="text-sm font-black text-slate-800">
-            Week of {weekStart.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
-          </h3>
+          <h3 className="text-sm font-black text-slate-800">{monthLabel}</h3>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={prevWeek} className={ui.btnSecondary + ' px-2 py-2'}><ChevronLeft className="h-4 w-4" /></button>
-          <button type="button" onClick={thisWeek} className={ui.btnSecondary + ' text-xs'}>Today</button>
-          <button type="button" onClick={nextWeek} className={ui.btnSecondary + ' px-2 py-2'}><ChevronRight className="h-4 w-4" /></button>
+          <button type="button" onClick={prevMonth} className={ui.btnSecondary + ' px-2 py-2'}><ChevronLeft className="h-4 w-4" /></button>
+          <button type="button" onClick={goToday} className={ui.btnSecondary + ' text-xs'}>Today</button>
+          <button type="button" onClick={nextMonth} className={ui.btnSecondary + ' px-2 py-2'}><ChevronRight className="h-4 w-4" /></button>
           {isManager && <button type="button" onClick={() => setShowForm(true)} className={ui.btnPrimary + ' text-xs'}><Plus className="h-3.5 w-3.5" /> Add Shift</button>}
         </div>
       </div>
 
-      {/* Schedule grid */}
+      {/* Monthly calendar grid */}
       {loading ? (
         <div className="flex items-center justify-center py-12"><RefreshCw className="h-5 w-5 animate-spin text-slate-400" /></div>
       ) : (
-        <div className="grid grid-cols-7 gap-2">
-          {weekDates.map((date, i) => {
-            const dateStr = formatDate(date);
-            const daySchedules = schedules.filter(s => s.schedule_date === dateStr);
-            const isToday = formatDate(new Date()) === dateStr;
-            return (
-              <div key={dateStr} className={`rounded-2xl border p-3 ${isToday ? 'border-[#223f7a] bg-[#f8faff]' : 'border-slate-200 bg-white'}`}>
-                <p className={`text-[10px] font-black uppercase ${isToday ? 'text-[#223f7a]' : 'text-slate-400'}`}>{WEEKDAYS[i]}</p>
-                <p className={`text-sm font-bold ${isToday ? 'text-[#223f7a]' : 'text-slate-700'}`}>{date.getDate()}</p>
-                <div className="mt-2 space-y-1.5">
-                  {daySchedules.map(s => (
-                    <div key={s.id} className="rounded-lg bg-slate-50 border border-slate-100 px-2 py-1.5">
-                      <p className="text-[10px] font-black text-slate-700">{s.profiles?.display_name?.split(' ')[0] ?? '—'}</p>
-                      <p className="text-[10px] font-semibold text-slate-500">{s.shift_start?.slice(0,5)} – {s.shift_end?.slice(0,5)}</p>
-                      <span className="text-[9px] font-bold text-slate-400">{SHIFT_TYPE_LABELS[s.shift_type]}</span>
-                    </div>
-                  ))}
-                  {daySchedules.length === 0 && <p className="text-[9px] text-slate-300 text-center">—</p>}
-                </div>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          {/* Weekday headers */}
+          <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
+            {WEEKDAY_HEADERS.map((day) => (
+              <div key={day} className="px-2 py-2 text-center text-[10px] font-black uppercase text-slate-400">
+                {day}
               </div>
-            );
-          })}
+            ))}
+          </div>
+
+          {/* Calendar days */}
+          <div className="grid grid-cols-7">
+            {calendarDays.map((date) => {
+              const dateStr = formatDate(date);
+              const isToday = dateStr === todayStr;
+              const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+              const daySchedules = schedulesByDate[dateStr] ?? [];
+
+              return (
+                <div
+                  key={dateStr}
+                  className={`min-h-[90px] border-b border-r border-slate-100 p-1.5 transition-colors ${
+                    isToday
+                      ? 'bg-[#f0f4ff] ring-1 ring-inset ring-[#223f7a]/20'
+                      : isCurrentMonth
+                        ? 'bg-white'
+                        : 'bg-slate-50/50'
+                  }`}
+                >
+                  <p className={`text-xs font-bold ${
+                    isToday
+                      ? 'text-[#223f7a]'
+                      : isCurrentMonth
+                        ? 'text-slate-700'
+                        : 'text-slate-300'
+                  }`}>
+                    {date.getDate()}
+                  </p>
+                  <div className="mt-1 space-y-0.5 overflow-y-auto max-h-[60px]">
+                    {daySchedules.map((s) => (
+                      <div
+                        key={s.id}
+                        className="rounded px-1.5 py-0.5 bg-gradient-to-r from-[#223f7a]/10 to-[#223f7a]/5 border border-[#223f7a]/10"
+                      >
+                        {isManager && (
+                          <p className="text-[9px] font-black text-[#223f7a] truncate">
+                            {s.profiles?.display_name?.split(' ')[0] ?? '—'}
+                          </p>
+                        )}
+                        <p className="text-[9px] font-semibold text-slate-600">
+                          {s.shift_start?.slice(0, 5)} – {s.shift_end?.slice(0, 5)}
+                        </p>
+                        <span className="text-[8px] font-bold text-slate-400">{SHIFT_TYPE_LABELS[s.shift_type]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* Add Shift Form */}
+      {/* Add Shift Form Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
             <h3 className="text-lg font-black text-slate-900 mb-4">Add Shift</h3>
             <div className="space-y-3">
-              <div><label className={ui.label}>Employee</label><select value={formProfileId} onChange={e => setFormProfileId(e.target.value)} className={ui.select}><option value="">Select...</option>{profiles.map(p => <option key={p.id} value={p.id}>{p.display_name}</option>)}</select></div>
-              <div><label className={ui.label}>Date</label><input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} className={ui.input} /></div>
+              <div>
+                <label className={ui.label}>Employee</label>
+                <select value={formProfileId} onChange={e => setFormProfileId(e.target.value)} className={ui.select}>
+                  <option value="">Select...</option>
+                  {profiles.map(p => <option key={p.id} value={p.id}>{p.display_name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={ui.label}>Date</label>
+                <input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} className={ui.input} />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={ui.label}>Start</label><input type="time" value={formStart} onChange={e => setFormStart(e.target.value)} className={ui.input} /></div>
                 <div><label className={ui.label}>End</label><input type="time" value={formEnd} onChange={e => setFormEnd(e.target.value)} className={ui.input} /></div>
               </div>
-              <div><label className={ui.label}>Type</label><select value={formType} onChange={e => setFormType(e.target.value)} className={ui.select}>{Object.entries(SHIFT_TYPE_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+              <div>
+                <label className={ui.label}>Type</label>
+                <select value={formType} onChange={e => setFormType(e.target.value)} className={ui.select}>
+                  {Object.entries(SHIFT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
             </div>
             <div className="mt-5 flex gap-3">
               <button type="button" onClick={() => void handleCreateSchedule()} disabled={saving || !formProfileId || !formDate} className={ui.btnPrimary}>{saving ? 'Saving...' : 'Save'}</button>

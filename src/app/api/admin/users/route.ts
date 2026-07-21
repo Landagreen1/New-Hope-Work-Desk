@@ -7,7 +7,7 @@ import { createClient as createSessionClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
-type AppRole = "agent" | "manager" | "customer_service" | "commercial";
+type AppRole = "agent" | "manager" | "customer_service" | "commercial" | "super_admin";
 
 type RequestBody = Record<string, unknown>;
 
@@ -43,10 +43,10 @@ async function getAuthorizedClients() {
     .eq("id", userId)
     .single();
 
-  if (!profile?.is_active || profile.role !== "manager") {
+  if (!profile?.is_active || (profile.role !== "manager" && profile.role !== "super_admin")) {
     return {
       error: Response.json(
-        { error: "Manager permission required." },
+        { error: "Manager or Super Admin permission required." },
         { status: 403 },
       ),
     };
@@ -71,7 +71,7 @@ async function getAuthorizedClients() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  return { admin, managerId: userId };
+  return { admin, managerId: userId, actorRole: profile.role };
 }
 
 async function parseBody(request: Request): Promise<RequestBody | Response> {
@@ -130,10 +130,18 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (!(["agent", "manager", "customer_service", "commercial"] as AppRole[]).includes(role)) {
+  if (!(["agent", "manager", "customer_service", "commercial", "super_admin"] as AppRole[]).includes(role)) {
     return Response.json(
-      { error: "Role must be Agent, Customer Service, Commercial, or Manager." },
+      { error: "Role must be Agent, Customer Service, Commercial, Manager, or Super Admin." },
       { status: 400 },
+    );
+  }
+
+  // Only a super_admin can create or assign the super_admin role
+  if (role === "super_admin" && authorization.actorRole !== "super_admin") {
+    return Response.json(
+      { error: "Only a Super Admin can create or assign the Super Admin role." },
+      { status: 403 },
     );
   }
 
@@ -380,11 +388,19 @@ export async function DELETE(request: Request) {
 
   const { data: profile, error: profileError } = await authorization.admin
     .from("profiles")
-    .select("id,username,display_name,is_active")
+    .select("id,username,display_name,role,is_active")
     .eq("id", userId)
     .single();
   if (profileError || !profile?.is_active) {
     return Response.json({ error: "Active user not found." }, { status: 404 });
+  }
+
+  // Super admin accounts cannot be deleted by anyone
+  if (profile.role === "super_admin") {
+    return Response.json(
+      { error: "Super Admin accounts cannot be deleted." },
+      { status: 403 },
+    );
   }
 
   const { error: banError } =

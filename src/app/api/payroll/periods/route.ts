@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "manager") {
+  if (profile?.role !== "manager" && profile?.role !== "super_admin") {
     return Response.json({ error: "Only managers can create payroll periods." }, { status: 403 });
   }
 

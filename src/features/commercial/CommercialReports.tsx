@@ -61,7 +61,7 @@ export default function CommercialReports({ initialProfile, embedded = false }: 
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const isManager = initialProfile.role === 'manager';
+  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
   // ─── Fetch all quotes for reporting ──────────────────────────────────────────
   const fetchAll = useCallback(async () => {

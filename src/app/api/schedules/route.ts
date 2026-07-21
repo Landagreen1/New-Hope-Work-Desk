@@ -16,6 +16,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const profileId = searchParams.get("profile_id");
   const week = searchParams.get("week"); // Monday of the week
+  const monthStart = searchParams.get("month_start");
+  const monthEnd = searchParams.get("month_end");
 
   let query = supabase
     .from("employee_schedules")
@@ -27,7 +29,11 @@ export async function GET(request: Request) {
     query = query.eq("profile_id", profileId);
   }
 
-  if (week) {
+  if (monthStart && monthEnd) {
+    // Monthly calendar range
+    query = query.gte("schedule_date", monthStart);
+    query = query.lte("schedule_date", monthEnd);
+  } else if (week) {
     const start = new Date(week + "T00:00:00");
     const end = new Date(start);
     end.setDate(start.getDate() + 6);
@@ -54,8 +60,8 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "manager") {
-    return Response.json({ error: "Only managers can create schedules." }, { status: 403 });
+  if (profile?.role !== "manager" && profile?.role !== "super_admin") {
+    return Response.json({ error: "Only managers and super admins can create schedules." }, { status: 403 });
   }
 
   let body: Record<string, unknown>;

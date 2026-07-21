@@ -2665,7 +2665,7 @@ export function WorkDeskApp({
   );
 
   const currentUserId = sessionProfile.id;
-  const isManager = sessionProfile.role === "manager";
+  const isManager = sessionProfile.role === "manager" || sessionProfile.role === "super_admin";
   const isCustomerService = sessionProfile.role === "customer_service";
   const currentUser = agentList.find((agent) => agent.id === currentUserId);
   const currentCustomerServiceUser = customerServiceUsers.find(
@@ -3885,7 +3885,7 @@ export function WorkDeskApp({
                 {sessionProfile.displayName}
               </p>
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                {sessionProfile.role === "manager"
+                {sessionProfile.role === "manager" || sessionProfile.role === "super_admin"
                   ? "Management"
                   : sessionProfile.role === "customer_service"
                     ? "Customer Service"
@@ -8957,14 +8957,14 @@ function UserAdminPanel() {
                         <span
                           className={cn(
                             "rounded-full px-2.5 py-1 text-xs font-black",
-                            user.role === "manager"
+                            user.role === "manager" || user.role === "super_admin"
                               ? "bg-[#eef3fb] text-[#223f7a]"
                               : user.role === "customer_service"
                                 ? "bg-cyan-50 text-cyan-700"
                                 : "bg-slate-100 text-slate-600",
                           )}
                         >
-                          {user.role === "manager"
+                          {user.role === "manager" || user.role === "super_admin"
                             ? "Manager / Admin"
                             : user.role === "customer_service"
                               ? "Customer Service"

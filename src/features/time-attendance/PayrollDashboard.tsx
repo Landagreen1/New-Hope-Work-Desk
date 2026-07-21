@@ -17,7 +17,7 @@ export default function PayrollDashboard({ initialProfile }: PayrollDashboardPro
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isManager = initialProfile.role === 'manager';
+  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null);

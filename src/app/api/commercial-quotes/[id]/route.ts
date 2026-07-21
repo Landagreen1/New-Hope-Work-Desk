@@ -185,7 +185,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
   // Hard delete: managers only
   if (hardDelete) {
-    if (profile?.role !== "manager") {
+    if (profile?.role !== "manager" && profile?.role !== "super_admin") {
       return Response.json(
         { error: "Only managers can permanently delete cards." },
         { status: 403 },

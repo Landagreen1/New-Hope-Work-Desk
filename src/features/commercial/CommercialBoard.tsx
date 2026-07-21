@@ -38,7 +38,7 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
   const [showNewCardForm, setShowNewCardForm] = useState<BoardColumn | null>(null);
   const [showArchive, setShowArchive] = useState(false);
 
-  const isManager = initialProfile.role === 'manager';
+  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
   // ─── Drag-and-drop sensors ───────────────────────────────────────────────────
   const sensors = useSensors(

@@ -1,4 +1,4 @@
-export type AppRole = 'agent' | 'customer_service' | 'manager' | 'commercial';
+export type AppRole = 'agent' | 'customer_service' | 'manager' | 'commercial' | 'super_admin';
 
 /**
  * Department mapping (maps to AppRole values in the database):
@@ -18,6 +18,7 @@ export function roleToDepartment(role: AppRole): Department {
   switch (role) {
     case 'agent': return 'sales';
     case 'manager': return 'management';
+    case 'super_admin': return 'management';
     case 'customer_service': return 'customer_service';
     case 'commercial': return 'commercial';
   }

@@ -64,7 +64,7 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
 
-  const isManager = initialProfile.role === 'manager';
+  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
   // ─── Data fetching ───────────────────────────────────────────────────────────
   const fetchQuotes = useCallback(async () => {

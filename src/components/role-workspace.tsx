@@ -230,7 +230,7 @@ export function RoleWorkspace({
         label: "Sales",
         shortLabel: "Sales",
         description:
-          sessionProfile.role === "manager"
+          sessionProfile.role === "manager" || sessionProfile.role === "super_admin"
             ? "Queues, quotes and reports"
             : sessionProfile.role === "customer_service"
               ? "Assigned service work"
@@ -242,7 +242,7 @@ export function RoleWorkspace({
         label: "Renewals",
         shortLabel: "Renewals",
         description:
-          sessionProfile.role === "manager"
+          sessionProfile.role === "manager" || sessionProfile.role === "super_admin"
             ? "Pipeline and assignments"
             : "My renewal follow-up",
         icon: FileSpreadsheet,
@@ -250,7 +250,7 @@ export function RoleWorkspace({
     ];
 
     // --- Management layout: streamlined tabs ---
-    if (sessionProfile.role === "manager") {
+    if (sessionProfile.role === "manager" || sessionProfile.role === "super_admin") {
       return [
         {
           id: "desk" as WorkspaceTab,
@@ -347,8 +347,8 @@ export function RoleWorkspace({
       <RenewalsPage
         initialProfile={profile}
         embedded
-        initialTab={sessionProfile.role === "manager" ? "pipeline" : "overview"}
-        showImportTab={sessionProfile.role === "manager"}
+        initialTab={sessionProfile.role === "manager" || sessionProfile.role === "super_admin" ? "pipeline" : "overview"}
+        showImportTab={sessionProfile.role === "manager" || sessionProfile.role === "super_admin"}
       />
     );
   } else if (activeTab === "commercial_board") {

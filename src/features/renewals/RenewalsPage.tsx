@@ -517,7 +517,7 @@ function RenewalDrawer({
     premium_renewal: record.premium_renewal?.toString() || '',
   });
 
-  const isManager = profile.role === 'manager';
+  const isManager = profile.role === 'manager' || profile.role === 'super_admin';
   const activeRecord = OPEN_STATUSES.includes(record.status);
   const requiresEvidence = ['call', 'sms', 'email'].includes(channel);
 
@@ -1151,7 +1151,7 @@ export default function RenewalsPage({
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      const effectiveAssignee = profile.role === 'manager' ? assignedFilter : profile.id;
+      const effectiveAssignee = (profile.role === 'manager' || profile.role === 'super_admin') ? assignedFilter : profile.id;
       const [renewalRows, people, agencyReportRows] = await Promise.all([
         listRenewals({
           status: statusFilter,
@@ -1159,8 +1159,8 @@ export default function RenewalsPage({
           dueWindow: profile.role === 'agent' ? 'all' : dueFilter,
           search,
         }),
-        profile.role === 'manager' ? listRenewalAssignees() : Promise.resolve([]),
-        profile.role === 'manager'
+        (profile.role === 'manager' || profile.role === 'super_admin') ? listRenewalAssignees() : Promise.resolve([]),
+        (profile.role === 'manager' || profile.role === 'super_admin')
           ? listRenewals({
               status: 'open',
               assignedTo: 'all',
@@ -1173,7 +1173,7 @@ export default function RenewalsPage({
       setAssignees(people);
       setManagerReportRows(agencyReportRows);
       setLastUpdated(new Date());
-      if (profile.role === 'manager') void generateDueNotifications().catch(() => undefined);
+      if (profile.role === 'manager' || profile.role === 'super_admin') void generateDueNotifications().catch(() => undefined);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to load Renewals.');
     } finally {

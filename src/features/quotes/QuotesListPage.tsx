@@ -31,7 +31,7 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 
 export default function QuotesListPage({ initialProfile }: QuotesListPageProps) {
   const router = useRouter();
-  const isManager = initialProfile.role === 'manager';
+  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
   const [quotes, setQuotes] = useState<OperationalQuote[]>([]);
   const [loading, setLoading] = useState(true);

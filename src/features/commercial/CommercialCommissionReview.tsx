@@ -35,7 +35,7 @@ export default function CommercialCommissionReview({ initialProfile, embedded = 
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const isManager = initialProfile.role === 'manager';
+  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
   // ─── Fetch cards in 'sold' column (pending commission review) ────────────────
   const fetchPendingQuotes = useCallback(async () => {

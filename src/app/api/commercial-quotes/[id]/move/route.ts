@@ -69,7 +69,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     .eq("id", user.id)
     .single();
 
-  const isManager = profile?.role === "manager";
+  const isManager = profile?.role === "manager" || profile?.role === "super_admin";
 
   let body: Record<string, unknown>;
   try {

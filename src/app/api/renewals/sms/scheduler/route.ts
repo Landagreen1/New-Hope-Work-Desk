@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       .select('role')
       .eq('id', userData.user.id)
       .single();
-    if (!profile || profile.role !== 'manager') {
+    if (!profile || (profile.role !== 'manager' && profile.role !== 'super_admin')) {
       return Response.json({ error: 'Manager permission required.' }, { status: 403 });
     }
   }

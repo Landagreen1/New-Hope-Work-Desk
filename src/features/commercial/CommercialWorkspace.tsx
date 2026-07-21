@@ -46,7 +46,7 @@ function LoadingFallback() {
 
 export default function CommercialWorkspace({ initialProfile, embedded = false }: CommercialWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<CommercialTab>('board');
-  const isManager = initialProfile.role === 'manager';
+  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
   const visibleTabs = TABS.filter((t) => !t.managerOnly || isManager);
 

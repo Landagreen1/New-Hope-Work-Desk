@@ -39,7 +39,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "manager") {
+  if (profile?.role !== "manager" && profile?.role !== "super_admin") {
     return Response.json(
       { error: "Only managers can approve or deny commissions." },
       { status: 403 },

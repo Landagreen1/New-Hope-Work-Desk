@@ -10,7 +10,7 @@
  *   - Intake Queue (sales handoff from CS)
  *   - Renewals
  */
-export type AppRole = "agent" | "manager" | "customer_service" | "commercial";
+export type AppRole = "agent" | "manager" | "customer_service" | "commercial" | "super_admin";
 export type AvailabilityStatus = "available" | "break" | "unavailable";
 export type RotationKind = "whatsapp" | "ringcentral" | "workload";
 export type WorkType =

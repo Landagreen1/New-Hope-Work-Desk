@@ -53,8 +53,8 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "manager") {
-    return Response.json({ error: "Only managers can update payment settings." }, { status: 403 });
+  if (profile?.role !== "manager" && profile?.role !== "super_admin") {
+    return Response.json({ error: "Only managers and super admins can update payment settings." }, { status: 403 });
   }
 
   let body: Record<string, unknown>;

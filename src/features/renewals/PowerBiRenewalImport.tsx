@@ -240,7 +240,7 @@ export default function PowerBiRenewalImport({
       }`;
 
   const loadReferenceData = useCallback(async () => {
-    if (profile.role !== "manager") return;
+    if (profile.role !== "manager" && profile.role !== "super_admin") return;
     setLoadingReferenceData(true);
     setError(null);
     try {
@@ -404,7 +404,7 @@ export default function PowerBiRenewalImport({
     }
   }
 
-  if (profile.role !== "manager") {
+  if (profile.role !== "manager" && profile.role !== "super_admin") {
     return (
       <div className={ui.page}>
         <div className={ui.error}>
