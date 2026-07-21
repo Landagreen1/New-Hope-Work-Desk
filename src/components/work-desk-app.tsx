@@ -9359,6 +9359,9 @@ function UserAdminPanel() {
                 <option value="customer_service">Customer Service</option>
                 <option value="commercial">Commercial</option>
                 <option value="manager">Manager / Admin</option>
+                {sessionProfile.role === "super_admin" && (
+                  <option value="super_admin">Super Admin</option>
+                )}
               </select>
             </Field>
             <button
