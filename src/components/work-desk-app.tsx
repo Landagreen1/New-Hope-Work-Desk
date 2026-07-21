@@ -5061,6 +5061,7 @@ export function WorkDeskApp({
             }
             workloadDatabaseContent={workloadDatabaseContent}
             forceManagerTab={forceManagerTab}
+            actorRole={sessionProfile.role}
           />
         )}
       </main>
@@ -5813,6 +5814,7 @@ function ManagerView({
   onUpdateCustomerServiceOverflow,
   workloadDatabaseContent,
   forceManagerTab,
+  actorRole,
 }: {
   agentList: Agent[];
   customerServiceUsers: CustomerServiceUser[];
@@ -5857,6 +5859,7 @@ function ManagerView({
   ) => Promise<void>;
   workloadDatabaseContent?: React.ReactNode;
   forceManagerTab?: ManagerTab;
+  actorRole?: string;
 }) {
   const [reportView, setReportView] = useState<ReportView>("executive");
   const [workView, setWorkView] = useState<"tasks" | "pricing" | "workload">("tasks");
@@ -8184,7 +8187,7 @@ function ManagerView({
 
       {managerTab === "administration" && administrationView === "sources" ? <SourceAdminPanel /> : null}
 
-      {managerTab === "administration" && administrationView === "users" ? <UserAdminPanel actorRole={sessionProfile.role} /> : null}
+      {managerTab === "administration" && administrationView === "users" ? <UserAdminPanel actorRole={actorRole} /> : null}
 
       {managerTab === "administration" && administrationView === "controls" ? (
         <div className="space-y-5">
