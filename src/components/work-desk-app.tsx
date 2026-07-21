@@ -8184,7 +8184,7 @@ function ManagerView({
 
       {managerTab === "administration" && administrationView === "sources" ? <SourceAdminPanel /> : null}
 
-      {managerTab === "administration" && administrationView === "users" ? <UserAdminPanel /> : null}
+      {managerTab === "administration" && administrationView === "users" ? <UserAdminPanel actorRole={sessionProfile.role} /> : null}
 
       {managerTab === "administration" && administrationView === "controls" ? (
         <div className="space-y-5">
@@ -9000,7 +9000,7 @@ function QueueOrderPanel({
   );
 }
 
-function UserAdminPanel() {
+function UserAdminPanel({ actorRole }: { actorRole?: string }) {
   const [users, setUsers] = useState<AdminUserAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -9359,7 +9359,7 @@ function UserAdminPanel() {
                 <option value="customer_service">Customer Service</option>
                 <option value="commercial">Commercial</option>
                 <option value="manager">Manager / Admin</option>
-                {sessionProfile.role === "super_admin" && (
+                {actorRole === "super_admin" && (
                   <option value="super_admin">Super Admin</option>
                 )}
               </select>
