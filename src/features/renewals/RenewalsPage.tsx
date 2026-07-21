@@ -1144,6 +1144,8 @@ export default function RenewalsPage({
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [smsSchedulerResult, setSmsSchedulerResult] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -1179,6 +1181,22 @@ export default function RenewalsPage({
   }, [assignedFilter, dueFilter, profile, search, statusFilter]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  async function runSmsScheduler() {
+    setBusy(true);
+    setSmsSchedulerResult(null);
+    try {
+      const response = await fetch('/api/renewals/sms/scheduler', { method: 'POST' });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || 'Scheduler failed.');
+      const s = json.summary;
+      setSmsSchedulerResult(`Done — ${s.sent} sent, ${s.skipped} already sent, ${s.failed} failed (${s.total} total evaluated).`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'SMS scheduler failed.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -1482,6 +1500,18 @@ export default function RenewalsPage({
                 {!managerAgentBreakdown.length ? (
                   <div className={ui.empty}>No open renewals are due in this period.</div>
                 ) : null}
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-violet-200 bg-violet-50/50 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-100 text-violet-700"><Smartphone className="h-5 w-5" /></div>
+                  <div className="flex-1">
+                    <h3 className="font-black text-slate-950">Send Renewal Text Reminders</h3>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">Sends SMS reminders to all assigned renewals due within 30, 15, and 7 days that haven't received a text yet. Only renewals with a phone number on file will get a message.</p>
+                    <button type="button" className={`${ui.btnPrimary} mt-3`} disabled={busy} onClick={() => void runSmsScheduler()}><Smartphone className="h-4 w-4" />Send All Due Reminders Now</button>
+                    {smsSchedulerResult ? <p className="mt-2 text-xs font-bold text-emerald-700">{smsSchedulerResult}</p> : null}
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
