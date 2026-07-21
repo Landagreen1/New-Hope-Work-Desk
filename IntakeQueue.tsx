@@ -465,7 +465,7 @@ type AdminUserAccount = {
   username: string;
   display_name: string;
   initials: string;
-  role: "agent" | "manager" | "customer_service";
+  role: "agent" | "manager" | "customer_service" | "commercial" | "super_admin";
   rotation_position: number;
   availability: AvailabilityStatus;
   is_active: boolean;

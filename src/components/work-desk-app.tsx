@@ -487,7 +487,7 @@ type AdminUserAccount = {
   username: string;
   display_name: string;
   initials: string;
-  role: "agent" | "manager" | "customer_service" | "commercial";
+  role: "agent" | "manager" | "customer_service" | "commercial" | "super_admin";
   rotation_position: number;
   availability: AvailabilityStatus;
   is_active: boolean;
@@ -4648,7 +4648,7 @@ export function WorkDeskApp({
             ) : null}
 
             {agentTab === "intake_queue" ? (
-              <IntakeQueue initialProfile={{ id: sessionProfile.id, display_name: sessionProfile.displayName, initials: sessionProfile.initials, role: sessionProfile.role as "agent" | "customer_service" | "manager" | "commercial", is_active: true }} embedded />
+              <IntakeQueue initialProfile={{ id: sessionProfile.id, display_name: sessionProfile.displayName, initials: sessionProfile.initials, role: sessionProfile.role as "agent" | "customer_service" | "manager" | "commercial" | "super_admin", is_active: true }} embedded />
             ) : null}
 
             {agentTab === "quotes" ? (
