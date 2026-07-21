@@ -176,6 +176,21 @@ export interface NormalizedImportRow {
   requote?: string;
   requote_note?: string;
   assigned_name?: string;
+  customer_state?: string;
+  customer_zip?: string;
+  client_since?: string;
+  client_office?: string;
+  client_source?: string;
+  producer_name?: string;
+  csr_name?: string;
+  policy_status?: string;
+  effective_date?: string;
+  expiration_date?: string;
+  inception_date?: string;
+  sold_date?: string;
+  application_type?: string;
+  policy_office?: string;
+  annual_premium?: string;
   raw?: Record<string, string>;
 }
 
@@ -595,20 +610,35 @@ export function normalizeDate(value: string): string | null {
 const GUESSES: Record<string, RegExp> = {
   policy_number: /^(policy#?|policy\s*(number|no\.?|#))$/i,
   renewal_date: /^(renewal\s*date|renewal|expiration\s*date|exp\.?\s*date)$/i,
-  customer_name: /^(named\s*insured|insured|customer|client|name)$/i,
-  customer_phone: /^(phone|telephone|tel|customer\s*phone)$/i,
-  customer_email: /^(email|customer\s*email)$/i,
-  carrier: /^(company|carrier)$/i,
+  customer_name: /^(named\s*insured|insured|customer|client|name|business\s*name.*insured.*names?)$/i,
+  customer_phone: /^(phone|telephone|tel|customer\s*phone|main\s*contact\s*phone)$/i,
+  customer_email: /^(email|customer\s*email|main\s*contact\s*email)$/i,
+  carrier: /^(company|carrier|writing\s*carrier)$/i,
   line_of_business: /^(lob|lobs|line\s*of\s*business|policy\s*type)$/i,
-  hawksoft_client_id: /^(hawksoft\s*)?client\s*(id|no\.?|#)|^cms$/i,
+  hawksoft_client_id: /^(hawksoft\s*)?client\s*(id|no\.?|#)|^cms$|^customer\s*id$/i,
   premium_current: /current.*prem|prem.*current|old.*prem/i,
   premium_renewal: /renew.*prem|prem.*renew|new.*prem/i,
+  annual_premium: /^annual\s*premium|premium\s*\+?\s*fees$/i,
   notice_call_date: /^(aviso\s*call|notice\s*call|last\s*call|contact\s*date)$/i,
   notes: /^notes?$|status\s*note|contact\s*note/i,
   eft: /^eft$|electronic\s*fund/i,
   requote: /^requote$|re[-\s]?quote\s*(needed|flag)?/i,
   requote_note: /nota\s*requote|requote\s*note/i,
-  assigned_name: /^(asignacion\s*txt|asignació?n\s*txt|asignaciontxt|asignado|asignaci[oó]n|responsable|responsible|assigned\s*(to|agent)?|assignee)$/i,
+  assigned_name: /^(asignacion\s*txt|asignació?n\s*txt|asignaciontxt|asignado|asignaci[oó]n|responsable|responsible|assigned\s*(to|agent)?|assignee|csr\s*name|csr|agent\s*1\s*name)$/i,
+  customer_state: /^(state|mailing\s*state)$/i,
+  customer_zip: /^(zip|zip\s*code|mailing\s*zip|postal)$/i,
+  client_since: /^client\s*since$/i,
+  client_office: /^client\s*office$/i,
+  client_source: /^client\s*source$/i,
+  producer_name: /^(producer|producer\s*name)$/i,
+  csr_name: /^(csr|csr\s*name)$/i,
+  policy_status: /^status$/i,
+  effective_date: /^effective\s*date$/i,
+  expiration_date: /^expiration\s*date$/i,
+  inception_date: /^inception\s*date$/i,
+  sold_date: /^sold\s*date$/i,
+  application_type: /^application\s*type$/i,
+  policy_office: /^policy\s*office$/i,
 };
 
 export function guessMapping(headers: string[]): Record<string, string> {
@@ -654,12 +684,27 @@ export function buildNormalizedRows(headers: string[], rawRows: string[][], mapp
     hawksoft_client_id: value(row, 'hawksoft_client_id'),
     premium_current: value(row, 'premium_current').replace(/[$,]/g, ''),
     premium_renewal: value(row, 'premium_renewal').replace(/[$,]/g, ''),
+    annual_premium: value(row, 'annual_premium').replace(/[$,]/g, ''),
     notice_call_date: normalizeDate(value(row, 'notice_call_date')) || '',
     notes: value(row, 'notes'),
     eft: value(row, 'eft'),
     requote: value(row, 'requote'),
     requote_note: value(row, 'requote_note'),
     assigned_name: value(row, 'assigned_name'),
+    customer_state: value(row, 'customer_state'),
+    customer_zip: value(row, 'customer_zip'),
+    client_since: normalizeDate(value(row, 'client_since')) || '',
+    client_office: value(row, 'client_office'),
+    client_source: value(row, 'client_source'),
+    producer_name: value(row, 'producer_name'),
+    csr_name: value(row, 'csr_name'),
+    policy_status: value(row, 'policy_status'),
+    effective_date: normalizeDate(value(row, 'effective_date')) || '',
+    expiration_date: normalizeDate(value(row, 'expiration_date')) || '',
+    inception_date: normalizeDate(value(row, 'inception_date')) || '',
+    sold_date: normalizeDate(value(row, 'sold_date')) || '',
+    application_type: value(row, 'application_type'),
+    policy_office: value(row, 'policy_office'),
     raw: Object.fromEntries(headers.map((header, index) => [header, row[index] || ''])),
   })).filter((row) => row.policy_number && row.renewal_date);
 }
