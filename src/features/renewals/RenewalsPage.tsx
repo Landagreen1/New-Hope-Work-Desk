@@ -25,6 +25,7 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Smartphone,
   UploadCloud,
   UserCheck,
   X,
@@ -56,6 +57,8 @@ import {
   normalizeAssignmentLabel,
   normalizeDate,
   parseCsv,
+  listSmsLogs,
+  sendRenewalSms,
   sendToRequote,
   updateRenewalContactInfo,
   updateWorkflow,
@@ -68,6 +71,7 @@ import {
   type RenewalContact,
   type RenewalEvent,
   type RenewalRecord,
+  type RenewalSmsLog,
   type RenewalStatus,
 } from './api';
 
@@ -484,6 +488,7 @@ function RenewalDrawer({
 }) {
   const [contacts, setContacts] = useState<RenewalContact[]>([]);
   const [events, setEvents] = useState<RenewalEvent[]>([]);
+  const [smsLogs, setSmsLogs] = useState<RenewalSmsLog[]>([]);
   const [tab, setTab] = useState<'work' | 'history' | 'edit'>('work');
   const [channel, setChannel] = useState<RenewalChannel>('call');
   const [direction, setDirection] = useState<'outbound' | 'inbound'>('outbound');
@@ -518,9 +523,10 @@ function RenewalDrawer({
 
   const loadHistory = useCallback(async () => {
     try {
-      const [contactRows, eventRows] = await Promise.all([listContacts(record.id), listRenewalEvents(record.id)]);
+      const [contactRows, eventRows, smsRows] = await Promise.all([listContacts(record.id), listRenewalEvents(record.id), listSmsLogs(record.id)]);
       setContacts(contactRows);
       setEvents(eventRows);
+      setSmsLogs(smsRows);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to load renewal history.');
     }
@@ -603,6 +609,12 @@ function RenewalDrawer({
       setError(caught instanceof Error ? caught.message : 'The re-quote intake could not be prepared.');
       setBusy(false);
     }
+  }
+
+  async function handleSendSms() {
+    await run(async () => {
+      await sendRenewalSms(record.id);
+    }, 'Text message sent successfully.');
   }
 
   async function saveEdit() {
@@ -752,6 +764,26 @@ function RenewalDrawer({
                 <button type="button" className={`${ui.btnPrimary} mt-3`} disabled={busy || !activeRecord || Boolean(record.requote_work_item_id)} onClick={() => void prepareRequote()}><Send className="h-4 w-4" />{record.requote_work_item_id ? 'Quote Already Created' : record.requote_intake_id ? 'Continue Requote Intake' : 'Prepare Requote Intake'}</button>
               </div>
             </div>
+          </section>
+
+          <section className={`${ui.card} ${ui.cardPad}`}>
+            <div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-50 text-violet-700"><Smartphone className="h-5 w-5" /></div><div><h3 className="font-black text-slate-950">Text Message Reminders</h3><p className="mt-1 text-sm font-semibold text-slate-500">Send an SMS reminder or view sent messages. Auto and manual texts are tracked separately.</p></div></div>
+            {smsLogs.length > 0 ? (
+              <div className="mt-4 space-y-2">
+                {smsLogs.slice(0, 5).map((log) => (
+                  <div key={log.id} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5 text-xs">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-black ${log.trigger_type === 'manual' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'}`}>{log.trigger_type === 'manual' ? 'Manual' : log.trigger_type.replace('auto_', '').toUpperCase()}</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-bold ${log.delivery_status === 'sent' || log.delivery_status === 'delivered' ? 'bg-emerald-100 text-emerald-700' : log.delivery_status === 'failed' || log.delivery_status === 'rejected' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>{log.delivery_status}</span>
+                    <span className="truncate font-semibold text-slate-600">{log.message_text.slice(0, 60)}…</span>
+                    <span className="ml-auto shrink-0 font-semibold text-slate-400">{new Date(log.sent_at).toLocaleDateString()}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm font-semibold text-slate-400">No text messages have been sent for this renewal yet.</p>
+            )}
+            <button type="button" className={`${ui.btnPrimary} mt-4`} disabled={busy || !activeRecord || !record.customer_phone} onClick={() => void handleSendSms()}><Smartphone className="h-4 w-4" />Send Text Reminder Now</button>
+            {!record.customer_phone ? <p className="mt-2 text-xs font-semibold text-amber-600">Add a phone number above before sending a text.</p> : null}
           </section>
 
           <section className={`${ui.card} ${ui.cardPad}`}>

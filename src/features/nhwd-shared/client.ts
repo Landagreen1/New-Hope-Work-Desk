@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/client";
+import type { AppRole, ProfileLite } from './types';
 
 let browserClient: SupabaseClient | null = null;
 
@@ -22,15 +23,7 @@ export function getSupabase(): SupabaseClient {
   return browserClient;
 }
 
-export type AppRole = "agent" | "customer_service" | "manager" | "commercial";
-
-export interface ProfileLite {
-  id: string;
-  display_name: string;
-  initials: string;
-  role: AppRole;
-  is_active: boolean;
-}
+export type { AppRole, ProfileLite } from './types';
 
 export async function getCurrentProfile(): Promise<ProfileLite | null> {
   const supabase = getSupabase();

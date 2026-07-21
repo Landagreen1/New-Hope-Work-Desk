@@ -15,7 +15,7 @@ export function OperationsDock({ role }: { role: AppRole }) {
     (module) =>
       module.status === 'active'
       && module.id in moduleIcons
-      && module.roles.includes(role),
+      && (module.roles as readonly string[]).includes(role),
   );
 
   return (

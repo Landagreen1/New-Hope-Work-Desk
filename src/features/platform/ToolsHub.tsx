@@ -19,7 +19,7 @@ export default function ToolsHub({ initialProfile: profile }: { initialProfile: 
     (module) =>
       module.status === 'active'
       && module.id in modulePresentation
-      && module.roles.includes(profile.role),
+      && (module.roles as readonly string[]).includes(profile.role),
   );
 
   return (

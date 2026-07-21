@@ -663,3 +663,48 @@ export function buildNormalizedRows(headers: string[], rawRows: string[][], mapp
     raw: Object.fromEntries(headers.map((header, index) => [header, row[index] || ''])),
   })).filter((row) => row.policy_number && row.renewal_date);
 }
+
+// ---------------------------------------------------------------------------
+// Renewal SMS Log
+// ---------------------------------------------------------------------------
+
+export type SmsTriggerType = 'auto_30d' | 'auto_15d' | 'auto_7d' | 'manual';
+export type SmsDeliveryStatus = 'queued' | 'sent' | 'delivered' | 'failed' | 'rejected';
+
+export interface RenewalSmsLog {
+  id: string;
+  record_id: string;
+  phone: string;
+  message_text: string;
+  trigger_type: SmsTriggerType;
+  rc_message_id: string | null;
+  rc_batch_id: string | null;
+  delivery_status: SmsDeliveryStatus;
+  error_detail: string | null;
+  sent_by: string | null;
+  sent_at: string;
+  created_at: string;
+}
+
+export async function listSmsLogs(recordId: string): Promise<RenewalSmsLog[]> {
+  const { data, error } = await getSupabase()
+    .from('renewal_sms_log')
+    .select('*')
+    .eq('record_id', recordId)
+    .order('sent_at', { ascending: false });
+  throwIfError(error);
+  return (data as RenewalSmsLog[]) ?? [];
+}
+
+export async function sendRenewalSms(recordId: string, message?: string): Promise<{ success: boolean; error?: string }> {
+  const response = await fetch('/api/renewals/sms/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recordId, message: message || undefined }),
+  });
+  const json = await response.json();
+  if (!response.ok) {
+    throw new Error(json.error || 'The text message could not be sent.');
+  }
+  return { success: true };
+}
