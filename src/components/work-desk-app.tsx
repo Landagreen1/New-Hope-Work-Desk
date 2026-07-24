@@ -1114,7 +1114,7 @@ function DealerSalespersonFields({
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label={allowEmpty ? "Source (optional)" : "Source"}>
+      <Field label={allowEmpty ? "Source (optional)" : "Source *"}>
         <SourceCombobox
           sources={sources}
           required={required}
@@ -1132,7 +1132,7 @@ function DealerSalespersonFields({
           onChange={(event) => setSalespersonId(event.target.value)}
           required={Boolean(dealerId && availableSalespeople.length)}
           disabled={!dealerId || !availableSalespeople.length}
-          className="field"
+          className={cn("field", !dealerId && "cursor-not-allowed bg-slate-50 opacity-60")}
         >
           <option value="">
             {!dealerId
@@ -1147,6 +1147,11 @@ function DealerSalespersonFields({
             </option>
           ))}
         </select>
+        {!dealerId && (
+          <p className="mt-1.5 text-[11px] font-semibold text-slate-400">
+            Choose a source to unlock this field.
+          </p>
+        )}
         {dealerId && !availableSalespeople.length ? (
           <p className="mt-1.5 text-xs font-bold text-slate-500">
             This source has no active salespeople. You may continue without selecting one.
@@ -2653,6 +2658,8 @@ export function WorkDeskApp({
   externalWorkspaceContent,
   workloadDatabaseContent,
   forceManagerTab,
+  forceAgentTab,
+  embedded = false,
 }: {
   sessionProfile: SessionProfile;
   initialData: DashboardData;
@@ -2660,6 +2667,9 @@ export function WorkDeskApp({
   externalWorkspaceContent?: React.ReactNode;
   workloadDatabaseContent?: React.ReactNode;
   forceManagerTab?: "overview" | "work" | "quotes" | "reports" | "team" | "administration";
+  forceAgentTab?: "desk" | "pricing" | "intake_queue" | "quotes" | "team" | "performance";
+  /** When true, the component skips rendering its own header/chrome and renders content only */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -2704,13 +2714,18 @@ export function WorkDeskApp({
   const [passEvents, setPassEvents] = useState<PassEvent[]>(
     initialData.passEvents,
   );
-  const [agentTab, setAgentTab] = useState<AgentTab>("desk");
+  const [agentTab, setAgentTab] = useState<AgentTab>(forceAgentTab ?? "desk");
   const [managerTab, setManagerTab] = useState<ManagerTab>(forceManagerTab ?? "overview");
 
   // Sync forceManagerTab from parent (top-level tab navigation)
   useEffect(() => {
     if (forceManagerTab) setManagerTab(forceManagerTab);
   }, [forceManagerTab]);
+
+  // Sync forceAgentTab from parent (sidebar navigation)
+  useEffect(() => {
+    if (forceAgentTab) setAgentTab(forceAgentTab);
+  }, [forceAgentTab]);
 
   const [whatsappCurrentId, setWhatsappCurrentId] = useState(
     initialData.rotations.whatsapp,
@@ -3958,7 +3973,7 @@ export function WorkDeskApp({
   ];
 
   return (
-    <div className="min-h-screen bg-[#f3f5f9] text-slate-950">
+    <div className={embedded ? "text-slate-950" : "min-h-screen bg-[#f3f5f9] text-slate-950"}>
       {toast ? (
         <div className="fixed right-5 top-5 z-[60] flex max-w-md items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-xl">
           <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
@@ -3966,6 +3981,7 @@ export function WorkDeskApp({
         </div>
       ) : null}
 
+      {!embedded && (
       <header className="sticky top-0 z-30 border-b border-[#dbe3f0] bg-white/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1700px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-4">
@@ -4108,14 +4124,15 @@ export function WorkDeskApp({
           </div>
         </div>
       </header>
+      )}
 
-      {workspaceTabs ? (
+      {!embedded && workspaceTabs ? (
         <div className="sticky top-[65px] z-20 border-b border-[#dbe3f0] bg-[#f3f5f9]/95 backdrop-blur-xl">
           {workspaceTabs}
         </div>
       ) : null}
 
-      <main className="mx-auto max-w-[1700px] px-4 py-6 sm:px-6 lg:px-8">
+      <main className={embedded ? "" : "mx-auto max-w-[1700px] px-4 py-6 sm:px-6 lg:px-8"}>
         {externalWorkspaceContent !== undefined ? (
           externalWorkspaceContent
         ) : isCustomerService && currentCustomerServiceUser ? (
@@ -4186,7 +4203,7 @@ export function WorkDeskApp({
               </div>
             </section>
 
-            <TabBar tabs={agentTabs} value={agentTab} onChange={setAgentTab} />
+            {!embedded && <TabBar tabs={agentTabs} value={agentTab} onChange={setAgentTab} />}
 
             {agentTab === "desk" ? (
               <div className="space-y-6">
@@ -5062,6 +5079,7 @@ export function WorkDeskApp({
             workloadDatabaseContent={workloadDatabaseContent}
             forceManagerTab={forceManagerTab}
             actorRole={sessionProfile.role}
+            embedded={embedded}
           />
         )}
       </main>
@@ -5815,6 +5833,7 @@ function ManagerView({
   workloadDatabaseContent,
   forceManagerTab,
   actorRole,
+  embedded,
 }: {
   agentList: Agent[];
   customerServiceUsers: CustomerServiceUser[];
@@ -5860,6 +5879,7 @@ function ManagerView({
   workloadDatabaseContent?: React.ReactNode;
   forceManagerTab?: ManagerTab;
   actorRole?: string;
+  embedded?: boolean;
 }) {
   const [reportView, setReportView] = useState<ReportView>("executive");
   const [workView, setWorkView] = useState<"tasks" | "pricing" | "workload">("tasks");
@@ -7111,7 +7131,7 @@ function ManagerView({
 
   return (
     <div className="space-y-5">
-      {!forceManagerTab && <TabBar tabs={tabs} value={managerTab} onChange={setManagerTab} />}
+      {!forceManagerTab && !embedded && <TabBar tabs={tabs} value={managerTab} onChange={setManagerTab} />}
 
       {managerTab === "work" ? (
         <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">

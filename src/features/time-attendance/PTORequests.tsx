@@ -19,13 +19,30 @@ export default function PTORequests({ initialProfile }: PTORequestsProps) {
   const [formType, setFormType] = useState<PTOType>('vacation');
   const [formStart, setFormStart] = useState('');
   const [formEnd, setFormEnd] = useState('');
-  const [formDays, setFormDays] = useState(1);
+  const [formDays, setFormDays] = useState<number | ''>('');
   const [formReason, setFormReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [denialReason, setDenialReason] = useState('');
 
   const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+
+  // Auto-calculate total days when start/end dates change
+  useEffect(() => {
+    if (formStart && formEnd) {
+      const start = new Date(formStart + 'T00:00:00');
+      const end = new Date(formEnd + 'T00:00:00');
+      if (end >= start) {
+        const diffMs = end.getTime() - start.getTime();
+        const diffDays = Math.round(diffMs / 86400000) + 1; // inclusive of both days
+        setFormDays(diffDays);
+      } else {
+        setFormDays('');
+      }
+    } else {
+      setFormDays('');
+    }
+  }, [formStart, formEnd]);
 
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null);
@@ -45,7 +62,7 @@ export default function PTORequests({ initialProfile }: PTORequestsProps) {
   useEffect(() => { void fetchData(); }, [fetchData]);
 
   const handleSubmitRequest = async () => {
-    if (!formStart || !formEnd || formDays <= 0) return;
+    if (!formStart || !formEnd || !formDays || formDays <= 0) return;
     setSaving(true); setError(null);
     try {
       const res = await fetch('/api/pto', {
@@ -53,7 +70,7 @@ export default function PTORequests({ initialProfile }: PTORequestsProps) {
         body: JSON.stringify({ pto_type: formType, start_date: formStart, end_date: formEnd, total_days: formDays, reason: formReason || null }),
       });
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Submit failed.'); }
-      setShowForm(false); setFormReason('');
+      setShowForm(false); setFormReason(''); setFormStart(''); setFormEnd('');
       await fetchData();
     } catch (err) { setError(err instanceof Error ? err.message : 'Submit failed.'); }
     finally { setSaving(false); }
@@ -139,11 +156,11 @@ export default function PTORequests({ initialProfile }: PTORequestsProps) {
                 <div><label className={ui.label}>Start</label><input type="date" value={formStart} onChange={e => setFormStart(e.target.value)} className={ui.input} /></div>
                 <div><label className={ui.label}>End</label><input type="date" value={formEnd} onChange={e => setFormEnd(e.target.value)} className={ui.input} /></div>
               </div>
-              <div><label className={ui.label}>Total Days</label><input type="number" min="0.5" step="0.5" value={formDays} onChange={e => setFormDays(Number(e.target.value))} className={ui.input} /></div>
+              <div><label className={ui.label}>Total Days <span className="text-[10px] font-semibold text-slate-400">(auto-calculated)</span></label><input type="text" readOnly value={formDays === '' ? '' : formDays} className={ui.input + ' bg-slate-50 cursor-default'} placeholder="Select dates" tabIndex={-1} /></div>
               <div><label className={ui.label}>Reason (optional)</label><textarea value={formReason} onChange={e => setFormReason(e.target.value)} className={ui.textarea} rows={2} /></div>
             </div>
             <div className="mt-5 flex gap-3">
-              <button type="button" onClick={() => void handleSubmitRequest()} disabled={saving || !formStart || !formEnd} className={ui.btnPrimary}>{saving ? 'Submitting...' : 'Submit Request'}</button>
+              <button type="button" onClick={() => void handleSubmitRequest()} disabled={saving || !formStart || !formEnd || !formDays} className={ui.btnPrimary}>{saving ? 'Submitting...' : 'Submit Request'}</button>
               <button type="button" onClick={() => setShowForm(false)} className={ui.btnSecondary}>Cancel</button>
             </div>
           </div>

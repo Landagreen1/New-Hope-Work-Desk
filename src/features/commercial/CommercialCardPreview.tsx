@@ -102,10 +102,10 @@ export default function CommercialCardPreview({
         {...attributes}
         {...(isLocked ? {} : listeners)}
         onClick={() => setShowDetail(true)}
-        className={`rounded-xl border bg-white p-3 shadow-sm transition ${
+        className={`rounded-xl border bg-white p-3.5 transition ${
           isLocked
-            ? 'cursor-default border-slate-300 opacity-75'
-            : 'cursor-pointer border-slate-200 hover:border-[#7890bc] hover:shadow-md'
+            ? 'cursor-default border-slate-200 opacity-70'
+            : 'cursor-pointer border-slate-100 shadow-sm hover:border-[#223f7a]/20 hover:shadow-lg hover:shadow-slate-200/60'
         }`}
         role="button"
         tabIndex={0}

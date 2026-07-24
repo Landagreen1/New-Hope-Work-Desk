@@ -1,18 +1,13 @@
 "use client";
 
 import {
-  Building2,
   ClipboardCheck,
-  Clock,
-  FileSpreadsheet,
   Headphones,
-  LayoutDashboard,
   RefreshCw,
-  UserCog,
-  UsersRound,
 } from "lucide-react";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 
+import { SidebarLayout, type NavigationState, type SubNavId } from "@/components/sidebar-layout";
 import { WorkDeskApp } from "@/components/work-desk-app";
 import CommercialWorkspace from "@/features/commercial/CommercialWorkspace";
 import TimeAttendanceWorkspace from "@/features/time-attendance/TimeAttendanceWorkspace";
@@ -22,25 +17,6 @@ import type { ProfileLite } from "@/features/nhwd-shared/types";
 import RenewalsPage from "@/features/renewals/RenewalsPage";
 import WorkloadLog from "@/features/workload/WorkloadLog";
 import type { DashboardData, SessionProfile } from "@/lib/types";
-
-type WorkspaceTab =
-  | "desk"
-  | "quote_intake"
-  | "customer_service"
-  | "renewals"
-  | "commercial_board"
-  | "user_admin"
-  | "time_attendance";
-
-interface TabDefinition {
-  id: WorkspaceTab;
-  label: string;
-  shortLabel?: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-  /** When true, a visual separator appears before this tab */
-  dividerBefore?: boolean;
-}
 
 function LoadingWorkspace({ label }: { label: string }) {
   return (
@@ -53,84 +29,14 @@ function LoadingWorkspace({ label }: { label: string }) {
   );
 }
 
-function WorkspaceTabs({
-  tabs,
-  active,
-  onChange,
-}: {
-  tabs: TabDefinition[];
-  active: WorkspaceTab;
-  onChange: (tab: WorkspaceTab) => void;
-}) {
-  return (
-    <div className="mx-auto max-w-[1700px] px-4 py-4 sm:px-6 lg:px-8">
-      <nav
-        role="tablist"
-        className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-[#d4dff0] bg-gradient-to-b from-white to-[#f8fafd] p-1.5 shadow-sm"
-      >
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const selected = active === tab.id;
-          return (
-            <div key={tab.id} className="flex items-center">
-              {tab.dividerBefore && (
-                <div className="mx-1.5 h-8 w-px shrink-0 bg-slate-200" />
-              )}
-              <button
-                role="tab"
-                type="button"
-                aria-selected={selected}
-                onClick={() => onChange(tab.id)}
-                className={`group relative flex min-w-fit items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left transition-all duration-200 sm:gap-3 sm:px-4 sm:py-3 ${
-                  selected
-                    ? "bg-gradient-to-b from-[#223f7a] to-[#1a3265] text-white shadow-md shadow-[#223f7a]/20"
-                    : "text-slate-500 hover:bg-white hover:text-[#223f7a] hover:shadow-sm"
-                }`}
-              >
-                <span
-                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition-colors sm:h-9 sm:w-9 sm:rounded-xl ${
-                    selected
-                      ? "bg-white/15"
-                      : "bg-slate-100/80 group-hover:bg-[#eef3fb]"
-                  }`}
-                >
-                  <Icon
-                    className={`h-4 w-4 ${selected ? "text-white" : "text-slate-400 group-hover:text-[#223f7a]"}`}
-                  />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-xs font-black sm:text-sm">
-                    <span className="sm:hidden">
-                      {tab.shortLabel ?? tab.label}
-                    </span>
-                    <span className="hidden sm:inline">{tab.label}</span>
-                  </span>
-                  <span
-                    className={`hidden truncate text-[10px] font-semibold leading-tight lg:block ${
-                      selected ? "text-blue-200" : "text-slate-400"
-                    }`}
-                  >
-                    {tab.description}
-                  </span>
-                </span>
-                {selected && (
-                  <span className="absolute inset-x-3 -bottom-[7px] h-[3px] rounded-full bg-[#223f7a] sm:inset-x-4" />
-                )}
-              </button>
-            </div>
-          );
-        })}
-      </nav>
-    </div>
-  );
-}
-
 function ManagerCustomerServiceWorkspace({
   profile,
+  initialSubNav,
 }: {
   profile: ProfileLite;
+  initialSubNav?: "intakes" | "queue";
 }) {
-  const [tab, setTab] = useState<"intakes" | "queue">("intakes");
+  const [tab, setTab] = useState<"intakes" | "queue">(initialSubNav ?? "intakes");
 
   return (
     <div className="space-y-5">
@@ -189,6 +95,67 @@ function ManagerCustomerServiceWorkspace({
   );
 }
 
+/**
+ * Maps sidebar SubNavId to WorkDeskApp's forceManagerTab prop.
+ * Only sales sub-nav items map to manager tabs.
+ */
+function subNavToManagerTab(
+  subNav: SubNavId,
+): "overview" | "work" | "quotes" | "reports" | "team" | "administration" | undefined {
+  switch (subNav) {
+    case "sales_overview":
+      return "overview";
+    case "sales_work":
+      return "work";
+    case "sales_databases":
+      return "quotes"; // WorkDeskApp uses "quotes" for the databases tab
+    case "sales_reports":
+      return "reports";
+    case "ua_users":
+      return "administration";
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Maps sidebar SubNavId to WorkDeskApp's agent tab.
+ */
+function subNavToAgentTab(
+  subNav: SubNavId,
+): "desk" | "pricing" | "intake_queue" | "quotes" | "team" | "performance" | undefined {
+  switch (subNav) {
+    case "sales_desk":
+      return "desk";
+    case "sales_pricing":
+      return "pricing";
+    case "sales_intake_queue":
+      return "intake_queue";
+    case "sales_team":
+      return "team";
+    case "sales_databases":
+      return "quotes";
+    case "sales_performance":
+      return "performance";
+    default:
+      return undefined;
+  }
+}
+
+function getDefaultNav(role: string): NavigationState {
+  if (role === "commercial") {
+    return { module: "commercial", subNav: "commercial_board" };
+  }
+  if (role === "manager" || role === "super_admin") {
+    return { module: "sales", subNav: "sales_overview" };
+  }
+  if (role === "customer_service") {
+    return { module: "sales", subNav: "sales_desk" };
+  }
+  // agent
+  return { module: "sales", subNav: "sales_desk" };
+}
+
 export function RoleWorkspace({
   sessionProfile,
   initialData,
@@ -196,8 +163,8 @@ export function RoleWorkspace({
   sessionProfile: SessionProfile;
   initialData: DashboardData;
 }) {
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>(
-    sessionProfile.role === "commercial" ? "commercial_board" : "desk",
+  const [navigation, setNavigation] = useState<NavigationState>(
+    () => getDefaultNav(sessionProfile.role),
   );
 
   const profile = useMemo<ProfileLite>(
@@ -211,179 +178,101 @@ export function RoleWorkspace({
     [sessionProfile],
   );
 
-  /**
-   * Tab structure (reworked for department alignment):
-   *
-   * ALL departments share: Work Desk → Customer Quote → Intake Queue → Renewals
-   * (ordered by workflow progression: desk → create intake → claim intake → renewals)
-   *
-   * Management additionally gets: Customer Service (oversight), Power BI Upload
-   * (separated visually with a divider)
-   *
-   * Future: Commercial, Homes, Trucking lines will add line-specific tabs.
-   */
-  const tabs = useMemo<TabDefinition[]>(() => {
-    // --- Shared tabs in workflow order ---
-    const sharedTabs: TabDefinition[] = [
-      {
-        id: "desk",
-        label: "Sales",
-        shortLabel: "Sales",
-        description:
-          sessionProfile.role === "manager" || sessionProfile.role === "super_admin"
-            ? "Queues, quotes and reports"
-            : sessionProfile.role === "customer_service"
-              ? "Assigned service work"
-              : "Sales rotations and quotes",
-        icon: LayoutDashboard,
-      },
-      {
-        id: "renewals",
-        label: "Renewals",
-        shortLabel: "Renewals",
-        description:
-          sessionProfile.role === "manager" || sessionProfile.role === "super_admin"
-            ? "Pipeline and assignments"
-            : "My renewal follow-up",
-        icon: FileSpreadsheet,
-      },
-    ];
+  const handleNavigate = useCallback((nav: NavigationState) => {
+    setNavigation(nav);
+  }, []);
 
-    // --- Management layout: streamlined tabs ---
-    if (sessionProfile.role === "manager" || sessionProfile.role === "super_admin") {
-      return [
-        {
-          id: "desk" as WorkspaceTab,
-          label: "Sales",
-          shortLabel: "Sales",
-          description: "Turns, quotes and reports",
-          icon: LayoutDashboard,
-        },
-        {
-          id: "customer_service" as WorkspaceTab,
-          label: "Customer Service",
-          shortLabel: "CS",
-          description: "Quote intake and sales handoff",
-          icon: UsersRound,
-        },
-        {
-          id: "commercial_board" as WorkspaceTab,
-          label: "Commercial Board",
-          shortLabel: "Commercial",
-          description: "Commercial policies Kanban",
-          icon: Building2,
-        },
-        {
-          id: "renewals" as WorkspaceTab,
-          label: "Renewals",
-          shortLabel: "Renewals",
-          description: "Pipeline, assignments and import",
-          icon: FileSpreadsheet,
-        },
-        {
-          id: "time_attendance" as WorkspaceTab,
-          label: "Time & Attendance",
-          shortLabel: "Clock",
-          description: "Clock, schedules, PTO, payroll",
-          icon: Clock,
-          dividerBefore: true,
-        },
-        {
-          id: "user_admin" as WorkspaceTab,
-          label: "User Admin",
-          shortLabel: "Users",
-          description: "Users, access and sources",
-          icon: UserCog,
-        },
-      ];
+  const isManager = sessionProfile.role === "manager" || sessionProfile.role === "super_admin";
+
+  // Determine what content to render based on sidebar navigation state
+  const renderContent = () => {
+    const { module, subNav } = navigation;
+
+    // --- Sales module: delegate to WorkDeskApp ---
+    if (module === "sales") {
+      const forceManagerTab = isManager ? subNavToManagerTab(subNav) : undefined;
+      const forceAgentTab = !isManager ? subNavToAgentTab(subNav) : undefined;
+
+      return (
+        <WorkDeskApp
+          sessionProfile={sessionProfile}
+          initialData={initialData}
+          forceManagerTab={forceManagerTab}
+          forceAgentTab={forceAgentTab}
+          workloadDatabaseContent={
+            <WorkloadLog initialProfile={profile} embedded />
+          }
+          embedded
+        />
+      );
     }
 
-    // Commercial role: Commercial Board only
-    if (sessionProfile.role === "commercial") {
-      return [
-        {
-          id: "commercial_board" as WorkspaceTab,
-          label: "Commercial Board",
-          shortLabel: "Commercial",
-          description: "Your commercial policies pipeline",
-          icon: Building2,
-        },
-      ];
+    // --- Customer Service ---
+    if (module === "customer_service") {
+      const csSubTab = subNav === "cs_queue" ? "queue" : "intakes";
+      return (
+        <ManagerCustomerServiceWorkspace
+          profile={profile}
+          initialSubNav={csSubTab}
+        />
+      );
     }
 
-    // Customer Service: shared tabs + Customer Service tab for intakes/queue
-    if (sessionProfile.role === "customer_service") {
-      return [
-        sharedTabs[0], // Sales
-        {
-          id: "customer_service" as WorkspaceTab,
-          label: "Customer Service",
-          shortLabel: "CS",
-          description: "Quote intake and sales queue",
-          icon: UsersRound,
-        },
-        sharedTabs[1], // Renewals
-      ];
+    // --- Commercial ---
+    if (module === "commercial") {
+      return (
+        <Suspense fallback={<LoadingWorkspace label="Commercial Board" />}>
+          <CommercialWorkspace initialProfile={profile} embedded />
+        </Suspense>
+      );
     }
 
-    // Sales (agent) get the shared tabs only
-    return sharedTabs;
-  }, [sessionProfile.role]);
+    // --- Renewals ---
+    if (module === "renewals") {
+      return (
+        <RenewalsPage
+          initialProfile={profile}
+          embedded
+          initialTab={isManager ? "pipeline" : "overview"}
+          showImportTab={isManager}
+        />
+      );
+    }
 
-  let externalWorkspaceContent: React.ReactNode | undefined;
+    // --- Time & Attendance ---
+    if (module === "time_attendance") {
+      return (
+        <Suspense fallback={<LoadingWorkspace label="Time & Attendance" />}>
+          <TimeAttendanceWorkspace initialProfile={profile} embedded />
+        </Suspense>
+      );
+    }
 
-  if (activeTab === "quote_intake") {
-    externalWorkspaceContent = (
-      <Suspense fallback={<LoadingWorkspace label="Customer Quote" />}>
-        <CsIntakeLanding initialProfile={profile} embedded />
-      </Suspense>
-    );
-  } else if (activeTab === "customer_service") {
-    externalWorkspaceContent = (
-      <ManagerCustomerServiceWorkspace profile={profile} />
-    );
-  } else if (activeTab === "renewals") {
-    externalWorkspaceContent = (
-      <RenewalsPage
-        initialProfile={profile}
-        embedded
-        initialTab={sessionProfile.role === "manager" || sessionProfile.role === "super_admin" ? "pipeline" : "overview"}
-        showImportTab={sessionProfile.role === "manager" || sessionProfile.role === "super_admin"}
-      />
-    );
-  } else if (activeTab === "commercial_board") {
-    externalWorkspaceContent = (
-      <Suspense fallback={<LoadingWorkspace label="Commercial Board" />}>
-        <CommercialWorkspace initialProfile={profile} embedded />
-      </Suspense>
-    );
-  } else if (activeTab === "time_attendance") {
-    externalWorkspaceContent = (
-      <Suspense fallback={<LoadingWorkspace label="Time & Attendance" />}>
-        <TimeAttendanceWorkspace initialProfile={profile} embedded />
-      </Suspense>
-    );
-  }
+    // --- User Administration ---
+    if (module === "user_admin") {
+      return (
+        <WorkDeskApp
+          sessionProfile={sessionProfile}
+          initialData={initialData}
+          forceManagerTab="administration"
+          workloadDatabaseContent={
+            <WorkloadLog initialProfile={profile} embedded />
+          }
+          embedded
+        />
+      );
+    }
 
-  // When user_admin tab is selected, we tell WorkDeskApp to show its administration panel
-  const forceManagerTab = activeTab === "user_admin" ? "administration" as const : undefined;
+    return null;
+  };
 
   return (
-    <WorkDeskApp
-      sessionProfile={sessionProfile}
-      initialData={initialData}
-      forceManagerTab={forceManagerTab}
-      workspaceTabs={
-        <WorkspaceTabs
-          tabs={tabs}
-          active={activeTab}
-          onChange={setActiveTab}
-        />
-      }
-      externalWorkspaceContent={externalWorkspaceContent}
-      workloadDatabaseContent={
-        <WorkloadLog initialProfile={profile} embedded />
-      }
-    />
+    <SidebarLayout
+      role={sessionProfile.role}
+      navigation={navigation}
+      onNavigate={handleNavigate}
+    >
+      {renderContent()}
+    </SidebarLayout>
   );
 }
