@@ -2272,15 +2272,23 @@ function SummaryCard({
   note,
   icon,
   tone,
+  onClick,
 }: {
   label: string;
   value: string | number;
   note?: string;
   icon: React.ReactNode;
   tone: string;
+  onClick?: () => void;
 }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div
+      className={cn("rounded-3xl border border-slate-200 bg-white p-5 shadow-sm", onClick && "cursor-pointer transition hover:border-[#6b84b5] hover:shadow-md")}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
+    >
       <div
         className={cn("grid h-10 w-10 place-items-center rounded-2xl", tone)}
       >
@@ -2296,6 +2304,152 @@ function SummaryCard({
         <p className="mt-1 text-xs font-semibold text-slate-500">{note}</p>
       ) : null}
     </div>
+  );
+}
+
+type DrillDownFilter = "total" | "new" | "requote" | "sold" | "not_sold" | "pending";
+
+const drillDownLabels: Record<DrillDownFilter, string> = {
+  total: "All Quotes",
+  new: "New Quotes",
+  requote: "Requotes",
+  sold: "Sold Quotes",
+  not_sold: "Not Sold Quotes",
+  pending: "Pending Pricing",
+};
+
+function ReportDrillDownTable({
+  filter,
+  rows,
+  onClose,
+  onOpenLog,
+}: {
+  filter: DrillDownFilter;
+  rows: Array<{
+    id: string;
+    sourceWorkItemId: string;
+    createdAt: string;
+    assignedAt: string;
+    acceptedAt?: string;
+    priceSentAt?: string;
+    finalizedAt?: string;
+    customer: string;
+    dealer: string;
+    salesperson: string;
+    workType: "new_quote" | "requote";
+    agent: string;
+    method: string;
+    channel: string;
+    lifecycle: string;
+    decision: string;
+    notSoldReason?: string;
+    timeToAccept: number | null;
+    timeToPrice: number | null;
+    timeToFinal: number | null;
+    totalCycle: number | null;
+  }>;
+  onClose: () => void;
+  onOpenLog: (sourceWorkItemId: string) => void;
+}) {
+  const filtered = rows.filter((row) => {
+    switch (filter) {
+      case "total": return true;
+      case "new": return row.workType === "new_quote";
+      case "requote": return row.workType === "requote";
+      case "sold": return row.lifecycle === "Sold";
+      case "not_sold": return row.lifecycle === "Not Sold";
+      case "pending": return row.lifecycle === "Price Sent";
+      default: return true;
+    }
+  });
+
+  return (
+    <section className="overflow-hidden rounded-[28px] border border-[#c9d5e9] bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-100 p-5 sm:p-6">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#4d6aa8]">
+            Drill-Down
+          </p>
+          <h3 className="mt-1 text-xl font-black text-slate-900">
+            {drillDownLabels[filter]}{" "}
+            <span className="text-base font-bold text-slate-400">
+              ({filtered.length})
+            </span>
+          </h3>
+        </div>
+        <button
+          onClick={onClose}
+          className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-200"
+        >
+          <X className="mr-1 inline h-3.5 w-3.5" />Close
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+            <tr>
+              <th className="px-4 py-3">Customer</th>
+              <th className="px-4 py-3">Source</th>
+              <th className="px-4 py-3">Salesperson</th>
+              <th className="px-4 py-3">Agent</th>
+              <th className="px-4 py-3">Type</th>
+              <th className="px-4 py-3">Channel</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Created</th>
+              <th className="px-4 py-3">Time to Accept</th>
+              <th className="px-4 py-3">Time to Price</th>
+              <th className="px-4 py-3">Total Cycle</th>
+              <th className="px-4 py-3">Finalized</th>
+              <th className="px-4 py-3">Reason</th>
+              <th className="px-4 py-3">Log</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filtered.map((row) => (
+              <tr key={row.id} className="hover:bg-[#f8faff]">
+                <td className="px-4 py-3 font-black text-slate-900">{row.customer}</td>
+                <td className="px-4 py-3 font-bold text-slate-700">{row.dealer}</td>
+                <td className="px-4 py-3 text-slate-600">{row.salesperson}</td>
+                <td className="px-4 py-3 font-bold text-slate-700">{row.agent}</td>
+                <td className="px-4 py-3">
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black", row.workType === "new_quote" ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700")}>
+                    {row.workType === "new_quote" ? "New" : "Requote"}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-slate-600">{row.channel}</td>
+                <td className="px-4 py-3">
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black",
+                    row.lifecycle === "Sold" ? "bg-emerald-50 text-emerald-700" :
+                    row.lifecycle === "Not Sold" ? "bg-rose-50 text-rose-700" :
+                    row.lifecycle === "Price Sent" ? "bg-amber-50 text-amber-700" :
+                    "bg-slate-100 text-slate-600"
+                  )}>
+                    {row.lifecycle}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-xs text-slate-600">{formatDateTime(row.createdAt)}</td>
+                <td className="px-4 py-3 text-xs font-bold">{formatDuration(row.timeToAccept)}</td>
+                <td className="px-4 py-3 text-xs font-bold">{formatDuration(row.timeToPrice)}</td>
+                <td className="px-4 py-3 text-xs font-bold">{formatDuration(row.totalCycle)}</td>
+                <td className="px-4 py-3 text-xs text-slate-600">{row.finalizedAt ? formatDateTime(row.finalizedAt) : "—"}</td>
+                <td className="px-4 py-3 text-xs text-slate-600">{row.notSoldReason || "—"}</td>
+                <td className="px-4 py-3">
+                  <button
+                    onClick={() => onOpenLog(row.sourceWorkItemId)}
+                    className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-black text-[#223f7a] hover:bg-slate-200"
+                  >
+                    Log
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!filtered.length && (
+              <tr><td colSpan={14} className="px-4 py-10 text-center text-sm font-bold text-slate-400">No quotes match this filter for the selected date range.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -5559,6 +5713,7 @@ function ManagerView({
   ) => Promise<void>;
 }) {
   const [reportView, setReportView] = useState<ReportView>("executive");
+  const [reportDrillDown, setReportDrillDown] = useState<"total" | "new" | "requote" | "sold" | "not_sold" | "pending" | null>(null);
   const [workView, setWorkView] = useState<"tasks" | "pricing">("tasks");
   const [administrationView, setAdministrationView] = useState<
     "users" | "sources"
@@ -5778,6 +5933,7 @@ function ManagerView({
       )
       .map((item) => ({
         id: item.id,
+        sourceWorkItemId: item.id,
         createdAt: item.createdAt,
         assignedAt: item.assignedAt,
         acceptedAt: item.acceptedAt,
@@ -5800,6 +5956,7 @@ function ManagerView({
       )
       .map((item) => ({
         id: item.id,
+        sourceWorkItemId: item.sourceWorkItemId,
         createdAt: item.quoteCreatedAt,
         assignedAt: item.assignedAt,
         acceptedAt: item.acceptedAt,
@@ -5822,6 +5979,7 @@ function ManagerView({
       )
       .map((item) => ({
         id: item.id,
+        sourceWorkItemId: item.sourceWorkItemId,
         createdAt: item.quoteCreatedAt,
         assignedAt: item.assignedAt,
         acceptedAt: item.acceptedAt,
@@ -7411,6 +7569,7 @@ function ManagerView({
               note="All input methods"
               icon={<ClipboardList className="h-5 w-5 text-[#223f7a]" />}
               tone="bg-[#eef3fb]"
+              onClick={() => setReportDrillDown(reportDrillDown === "total" ? null : "total")}
             />
             <SummaryCard
               label="New Quotes"
@@ -7418,6 +7577,7 @@ function ManagerView({
               note={`${reportData.newQuoteSold} sold · ${reportData.newQuoteNotSold} not sold · ${reportData.newQuotePending} pending`}
               icon={<FileText className="h-5 w-5 text-blue-700" />}
               tone="bg-blue-50"
+              onClick={() => setReportDrillDown(reportDrillDown === "new" ? null : "new")}
             />
             <SummaryCard
               label="Requotes"
@@ -7425,6 +7585,7 @@ function ManagerView({
               note={`${reportData.requoteSold} sold · ${reportData.requoteNotSold} not sold · ${reportData.requotePending} pending`}
               icon={<RefreshCw className="h-5 w-5 text-violet-700" />}
               tone="bg-violet-50"
+              onClick={() => setReportDrillDown(reportDrillDown === "requote" ? null : "requote")}
             />
             <SummaryCard
               label="Sold"
@@ -7432,6 +7593,7 @@ function ManagerView({
               note={`${reportData.conversion.toFixed(1)}% conversion`}
               icon={<CircleDollarSign className="h-5 w-5 text-emerald-700" />}
               tone="bg-emerald-50"
+              onClick={() => setReportDrillDown(reportDrillDown === "sold" ? null : "sold")}
             />
             <SummaryCard
               label="Not Sold"
@@ -7439,6 +7601,7 @@ function ManagerView({
               note={`${reportData.efficiency.toFixed(1)}% efficiency`}
               icon={<TrendingUp className="h-5 w-5 text-rose-700" />}
               tone="bg-rose-50"
+              onClick={() => setReportDrillDown(reportDrillDown === "not_sold" ? null : "not_sold")}
             />
             <SummaryCard
               label="Pending Pricing"
@@ -7446,8 +7609,18 @@ function ManagerView({
               note="Awaiting final decision"
               icon={<Clock3 className="h-5 w-5 text-amber-700" />}
               tone="bg-amber-50"
+              onClick={() => setReportDrillDown(reportDrillDown === "pending" ? null : "pending")}
             />
           </div>
+
+          {reportDrillDown ? (
+            <ReportDrillDownTable
+              filter={reportDrillDown}
+              rows={reportData.timingRows}
+              onClose={() => setReportDrillDown(null)}
+              onOpenLog={onOpenQuoteLog}
+            />
+          ) : null}
 
           <div className="grid min-w-0 gap-5 xl:grid-cols-[270px_minmax(0,1fr)]">
             <aside className="hidden xl:block">
