@@ -7745,71 +7745,110 @@ function ManagerView({
       ) : null}
 
       {managerTab === "quotes" && managerDatabaseView === "quotes" ? (
-        <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 p-6">
-            <div>
-              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]">
-                <Table2 className="h-4 w-4" /> Quotes Database
+        <div className="space-y-5">
+          {/* Header */}
+          <section className="rounded-[28px] border border-[#c9d5e9] bg-gradient-to-br from-white to-[#eef3fb] p-6 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#526b9a]">
+                  Quotes Management
+                </p>
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+                  Quotes Database
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-500">
+                  Review all quote records, filter by date, status, agent, or source. Delete only incorrect or test records.
+                </p>
               </div>
-              <h3 className="mt-1 text-xl font-black">
-                Manage and filter every quote status
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Filter by day, status, update, customer, source, salesperson, or
-                agent. Delete only incorrect or test records.
-              </p>
-            </div>
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <Field label="Day">
-                <input
-                  type="date"
-                  value={managerQuoteDay}
-                  onChange={(event) => setManagerQuoteDay(event.target.value)}
-                  className="field"
-                />
-              </Field>
-              <Field label="Status">
-                <select
-                  value={managerQuoteStatus}
-                  onChange={(event) =>
-                    setManagerQuoteStatus(event.target.value)
-                  }
-                  className="field"
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManagerQuoteDay("");
+                    setManagerQuoteStatus("all");
+                    setManagerQuoteUpdate("all");
+                    setQuoteSearch("");
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#c9d5e9] bg-white px-4 py-2.5 text-sm font-black text-[#223f7a]"
                 >
+                  <RefreshCw className="h-4 w-4" /> Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const headers = ["Customer", "Status", "Type", "Agent", "Source", "Salesperson", "Input Method", "Last Status Date"];
+                    const lines = [
+                      headers.map((h) => `"${h}"`).join(","),
+                      ...visibleQuoteRecords.map((row) =>
+                        [row.customer, row.status, workTypeLabels[row.workType], row.agent, row.source, row.salesperson, row.receivedThrough, row.statusDate]
+                          .map((v) => `"${String(v ?? "").replaceAll('"', '""')}"`)
+                          .join(","),
+                      ),
+                    ];
+                    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const anchor = document.createElement("a");
+                    anchor.href = url;
+                    anchor.download = `quotes-database-${managerQuoteDay || "all"}.csv`;
+                    anchor.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#223f7a] px-4 py-2.5 text-sm font-black text-white"
+                >
+                  <Download className="h-4 w-4" /> Export CSV
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Stats */}
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            {([
+              { label: "Total Quotes", value: quoteRecords.length, className: "text-[#223f7a]" },
+              { label: "Sold", value: quoteRecords.filter((q) => q.status === "Sold").length, className: "text-emerald-700" },
+              { label: "Not Sold", value: quoteRecords.filter((q) => q.status === "Not Sold").length, className: "text-rose-700" },
+              { label: "Active", value: quoteRecords.filter((q) => q.status === "Active").length, className: "text-amber-700" },
+              { label: "Pending Pricing", value: quoteRecords.filter((q) => q.status === "Price Sent").length, className: "text-blue-700" },
+            ] as const).map(({ label, value, className: textClass }) => (
+              <div key={label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-400">{label}</p>
+                <p className={cn("mt-2 text-3xl font-black", textClass)}>{value}</p>
+              </div>
+            ))}
+          </section>
+
+          {/* Filters */}
+          <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <label>
+                <span className="text-xs font-black uppercase tracking-wider text-slate-400">Day</span>
+                <input type="date" value={managerQuoteDay} onChange={(event) => setManagerQuoteDay(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-semibold" />
+              </label>
+              <label>
+                <span className="text-xs font-black uppercase tracking-wider text-slate-400">Status</span>
+                <select value={managerQuoteStatus} onChange={(event) => setManagerQuoteStatus(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-semibold">
                   <option value="all">All statuses</option>
                   <option>Active</option>
                   <option>Price Sent</option>
                   <option>Sold</option>
                   <option>Not Sold</option>
                 </select>
-              </Field>
-              <Field label="Update">
-                <select
-                  value={managerQuoteUpdate}
-                  onChange={(event) =>
-                    setManagerQuoteUpdate(event.target.value)
-                  }
-                  className="field"
-                >
+              </label>
+              <label>
+                <span className="text-xs font-black uppercase tracking-wider text-slate-400">Update Type</span>
+                <select value={managerQuoteUpdate} onChange={(event) => setManagerQuoteUpdate(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-semibold">
                   {quoteUpdateFilterOptions.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
+                    <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
-              </Field>
-              <Field label="Search">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    value={quoteSearch}
-                    onChange={(event) => setQuoteSearch(event.target.value)}
-                    placeholder="Customer, source, salesperson, agent"
-                    className="field"
-                    style={{ paddingLeft: "3rem" }}
-                  />
-                </div>
-              </Field>
+              </label>
+              <label>
+                <span className="text-xs font-black uppercase tracking-wider text-slate-400">Search</span>
+                <span className="relative mt-1 block">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input value={quoteSearch} onChange={(event) => setQuoteSearch(event.target.value)} placeholder="Customer, source, salesperson, agent" className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 font-semibold" />
+                </span>
+              </label>
             </div>
             <button
               onClick={() => {
@@ -7822,114 +7861,95 @@ function ManagerView({
             >
               Show all records
             </button>
-          </div>
-          <div className="border-b border-amber-100 bg-amber-50 px-6 py-3 text-xs font-semibold text-amber-900">
-            Deletion is manager-only, requires a reason, and is permanently
-            recorded in the audit log.
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-[#f3f6fb] text-[11px] font-black uppercase tracking-wider text-slate-400">
-                <tr>
-                  <th className="px-5 py-3">Customer</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Type</th>
-                  <th className="px-5 py-3">Agent</th>
-                  <th className="px-5 py-3">Source / Salesperson</th>
-                  <th className="px-5 py-3">Input</th>
-                  <th className="px-5 py-3">Last Status</th>
-                  <th className="px-5 py-3">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {visibleQuoteRecords.map((item) => {
-                  const statusClass =
-                    item.status === "Sold"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : item.status === "Not Sold"
-                        ? "bg-rose-50 text-rose-700"
-                        : item.status === "Price Sent"
-                          ? "bg-blue-50 text-blue-700"
-                          : "bg-amber-50 text-amber-700";
-                  return (
-                    <tr
-                      key={`${item.stage}-${item.id}`}
-                      className="hover:bg-slate-50"
-                    >
-                      <td className="px-5 py-4">
-                        <p className="font-black text-slate-900">
-                          {item.customer}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {item.source}
-                        </p>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span
-                          className={cn(
-                            "rounded-full px-2.5 py-1 text-xs font-black",
-                            statusClass,
-                          )}
-                        >
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 font-bold text-slate-600">
-                        {workTypeLabels[item.workType]}
-                      </td>
-                      <td className="px-5 py-4 font-bold text-slate-700">
-                        {item.agent}
-                      </td>
-                      <td className="px-5 py-4">
-                        <p className="font-semibold text-slate-600">
-                          {item.source}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {item.salesperson}
-                        </p>
-                      </td>
-                      <td className="px-5 py-4 text-xs font-semibold text-slate-500">
-                        {item.receivedThrough}
-                      </td>
-                      <td className="px-5 py-4 text-xs font-semibold text-slate-500">
-                        {formatDateTime(item.statusDate)}
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() =>
-                              onOpenQuoteLog(item.sourceWorkItemId)
-                            }
-                            className="rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-3 py-2 text-xs font-black text-[#223f7a]"
-                          >
-                            Log
-                          </button>
-                          <button
-                            onClick={() =>
-                              void onDeleteQuote(
-                                item.stage,
-                                item.id,
-                                item.customer,
-                              )
-                            }
-                            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-100"
-                          >
-                            <Trash2 className="h-4 w-4" /> Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {!visibleQuoteRecords.length ? (
-            <div className="p-8 text-center text-sm font-semibold text-slate-500">
-              No quote records match your search.
+          </section>
+
+          {/* Table */}
+          <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 p-5">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-[#223f7a]">Quote Records</p>
+                <h3 className="mt-1 text-xl font-black">{visibleQuoteRecords.length} matching records</h3>
+              </div>
+              <Table2 className="h-5 w-5 text-slate-400" />
             </div>
-          ) : null}
-        </section>
+            <div className="border-b border-amber-100 bg-amber-50 px-6 py-3 text-xs font-semibold text-amber-900">
+              Deletion is manager-only, requires a reason, and is permanently recorded in the audit log.
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                  <tr>
+                    <th className="px-5 py-3">Customer</th>
+                    <th className="px-5 py-3">Status</th>
+                    <th className="px-5 py-3">Type</th>
+                    <th className="px-5 py-3">Agent</th>
+                    <th className="px-5 py-3">Source / Salesperson</th>
+                    <th className="px-5 py-3">Input</th>
+                    <th className="px-5 py-3">Last Status</th>
+                    <th className="px-5 py-3">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {visibleQuoteRecords.map((item) => {
+                    const statusClass =
+                      item.status === "Sold"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : item.status === "Not Sold"
+                          ? "bg-rose-50 text-rose-700"
+                          : item.status === "Price Sent"
+                            ? "bg-blue-50 text-blue-700"
+                            : "bg-amber-50 text-amber-700";
+                    return (
+                      <tr
+                        key={`${item.stage}-${item.id}`}
+                        className="hover:bg-slate-50"
+                      >
+                        <td className="px-5 py-4">
+                          <p className="font-black text-slate-900">{item.customer}</p>
+                          <p className="mt-1 text-xs text-slate-400">{item.source}</p>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className={cn("rounded-full px-2.5 py-1 text-xs font-black", statusClass)}>
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 font-bold text-slate-600">{workTypeLabels[item.workType]}</td>
+                        <td className="px-5 py-4 font-bold text-slate-700">{item.agent}</td>
+                        <td className="px-5 py-4">
+                          <p className="font-semibold text-slate-600">{item.source}</p>
+                          <p className="mt-1 text-xs text-slate-400">{item.salesperson}</p>
+                        </td>
+                        <td className="px-5 py-4 text-xs font-semibold text-slate-500">{item.receivedThrough}</td>
+                        <td className="px-5 py-4 text-xs font-semibold text-slate-500">{formatDateTime(item.statusDate)}</td>
+                        <td className="px-5 py-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => onOpenQuoteLog(item.sourceWorkItemId)}
+                              className="rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-3 py-2 text-xs font-black text-[#223f7a]"
+                            >
+                              Log
+                            </button>
+                            <button
+                              onClick={() => void onDeleteQuote(item.stage, item.id, item.customer)}
+                              className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-100"
+                            >
+                              <Trash2 className="h-4 w-4" /> Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {!visibleQuoteRecords.length ? (
+              <div className="p-8 text-center text-sm font-semibold text-slate-500">
+                No quote records match your search.
+              </div>
+            ) : null}
+          </section>
+        </div>
       ) : null}
 
       {managerTab === "quotes" && managerDatabaseView === "workloads" ? (
