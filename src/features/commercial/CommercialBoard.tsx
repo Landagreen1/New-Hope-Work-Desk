@@ -199,7 +199,12 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
 
   const visibleColumns = showArchive
     ? BOARD_COLUMNS.filter((c) => c.id === 'archive')
-    : BOARD_COLUMNS.filter((c) => c.id !== 'archive');
+    : BOARD_COLUMNS.filter((c) => {
+        if (c.id === 'archive') return false;
+        // Commercial agents should not see commission columns
+        if (!isManager && MANAGER_ONLY_COLUMNS.includes(c.id)) return false;
+        return true;
+      });
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 

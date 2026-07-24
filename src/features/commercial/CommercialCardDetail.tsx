@@ -579,6 +579,29 @@ export default function CommercialCardDetail({
               </select>
             </div>
 
+            {/* Sold Premium — visible when card is in sold or later columns */}
+            {(['sold', 'commission_approved', 'commission_not_approved'].includes(quote.board_column)) && (
+              <div>
+                <label className={ui.label}>Sold Premium ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={quote.sold_premium ?? ''}
+                  onBlur={(e) => {
+                    const val = e.target.value ? parseFloat(e.target.value) : null;
+                    if (val !== quote.sold_premium) void updateField('sold_premium', val);
+                  }}
+                  placeholder="e.g. 1200.00"
+                  className={ui.input + ' mt-1 text-xs'}
+                  disabled={!canEditFields}
+                />
+                <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                  Total annual premium for this policy.
+                </p>
+              </div>
+            )}
+
             {/* Time tracking */}
             <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Time In List</p>

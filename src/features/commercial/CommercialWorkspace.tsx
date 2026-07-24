@@ -2,7 +2,9 @@
 
 import {
   BarChart3,
+  Clock,
   Database,
+  DollarSign,
   Kanban,
   Shield,
 } from 'lucide-react';
@@ -10,16 +12,18 @@ import { Suspense, useState } from 'react';
 
 import type { ProfileLite } from '../nhwd-shared/types';
 import CommercialBoard from './CommercialBoard';
+import CommercialCommissionReport from './CommercialCommissionReport';
 import CommercialCommissionReview from './CommercialCommissionReview';
 import CommercialDatabase from './CommercialDatabase';
 import CommercialReports from './CommercialReports';
+import CommercialTimingReport from './CommercialTimingReport';
 
 interface CommercialWorkspaceProps {
   initialProfile: ProfileLite;
   embedded?: boolean;
 }
 
-type CommercialTab = 'board' | 'database' | 'commissions' | 'reports';
+type CommercialTab = 'board' | 'database' | 'commissions' | 'timing' | 'commission_report' | 'reports';
 
 interface SubTab {
   id: CommercialTab;
@@ -32,8 +36,10 @@ interface SubTab {
 const TABS: SubTab[] = [
   { id: 'board', label: 'Kanban Board', shortLabel: 'Board', icon: Kanban },
   { id: 'database', label: 'Database', shortLabel: 'Database', icon: Database },
-  { id: 'commissions', label: 'Commission Review', shortLabel: 'Commissions', icon: Shield },
-  { id: 'reports', label: 'Reports', shortLabel: 'Reports', icon: BarChart3, managerOnly: true },
+  { id: 'commissions', label: 'Commission Review', shortLabel: 'Review', icon: Shield, managerOnly: true },
+  { id: 'timing', label: 'Timing Report', shortLabel: 'Timing', icon: Clock, managerOnly: true },
+  { id: 'commission_report', label: 'Commission Report', shortLabel: 'Commissions', icon: DollarSign, managerOnly: true },
+  { id: 'reports', label: 'Overview', shortLabel: 'Overview', icon: BarChart3, managerOnly: true },
 ];
 
 function LoadingFallback() {
@@ -88,6 +94,12 @@ export default function CommercialWorkspace({ initialProfile, embedded = false }
         )}
         {activeTab === 'commissions' && (
           <CommercialCommissionReview initialProfile={initialProfile} embedded />
+        )}
+        {activeTab === 'timing' && isManager && (
+          <CommercialTimingReport initialProfile={initialProfile} embedded />
+        )}
+        {activeTab === 'commission_report' && isManager && (
+          <CommercialCommissionReport initialProfile={initialProfile} embedded />
         )}
         {activeTab === 'reports' && isManager && (
           <CommercialReports initialProfile={initialProfile} embedded />

@@ -60,7 +60,27 @@ export async function GET(request: Request, context: RouteContext) {
     return Response.json({ error: error.message }, { status: 404 });
   }
 
-  return Response.json({ quote: data });
+  // Strip sensitive fields from commercial agents
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  let quote = data;
+  if (profile?.role === "commercial") {
+    quote = {
+      ...quote,
+      risk_level: undefined,
+      commission_status: undefined,
+      commission_decision_by: undefined,
+      commission_decision_at: undefined,
+      commission_denial_reason: undefined,
+      commission_notes: undefined,
+    };
+  }
+
+  return Response.json({ quote });
 }
 
 /**

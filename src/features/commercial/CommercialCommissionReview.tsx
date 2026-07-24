@@ -5,6 +5,7 @@ import {
   Ban,
   CheckCircle2,
   DollarSign,
+  History,
   RefreshCw,
   Shield,
   ThumbsDown,
@@ -14,6 +15,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
+import CommercialActivityLog from './CommercialActivityLog';
 import type { CommercialQuote } from './types';
 import { BOARD_COLUMNS, COMMISSION_STATUS_STYLES, COVERAGE_LABELS, RISK_STYLES } from './types';
 
@@ -34,6 +36,7 @@ export default function CommercialCommissionReview({ initialProfile, embedded = 
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [activityLogQuoteId, setActivityLogQuoteId] = useState<string | null>(null);
 
   const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
@@ -232,6 +235,18 @@ export default function CommercialCommissionReview({ initialProfile, embedded = 
                   )}
                 </div>
 
+                {/* Log button — view full activity timeline */}
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setActivityLogQuoteId(quote.id)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-600 transition hover:border-[#7890bc] hover:bg-[#eef3fb] hover:text-[#223f7a]"
+                  >
+                    <History className="h-3.5 w-3.5" />
+                    View Full Log
+                  </button>
+                </div>
+
                 {/* Commission denial reason (visible to agents) */}
                 {quote.commission_status === 'denied' && quote.commission_denial_reason && (
                   <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3">
@@ -330,6 +345,16 @@ export default function CommercialCommissionReview({ initialProfile, embedded = 
               </div>
             )}
 
+            {/* Quick view log button inside modal */}
+            <button
+              type="button"
+              onClick={() => setActivityLogQuoteId(reviewingQuote.id)}
+              className="mb-4 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-600 transition hover:border-[#7890bc] hover:bg-[#eef3fb] hover:text-[#223f7a]"
+            >
+              <History className="h-3.5 w-3.5" />
+              View Full Activity Log
+            </button>
+
             {/* Reason (required for denial) */}
             {decision === 'denied' && (
               <div className="mb-4">
@@ -386,6 +411,14 @@ export default function CommercialCommissionReview({ initialProfile, embedded = 
             </div>
           </div>
         </div>
+      )}
+
+      {/* Activity Log Modal */}
+      {activityLogQuoteId && (
+        <CommercialActivityLog
+          quoteId={activityLogQuoteId}
+          onClose={() => setActivityLogQuoteId(null)}
+        />
       )}
     </section>
   );

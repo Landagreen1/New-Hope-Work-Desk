@@ -68,7 +68,27 @@ export async function GET(request: Request) {
     return Response.json({ error: error.message }, { status: 400 });
   }
 
-  return Response.json({ quotes: data ?? [] });
+  // Strip sensitive fields from commercial agents (they should not see risk, commission info)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  let quotes = data ?? [];
+  if (profile?.role === "commercial") {
+    quotes = quotes.map((q: Record<string, unknown>) => ({
+      ...q,
+      risk_level: undefined,
+      commission_status: undefined,
+      commission_decision_by: undefined,
+      commission_decision_at: undefined,
+      commission_denial_reason: undefined,
+      commission_notes: undefined,
+    }));
+  }
+
+  return Response.json({ quotes });
 }
 
 /**

@@ -295,22 +295,26 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
           className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-[#7890bc]"
         >
           <option value="">All Columns</option>
-          {BOARD_COLUMNS.map((col) => (
-            <option key={col.id} value={col.id}>{col.label}</option>
-          ))}
+          {BOARD_COLUMNS
+            .filter((col) => isManager || !['commission_approved', 'commission_not_approved', 'archive'].includes(col.id))
+            .map((col) => (
+              <option key={col.id} value={col.id}>{col.label}</option>
+            ))}
         </select>
 
-        {/* Risk filter */}
-        <select
-          value={filterRisk}
-          onChange={(e) => setFilterRisk(e.target.value as RiskLevel | '')}
-          className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-[#7890bc]"
-        >
-          <option value="">All Risk</option>
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-        </select>
+        {/* Risk filter (managers only) */}
+        {isManager && (
+          <select
+            value={filterRisk}
+            onChange={(e) => setFilterRisk(e.target.value as RiskLevel | '')}
+            className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-[#7890bc]"
+          >
+            <option value="">All Risk</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        )}
 
         {/* Status filter */}
         <select
@@ -381,14 +385,18 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
                 <th className={ui.th + ' cursor-pointer select-none'} onClick={() => handleSort('board_column')}>
                   <span className="flex items-center gap-1">Column <SortIcon field="board_column" /></span>
                 </th>
-                <th className={ui.th + ' cursor-pointer select-none'} onClick={() => handleSort('risk_level')}>
-                  <span className="flex items-center gap-1">Risk <SortIcon field="risk_level" /></span>
-                </th>
+                {isManager && (
+                  <th className={ui.th + ' cursor-pointer select-none'} onClick={() => handleSort('risk_level')}>
+                    <span className="flex items-center gap-1">Risk <SortIcon field="risk_level" /></span>
+                  </th>
+                )}
                 <th className={ui.th + ' cursor-pointer select-none'} onClick={() => handleSort('card_status')}>
                   <span className="flex items-center gap-1">Status <SortIcon field="card_status" /></span>
                 </th>
                 <th className={ui.th}>Coverage</th>
-                <th className={ui.th}>Commission</th>
+                {isManager && (
+                  <th className={ui.th}>Commission</th>
+                )}
                 <th className={ui.th + ' cursor-pointer select-none'} onClick={() => handleSort('updated_at')}>
                   <span className="flex items-center gap-1">Updated <SortIcon field="updated_at" /></span>
                 </th>
@@ -431,11 +439,13 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
                         <span className="text-xs font-bold text-slate-700">{columnDef?.label ?? quote.board_column}</span>
                       </span>
                     </td>
-                    <td className={ui.td}>
-                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${riskStyle.bg} ${riskStyle.text}`}>
-                        {riskStyle.label}
-                      </span>
-                    </td>
+                    {isManager && (
+                      <td className={ui.td}>
+                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${riskStyle.bg} ${riskStyle.text}`}>
+                          {riskStyle.label}
+                        </span>
+                      </td>
+                    )}
                     <td className={ui.td}>
                       <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${statusStyle.bg} ${statusStyle.text}`}>
                         {statusStyle.label}
@@ -446,15 +456,17 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
                         {quote.coverage_type ? COVERAGE_LABELS[quote.coverage_type] ?? quote.coverage_type : '—'}
                       </span>
                     </td>
-                    <td className={ui.td}>
-                      {commStyle ? (
-                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${commStyle.bg} ${commStyle.text}`}>
-                          {commStyle.label}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-slate-400">—</span>
-                      )}
-                    </td>
+                    {isManager && (
+                      <td className={ui.td}>
+                        {commStyle ? (
+                          <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${commStyle.bg} ${commStyle.text}`}>
+                            {commStyle.label}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">—</span>
+                        )}
+                      </td>
+                    )}
                     <td className={ui.td}>
                       <span className="text-xs font-semibold text-slate-500">{formatDate(quote.updated_at)}</span>
                     </td>
