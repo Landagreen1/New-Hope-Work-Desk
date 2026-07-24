@@ -267,6 +267,7 @@ export default function IntakeQueue({
   }
 
   async function action(id: string, task: () => Promise<void>, success: string) {
+    if (busyId) return;
     setBusyId(id);
     setError(null);
     setNotice(null);

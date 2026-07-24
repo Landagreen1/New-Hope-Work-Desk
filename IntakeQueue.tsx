@@ -17,6 +17,7 @@ import {
   Clock3,
   Download,
   FilePlus2,
+  FileText,
   Gauge,
   KeyRound,
   Layers3,
@@ -5817,7 +5818,7 @@ function ManagerView({
       }));
     const outcomes = quoteOutcomes
       .filter((item) =>
-        withinDateRange(item.quoteCreatedAt, reportStart, reportEnd),
+        withinDateRange(item.finalizedAt, reportStart, reportEnd),
       )
       .map((item) => ({
         id: item.id,
@@ -5857,6 +5858,16 @@ function ManagerView({
     const finalized = sold + notSold;
     const efficiency = quotes.length ? (finalized / quotes.length) * 100 : 0;
     const conversion = finalized ? (sold / finalized) * 100 : 0;
+
+    // New Quote vs Requote breakdown
+    const newQuotes = quotes.filter((item) => item.workType === "new_quote");
+    const requotes = quotes.filter((item) => item.workType === "requote");
+    const newQuoteSold = newQuotes.filter((item) => item.lifecycle === "Sold").length;
+    const newQuoteNotSold = newQuotes.filter((item) => item.lifecycle === "Not Sold").length;
+    const newQuotePending = newQuotes.filter((item) => item.lifecycle === "Price Sent").length;
+    const requoteSold = requotes.filter((item) => item.lifecycle === "Sold").length;
+    const requoteNotSold = requotes.filter((item) => item.lifecycle === "Not Sold").length;
+    const requotePending = requotes.filter((item) => item.lifecycle === "Price Sent").length;
 
     const timingRows = quotes.map((item) => ({
       ...item,
@@ -6480,6 +6491,14 @@ function ManagerView({
       finalized,
       efficiency,
       conversion,
+      newQuotes: newQuotes.length,
+      requotes: requotes.length,
+      newQuoteSold,
+      newQuoteNotSold,
+      newQuotePending,
+      requoteSold,
+      requoteNotSold,
+      requotePending,
       pendingInRange,
       totalPasses,
       byAgent,
@@ -7387,46 +7406,46 @@ function ManagerView({
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
             <SummaryCard
-              label="Quotes"
+              label="Total Quotes"
               value={reportData.quotes.length}
               note="All input methods"
               icon={<ClipboardList className="h-5 w-5 text-[#223f7a]" />}
               tone="bg-[#eef3fb]"
             />
             <SummaryCard
+              label="New Quotes"
+              value={reportData.newQuotes}
+              note={`${reportData.newQuoteSold} sold · ${reportData.newQuoteNotSold} not sold · ${reportData.newQuotePending} pending`}
+              icon={<FileText className="h-5 w-5 text-blue-700" />}
+              tone="bg-blue-50"
+            />
+            <SummaryCard
+              label="Requotes"
+              value={reportData.requotes}
+              note={`${reportData.requoteSold} sold · ${reportData.requoteNotSold} not sold · ${reportData.requotePending} pending`}
+              icon={<RefreshCw className="h-5 w-5 text-violet-700" />}
+              tone="bg-violet-50"
+            />
+            <SummaryCard
               label="Sold"
               value={reportData.sold}
-              note="Final Sold decisions"
+              note={`${reportData.conversion.toFixed(1)}% conversion`}
               icon={<CircleDollarSign className="h-5 w-5 text-emerald-700" />}
               tone="bg-emerald-50"
             />
             <SummaryCard
-              label="Conversion"
-              value={`${reportData.conversion.toFixed(1)}%`}
-              note="Sold ÷ finalized"
-              icon={<TrendingUp className="h-5 w-5 text-[#223f7a]" />}
-              tone="bg-[#eef3fb]"
+              label="Not Sold"
+              value={reportData.notSold}
+              note={`${reportData.efficiency.toFixed(1)}% efficiency`}
+              icon={<TrendingUp className="h-5 w-5 text-rose-700" />}
+              tone="bg-rose-50"
             />
             <SummaryCard
-              label="Efficiency"
-              value={`${reportData.efficiency.toFixed(1)}%`}
-              note="Finalized ÷ all quotes"
-              icon={<Gauge className="h-5 w-5 text-cyan-700" />}
-              tone="bg-cyan-50"
-            />
-            <SummaryCard
-              label="Pending"
+              label="Pending Pricing"
               value={pendingPricing.length}
-              note="Current follow-up list"
+              note="Awaiting final decision"
               icon={<Clock3 className="h-5 w-5 text-amber-700" />}
               tone="bg-amber-50"
-            />
-            <SummaryCard
-              label="Exceptions"
-              value={reportData.exceptionItems.length}
-              note="Items needing review"
-              icon={<AlertTriangle className="h-5 w-5 text-rose-700" />}
-              tone="bg-rose-50"
             />
           </div>
 
