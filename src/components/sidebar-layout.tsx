@@ -25,6 +25,7 @@ export type { ModuleId, NavigationState, SubNavId };
  */
 export function SidebarLayout({
   role,
+  displayName,
   navigation,
   onNavigate,
   badges,
@@ -32,12 +33,24 @@ export function SidebarLayout({
   children,
 }: {
   role: AppRole;
+  displayName?: string;
   navigation: NavigationState;
   onNavigate: (nav: NavigationState) => void;
   badges?: Record<string, number>;
   headerRight?: ReactNode;
   children: ReactNode;
 }) {
+  const roleLabel =
+    role === "super_admin"
+      ? "Super Admin"
+      : role === "manager"
+        ? "Manager"
+        : role === "customer_service"
+          ? "Customer Service"
+          : role === "commercial"
+            ? "Commercial"
+            : "Agent";
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#f3f5f9] text-slate-950">
       {/* Top header bar */}
@@ -60,11 +73,17 @@ export function SidebarLayout({
             </p>
           </div>
         </div>
-        {headerRight && (
-          <div className="flex items-center gap-2">
-            {headerRight}
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {headerRight}
+          {displayName && (
+            <div className="hidden items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 sm:flex">
+              <span className="text-xs font-black text-slate-800">{displayName}</span>
+              <span className="rounded-full bg-[#223f7a]/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-[#223f7a]">
+                {roleLabel}
+              </span>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Body: sidebar + content */}

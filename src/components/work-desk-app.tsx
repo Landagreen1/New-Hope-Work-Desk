@@ -203,6 +203,7 @@ type ModalType =
   | "payment"
   | "manual_quote"
   | "manager_assign_quote"
+  | "manager_assign_workload"
   | "quote_result"
   | "not_sold_reason"
   | "take_quote"
@@ -3829,6 +3830,43 @@ export function WorkDeskApp({
     if (success) setModal(null);
   }
 
+  async function submitManagerAssignedWorkload(formData: FormData) {
+    const mode = String(formData.get("workloadMode") || "new") as "linked" | "new";
+    const workType = String(formData.get("workType")) as "activation" | "change";
+    const changeType = String(formData.get("changeType") || "").trim();
+    const note = String(formData.get("note") || "").trim();
+    const relatedQuoteId = String(formData.get("relatedQuote") || "");
+    const customer = String(formData.get("customer") || "");
+    const dealerId = String(formData.get("dealer") || "");
+    const salespersonId = String(formData.get("salesperson") || "");
+    const ownerId = String(formData.get("owner") || "");
+    const assignedProfileId = String(formData.get("assignedAgent"));
+
+    if (mode === "linked" && !relatedQuoteId)
+      return showToast("Select the existing quote this workload belongs to.");
+    if (!assignedProfileId)
+      return showToast("Select the agent to assign this workload to.");
+
+    const agent = agentList.find((candidate) => candidate.id === assignedProfileId);
+    const success = await runRpc(
+      "log_manual_workload",
+      {
+        p_mode: mode,
+        p_related_quote_source_work_item_id: relatedQuoteId || null,
+        p_customer_name: customer || null,
+        p_dealer_id: dealerId || null,
+        p_salesperson_id: salespersonId || null,
+        p_work_type: workType,
+        p_original_owner_profile_id: ownerId || null,
+        p_change_type: changeType || null,
+        p_note: note || null,
+        p_assigned_profile_id: assignedProfileId,
+      },
+      `Workload assigned to ${agent?.name || "the selected agent"}. No rotation moved.`,
+    );
+    if (success) setModal(null);
+  }
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.replace("/login");
@@ -5063,6 +5101,7 @@ export function WorkDeskApp({
               requestNotSold({ kind: "pending", item })
             }
             onOpenAssignQuote={() => setModal("manager_assign_quote")}
+            onOpenAssignWorkload={() => setModal("manager_assign_workload")}
             onReassignWork={managerReassignWork}
             onReassignPending={managerReassignPending}
             onDeleteQuote={managerDeleteQuote}
@@ -5521,6 +5560,84 @@ export function WorkDeskApp({
       </Modal>
 
       <Modal
+        open={modal === "manager_assign_workload"}
+        title="Create & Assign Workload"
+        subtitle="Create an Activation or Change and assign it to any agent. No rotation moves."
+        onClose={() => setModal(null)}
+      >
+        <form action={submitManagerAssignedWorkload} className="space-y-4 p-6">
+          <input type="hidden" name="workloadMode" value="new" />
+          <div className="rounded-2xl bg-violet-50 p-4 text-sm font-semibold text-violet-800">
+            The assigned agent will receive this as active work. No queue or rotation is affected.
+          </div>
+          <Field label="Customer name">
+            <input name="customer" required className="field" />
+          </Field>
+          <DealerSalespersonFields
+            sources={sourceList}
+            salespeople={salespeople}
+            required={false}
+            allowEmpty
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Work type">
+              <select name="workType" className="field">
+                <option value="activation">Activation</option>
+                <option value="change">Change</option>
+              </select>
+            </Field>
+            <Field label="Change type (optional)">
+              <select name="changeType" className="field">
+                <option value="">Not applicable</option>
+                <option>Add Vehicle</option>
+                <option>Remove Vehicle</option>
+                <option>Add Driver</option>
+                <option>Remove Driver</option>
+                <option>Change Coverage</option>
+                <option>Other Policy Change</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="Original owner (optional)">
+            <select name="owner" className="field">
+              <option value="">Unknown / Not specified</option>
+              {agentList.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Assign to agent">
+            <select name="assignedAgent" required className="field">
+              <option value="">Select agent...</option>
+              {agentList.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name} ·{" "}
+                  {agent.availability === "available"
+                    ? "Available"
+                    : agent.availability === "break"
+                      ? "Lunch"
+                      : "Unavailable"}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Assignment note (optional)">
+            <textarea
+              name="note"
+              rows={3}
+              className="field"
+              placeholder="What needs to be done?"
+            />
+          </Field>
+          <button className="w-full rounded-xl bg-violet-600 px-4 py-3 font-black text-white hover:bg-violet-700">
+            Create & Assign Workload
+          </button>
+        </form>
+      </Modal>
+
+      <Modal
         open={modal === "not_sold_reason"}
         title="Why was this quote not sold?"
         subtitle="Choose the best reason so management can report on lost opportunities."
@@ -5819,6 +5936,7 @@ function ManagerView({
   finalizePendingPricingSold,
   onRequestNotSold,
   onOpenAssignQuote,
+  onOpenAssignWorkload,
   onReassignWork,
   onReassignPending,
   onDeleteQuote,
@@ -5855,6 +5973,7 @@ function ManagerView({
   finalizePendingPricingSold: (item: PendingPricingItem) => Promise<void>;
   onRequestNotSold: (item: PendingPricingItem) => void;
   onOpenAssignQuote: () => void;
+  onOpenAssignWorkload: () => void;
   onReassignWork: (itemId: string, profileId: string) => Promise<void>;
   onReassignPending: (itemId: string, profileId: string) => Promise<void>;
   onDeleteQuote: (
@@ -7412,6 +7531,12 @@ function ManagerView({
               >
                 <FilePlus2 className="h-4 w-4" /> Create & Assign Quote
               </button>
+              <button
+                onClick={onOpenAssignWorkload}
+                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-black text-white"
+              >
+                <Layers3 className="h-4 w-4" /> Create & Assign Workload
+              </button>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -8773,7 +8898,7 @@ function SourceAdminPanel() {
                 className="rounded-2xl border border-slate-200 p-4"
               >
                 <p className="font-black">{dealer.name}</p>
-                <div className="mt-3 space-y-2">
+              <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
                   {people.length ? (
                     people.map((person) => (
                       <div

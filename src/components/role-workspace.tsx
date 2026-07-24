@@ -269,6 +269,7 @@ export function RoleWorkspace({
   return (
     <SidebarLayout
       role={sessionProfile.role}
+      displayName={sessionProfile.displayName}
       navigation={navigation}
       onNavigate={handleNavigate}
     >
