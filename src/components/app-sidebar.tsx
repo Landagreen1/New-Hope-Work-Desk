@@ -13,6 +13,7 @@ import {
   Gauge,
   Headphones,
   LayoutDashboard,
+  LogOut,
   Menu,
   ShieldCheck,
   Table2,
@@ -193,11 +194,17 @@ export function AppSidebar({
   navigation,
   onNavigate,
   badges,
+  displayName,
+  roleLabel,
+  onSignOut,
 }: {
   role: AppRole;
   navigation: NavigationState;
   onNavigate: (nav: NavigationState) => void;
   badges?: Record<string, number>;
+  displayName?: string;
+  roleLabel?: string;
+  onSignOut?: () => void;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedModules, setExpandedModules] = useState<Set<ModuleId>>(
@@ -340,11 +347,31 @@ export function AppSidebar({
         </ul>
       </div>
 
-      {/* Bottom branding */}
-      <div className="border-t border-slate-100 px-4 py-3">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          New Hope Work Desk
-        </p>
+      {/* Bottom: user info + sign out */}
+      <div className="border-t border-slate-100 px-3 py-3">
+        {displayName && (
+          <div className="flex items-center gap-2 px-1 pb-2">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#223f7a] text-[10px] font-black text-white">
+              {displayName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-black text-slate-800">{displayName}</p>
+              {roleLabel && (
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{roleLabel}</p>
+              )}
+            </div>
+          </div>
+        )}
+        {onSignOut && (
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Sign out
+          </button>
+        )}
       </div>
     </nav>
   );

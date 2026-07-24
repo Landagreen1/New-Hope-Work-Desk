@@ -1,6 +1,5 @@
 "use client";
 
-import { LogOut } from "lucide-react";
 import Image from "next/image";
 import { type ReactNode } from "react";
 
@@ -14,15 +13,13 @@ export type { ModuleId, NavigationState, SubNavId };
  *
  * Structure:
  * ┌─────────────────────────────────────────────────────────────────┐
- * │  Header: Logo | Work Desk label | (right: alerts, user, etc.)  │
+ * │  Header: Logo | Work Desk label | (right: headerRight slot)    │
  * ├──────────────┬──────────────────────────────────────────────────┤
  * │  Sidebar     │  Main Content                                    │
  * │  (nav)       │                                                  │
- * │              │                                                  │
+ * │  ...         │                                                  │
+ * │  User+Logout │                                                  │
  * └──────────────┴──────────────────────────────────────────────────┘
- *
- * The header and right-side controls are rendered via the `headerRight` slot
- * so the parent component retains full control of alerts, user info, sign-out.
  */
 export function SidebarLayout({
   role,
@@ -76,28 +73,11 @@ export function SidebarLayout({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {headerRight}
-          {displayName && (
-            <div className="hidden items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 sm:flex">
-              <span className="text-xs font-black text-slate-800">{displayName}</span>
-              <span className="rounded-full bg-[#223f7a]/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-[#223f7a]">
-                {roleLabel}
-              </span>
-            </div>
-          )}
-          {onSignOut && (
-            <button
-              type="button"
-              onClick={onSignOut}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-50"
-              title="Sign out"
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Sign out</span>
-            </button>
-          )}
-        </div>
+        {headerRight && (
+          <div className="flex items-center gap-3">
+            {headerRight}
+          </div>
+        )}
       </header>
 
       {/* Body: sidebar + content */}
@@ -107,6 +87,9 @@ export function SidebarLayout({
           navigation={navigation}
           onNavigate={onNavigate}
           badges={badges}
+          displayName={displayName}
+          roleLabel={roleLabel}
+          onSignOut={onSignOut}
         />
 
         {/* Main content area - scrollable */}
