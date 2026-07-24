@@ -284,6 +284,8 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
                   onAddCard={() => setShowNewCardForm(column.id)}
                   onRefresh={fetchQuotes}
                   isManager={isManager}
+                  currentUserId={initialProfile.id}
+                  canAddCard={isManager || column.id === 'quote_intake'}
                 />
               ))}
             </div>

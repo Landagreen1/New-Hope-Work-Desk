@@ -153,5 +153,20 @@ export async function POST(request: Request) {
     moved_by: user.id,
   });
 
+  // Create default checklist: Email / Recording / Form
+  const { data: checklist } = await supabase
+    .from("commercial_quote_checklists")
+    .insert({ quote_id: data.id, title: "Required Documents" })
+    .select("id")
+    .single();
+
+  if (checklist) {
+    await supabase.from("commercial_quote_checklist_items").insert([
+      { checklist_id: checklist.id, label: "Email", position: 1 },
+      { checklist_id: checklist.id, label: "Recording", position: 2 },
+      { checklist_id: checklist.id, label: "Form", position: 3 },
+    ]);
+  }
+
   return Response.json({ id: data.id }, { status: 201 });
 }

@@ -39,12 +39,18 @@ interface CommercialCardDetailProps {
   quoteId: string;
   onClose: () => void;
   onRefresh?: () => Promise<void>;
+  /** Current user's profile ID */
+  currentUserId?: string;
+  /** Whether current user is manager/super_admin */
+  isManager?: boolean;
 }
 
 export default function CommercialCardDetail({
   quoteId,
   onClose,
   onRefresh,
+  currentUserId,
+  isManager = false,
 }: CommercialCardDetailProps) {
   const [quote, setQuote] = useState<CommercialQuote | null>(null);
   const [comments, setComments] = useState<CommercialComment[]>([]);
@@ -63,6 +69,10 @@ export default function CommercialCardDetail({
   const [uploading, setUploading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Can the current user edit card fields (not comments/attachments)?
+  // Only the card creator (assigned_to) and managers/super_admin can edit fields.
+  const canEditFields = isManager || (currentUserId != null && quote?.assigned_to === currentUserId);
 
   // ─── Fetch full card detail ──────────────────────────────────────────────────
   const fetchDetail = useCallback(async () => {
@@ -528,6 +538,7 @@ export default function CommercialCardDetail({
                 value={quote.risk_level}
                 onChange={(e) => void updateField('risk_level', e.target.value)}
                 className={ui.select + ' mt-1 text-xs'}
+                disabled={!canEditFields}
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -542,6 +553,7 @@ export default function CommercialCardDetail({
                 value={quote.card_status}
                 onChange={(e) => void updateField('card_status', e.target.value)}
                 className={ui.select + ' mt-1 text-xs'}
+                disabled={!canEditFields}
               >
                 <option value="in_progress">In Progress</option>
                 <option value="done">Done</option>
@@ -559,6 +571,7 @@ export default function CommercialCardDetail({
                 onBlur={(e) => void updateField('policy_number', e.target.value || null)}
                 placeholder="Enter policy #"
                 className={ui.input + ' mt-1 text-xs'}
+                disabled={!canEditFields}
               />
             </div>
 
@@ -569,6 +582,7 @@ export default function CommercialCardDetail({
                 value={quote.coverage_type ?? ''}
                 onChange={(e) => void updateField('coverage_type', e.target.value || null)}
                 className={ui.select + ' mt-1 text-xs'}
+                disabled={!canEditFields}
               >
                 <option value="">Select...</option>
                 {Object.entries(COVERAGE_LABELS).map(([key, label]) => (

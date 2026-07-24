@@ -7,12 +7,13 @@ import { useState } from 'react';
 
 import CommercialCardDetail from './CommercialCardDetail';
 import type { CommercialQuote } from './types';
-import { LOCKED_COLUMNS, RISK_STYLES, STATUS_STYLES } from './types';
+import { LOCKED_COLUMNS, STATUS_STYLES } from './types';
 
 interface CommercialCardPreviewProps {
   quote: CommercialQuote;
   onRefresh?: () => Promise<void>;
   isManager?: boolean;
+  currentUserId?: string;
 }
 
 function getRelativeTime(dateStr: string): string {
@@ -61,6 +62,7 @@ export default function CommercialCardPreview({
   quote,
   onRefresh,
   isManager,
+  currentUserId,
 }: CommercialCardPreviewProps) {
   const [showDetail, setShowDetail] = useState(false);
 
@@ -77,7 +79,6 @@ export default function CommercialCardPreview({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const riskStyle = RISK_STYLES[quote.risk_level];
   const statusStyle = STATUS_STYLES[quote.card_status];
   const commentCount = getCommentCount(quote);
   const attachmentCount = getAttachmentCount(quote);
@@ -138,11 +139,8 @@ export default function CommercialCardPreview({
 
         {/* Badges row */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${riskStyle.bg} ${riskStyle.text}`}>
-            Risk: {riskStyle.label}
-          </span>
           <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${statusStyle.bg} ${statusStyle.text}`}>
-            Status: {statusStyle.label}
+            {statusStyle.label}
           </span>
         </div>
 
@@ -187,6 +185,8 @@ export default function CommercialCardPreview({
           quoteId={quote.id}
           onClose={() => setShowDetail(false)}
           onRefresh={onRefresh}
+          currentUserId={currentUserId}
+          isManager={isManager}
         />
       )}
     </>

@@ -7287,18 +7287,6 @@ function ManagerView({
             >
               Pending Pricing · {pendingPricing.length}
             </button>
-            <button
-              type="button"
-              onClick={() => setWorkView("workload")}
-              className={cn(
-                "rounded-xl px-4 py-2.5 text-xs font-black transition",
-                workView === "workload"
-                  ? "bg-[#223f7a] text-white shadow-sm"
-                  : "text-slate-500 hover:bg-white",
-              )}
-            >
-              Workload Log
-            </button>
           </div>
         </section>
       ) : null}
@@ -7954,10 +7942,6 @@ function ManagerView({
 
       {managerTab === "quotes" && managerDatabaseView === "workloads" ? (
         workloadDatabaseContent ?? <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"><EmptyState title="Workload database unavailable" note="Refresh the page or verify the workload module." /></div>
-      ) : null}
-
-      {managerTab === "work" && workView === "workload" ? (
-        workloadDatabaseContent ?? <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm"><EmptyState title="Workload log unavailable" note="Refresh the page or verify the workload module." /></div>
       ) : null}
 
       {managerTab === "reports" ? (

@@ -13,6 +13,8 @@ interface BoardColumnProps {
   onAddCard: () => void;
   onRefresh: () => Promise<void>;
   isManager: boolean;
+  currentUserId?: string;
+  canAddCard?: boolean;
 }
 
 export default function BoardColumnComponent({
@@ -21,6 +23,8 @@ export default function BoardColumnComponent({
   onAddCard,
   onRefresh,
   isManager,
+  currentUserId,
+  canAddCard = true,
 }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
@@ -45,6 +49,7 @@ export default function BoardColumnComponent({
           <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-black text-slate-500">
             {quotes.length}
           </span>
+          {canAddCard && (
           <button
             type="button"
             onClick={onAddCard}
@@ -53,6 +58,7 @@ export default function BoardColumnComponent({
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
+          )}
         </div>
       </div>
 
@@ -65,6 +71,7 @@ export default function BoardColumnComponent({
               quote={quote}
               onRefresh={onRefresh}
               isManager={isManager}
+              currentUserId={currentUserId}
             />
           ))}
         </SortableContext>
@@ -77,6 +84,7 @@ export default function BoardColumnComponent({
       </div>
 
       {/* Add Card Button (bottom) */}
+      {canAddCard && (
       <button
         type="button"
         onClick={onAddCard}
@@ -85,6 +93,7 @@ export default function BoardColumnComponent({
         <Plus className="h-3.5 w-3.5" />
         Add a card
       </button>
+      )}
     </div>
   );
 }

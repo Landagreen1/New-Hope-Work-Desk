@@ -510,6 +510,8 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
           quoteId={openDetailId}
           onClose={() => setOpenDetailId(null)}
           onRefresh={fetchQuotes}
+          currentUserId={initialProfile.id}
+          isManager={isManager}
         />
       )}
 
