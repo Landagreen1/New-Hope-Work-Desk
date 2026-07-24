@@ -33,12 +33,6 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
   const [ownerPhone, setOwnerPhone] = useState('');
   const [ownerEmail, setOwnerEmail] = useState('');
 
-  // --- Coverages ---
-  const [coverageGl, setCoverageGl] = useState(false);
-  const [coverageUmb, setCoverageUmb] = useState(false);
-  const [coverageWc, setCoverageWc] = useState(false);
-  const [coverageType, setCoverageType] = useState<CoverageType | ''>('');
-
   // --- Job Details ---
   const [jobType, setJobType] = useState('');
   const [roofingCode, setRoofingCode] = useState('');
@@ -47,7 +41,8 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
   const [heatApplication, setHeatApplication] = useState('');
   const [commercialResidential, setCommercialResidential] = useState('');
 
-  // --- Card ---
+  // --- Card Settings ---
+  const [coverageType, setCoverageType] = useState<CoverageType | ''>('');
   const [cardStatus, setCardStatus] = useState('in_progress');
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -57,42 +52,36 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
   function buildDescription(): string {
     const lines: string[] = [];
 
-    lines.push('Información de Compañía:');
-    lines.push(`Nombre: ${businessName}`);
-    if (address) lines.push(`Dirección: ${address}`);
-    if (einW7) lines.push(`EIN o W7: ${einW7}`);
-    if (states) lines.push(`Estados en cual trabajan: ${states}`);
-    if (employeeCount) lines.push(`Empleados y Payroll (WC): ${employeeCount}`);
+    lines.push('Company Information:');
+    lines.push(`Name: ${businessName}`);
+    if (address) lines.push(`Address: ${address}`);
+    if (einW7) lines.push(`EIN / W7: ${einW7}`);
+    if (states) lines.push(`States of operation: ${states}`);
+    if (employeeCount) lines.push(`Employees & Payroll (WC): ${employeeCount}`);
 
     if (ownerName || ownerDob || ownerPhone || ownerEmail) {
       lines.push('');
-      lines.push('Información de dueño:');
-      if (ownerName) lines.push(`Nombre: ${ownerName}`);
-      if (ownerDob) lines.push(`Fecha de nacimiento: ${ownerDob}`);
-      if (ownerPhone) lines.push(`Teléfono: ${ownerPhone}`);
-      if (ownerEmail) lines.push(`Correo: ${ownerEmail}`);
+      lines.push('Owner Information:');
+      if (ownerName) lines.push(`Name: ${ownerName}`);
+      if (ownerDob) lines.push(`Date of birth: ${ownerDob}`);
+      if (ownerPhone) lines.push(`Phone: ${ownerPhone}`);
+      if (ownerEmail) lines.push(`Email: ${ownerEmail}`);
     }
-
-    lines.push('');
-    lines.push('Coberturas:');
-    lines.push(`GL: ${coverageGl ? 'Sí' : 'No'}`);
-    lines.push(`UMB: ${coverageUmb ? 'Sí' : 'No'}`);
-    lines.push(`WC: ${coverageWc ? 'Sí' : 'No'}`);
 
     if (jobType || roofingCode || height || roofType || heatApplication || commercialResidential) {
       lines.push('');
-      lines.push('Tipo de trabajo:');
-      if (jobType) lines.push(`Trabajo: ${jobType}`);
-      if (roofingCode) lines.push(`Código de roofing: ${roofingCode}`);
-      if (height) lines.push(`Altura: ${height}`);
-      if (roofType) lines.push(`Tipo de techo: ${roofType}`);
-      if (heatApplication) lines.push(`Heat Application / Antorcha: ${heatApplication}`);
-      if (commercialResidential) lines.push(`Comercial / Residencial: ${commercialResidential}`);
+      lines.push('Job Details:');
+      if (jobType) lines.push(`Type of work: ${jobType}`);
+      if (roofingCode) lines.push(`Roofing code: ${roofingCode}`);
+      if (height) lines.push(`Height: ${height}`);
+      if (roofType) lines.push(`Roof type: ${roofType}`);
+      if (heatApplication) lines.push(`Heat application / Torch: ${heatApplication}`);
+      if (commercialResidential) lines.push(`Commercial / Residential: ${commercialResidential}`);
     }
 
     if (additionalNotes.trim()) {
       lines.push('');
-      lines.push('Notas adicionales:');
+      lines.push('Additional Notes:');
       lines.push(additionalNotes.trim());
     }
 
@@ -104,22 +93,10 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
     if (!businessName.trim()) return;
     setSubmitting(true);
     try {
-      // Derive coverage_type from checkboxes
-      let derivedCoverage: string | undefined = coverageType || undefined;
-      if (!derivedCoverage) {
-        const parts: string[] = [];
-        if (coverageGl) parts.push('gl');
-        if (coverageWc) parts.push('wc');
-        if (coverageUmb) parts.push('umb');
-        if (parts.length === 1) derivedCoverage = parts[0];
-        else if (parts.includes('gl') && parts.includes('wc') && !parts.includes('umb')) derivedCoverage = 'gl_wc';
-        else if (parts.includes('gl') && parts.includes('wc') && parts.includes('umb')) derivedCoverage = 'gl_wc_umb';
-      }
-
       await onSubmit({
         business_name: businessName.trim(),
         description: buildDescription(),
-        coverage_type: derivedCoverage,
+        coverage_type: coverageType || undefined,
         card_status: cardStatus,
         board_column: column,
       });
@@ -157,11 +134,11 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
             {/* ── Company Info ── */}
             <section>
               <h4 className="mb-3 text-xs font-black uppercase tracking-widest text-[#526b9a]">
-                Información de Compañía
+                Company Information
               </h4>
               <div className="space-y-3">
                 <div>
-                  <label className={ui.label}>Nombre de la Compañía *</label>
+                  <label className={ui.label}>Business Name *</label>
                   <input
                     type="text"
                     value={businessName}
@@ -173,7 +150,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                   />
                 </div>
                 <div>
-                  <label className={ui.label}>Dirección</label>
+                  <label className={ui.label}>Address</label>
                   <input
                     type="text"
                     value={address}
@@ -184,7 +161,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className={ui.label}>EIN o W7</label>
+                    <label className={ui.label}>EIN or W7</label>
                     <input
                       type="text"
                       value={einW7}
@@ -194,7 +171,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                     />
                   </div>
                   <div>
-                    <label className={ui.label}>Estados en cual trabajan</label>
+                    <label className={ui.label}>States of Operation</label>
                     <input
                       type="text"
                       value={states}
@@ -205,7 +182,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                   </div>
                 </div>
                 <div>
-                  <label className={ui.label}>Empleados y Payroll (WC)</label>
+                  <label className={ui.label}>Employees & Payroll (WC)</label>
                   <input
                     type="text"
                     value={employeeCount}
@@ -220,22 +197,22 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
             {/* ── Owner Info ── */}
             <section>
               <h4 className="mb-3 text-xs font-black uppercase tracking-widest text-[#526b9a]">
-                Información del Dueño
+                Owner Information
               </h4>
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className={ui.label}>Nombre</label>
+                    <label className={ui.label}>Full Name</label>
                     <input
                       type="text"
                       value={ownerName}
                       onChange={(e) => setOwnerName(e.target.value)}
-                      placeholder="Full name"
+                      placeholder="Owner full name"
                       className={ui.input + ' mt-1'}
                     />
                   </div>
                   <div>
-                    <label className={ui.label}>Fecha de nacimiento</label>
+                    <label className={ui.label}>Date of Birth</label>
                     <input
                       type="date"
                       value={ownerDob}
@@ -246,7 +223,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className={ui.label}>Teléfono</label>
+                    <label className={ui.label}>Phone Number</label>
                     <input
                       type="tel"
                       value={ownerPhone}
@@ -256,7 +233,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                     />
                   </div>
                   <div>
-                    <label className={ui.label}>Correo electrónico</label>
+                    <label className={ui.label}>Email</label>
                     <input
                       type="email"
                       value={ownerEmail}
@@ -269,48 +246,14 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
               </div>
             </section>
 
-            {/* ── Coverages ── */}
-            <section>
-              <h4 className="mb-3 text-xs font-black uppercase tracking-widest text-[#526b9a]">
-                Coberturas
-              </h4>
-              <div className="flex flex-wrap gap-4">
-                <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-700">
-                  <input type="checkbox" checked={coverageGl} onChange={(e) => setCoverageGl(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
-                  GL
-                </label>
-                <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-700">
-                  <input type="checkbox" checked={coverageUmb} onChange={(e) => setCoverageUmb(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
-                  UMB
-                </label>
-                <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-700">
-                  <input type="checkbox" checked={coverageWc} onChange={(e) => setCoverageWc(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
-                  WC
-                </label>
-              </div>
-              <div className="mt-3">
-                <label className={ui.label}>Coverage Type (specific)</label>
-                <select
-                  value={coverageType}
-                  onChange={(e) => setCoverageType(e.target.value as CoverageType | '')}
-                  className={ui.select + ' mt-1'}
-                >
-                  <option value="">Auto-detect from checkboxes</option>
-                  {Object.entries(COVERAGE_LABELS).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </select>
-              </div>
-            </section>
-
             {/* ── Job Details ── */}
             <section>
               <h4 className="mb-3 text-xs font-black uppercase tracking-widest text-[#526b9a]">
-                Tipo de Trabajo
+                Job Details
               </h4>
               <div className="space-y-3">
                 <div>
-                  <label className={ui.label}>Tipo de trabajo que realiza</label>
+                  <label className={ui.label}>Type of Work</label>
                   <input
                     type="text"
                     value={jobType}
@@ -321,7 +264,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className={ui.label}>Código de roofing</label>
+                    <label className={ui.label}>Roofing Code</label>
                     <input
                       type="text"
                       value={roofingCode}
@@ -331,7 +274,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                     />
                   </div>
                   <div>
-                    <label className={ui.label}>Altura</label>
+                    <label className={ui.label}>Height</label>
                     <input
                       type="text"
                       value={height}
@@ -343,7 +286,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div>
-                    <label className={ui.label}>Tipo de techo</label>
+                    <label className={ui.label}>Roof Type</label>
                     <input
                       type="text"
                       value={roofType}
@@ -353,28 +296,28 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                     />
                   </div>
                   <div>
-                    <label className={ui.label}>Heat / Antorcha</label>
+                    <label className={ui.label}>Heat / Torch</label>
                     <select
                       value={heatApplication}
                       onChange={(e) => setHeatApplication(e.target.value)}
                       className={ui.select + ' mt-1'}
                     >
                       <option value="">Select...</option>
-                      <option value="Sí">Sí</option>
+                      <option value="Yes">Yes</option>
                       <option value="No">No</option>
                     </select>
                   </div>
                   <div>
-                    <label className={ui.label}>Comercial / Residencial</label>
+                    <label className={ui.label}>Commercial / Residential</label>
                     <select
                       value={commercialResidential}
                       onChange={(e) => setCommercialResidential(e.target.value)}
                       className={ui.select + ' mt-1'}
                     >
                       <option value="">Select...</option>
-                      <option value="Comercial">Comercial</option>
-                      <option value="Residencial">Residencial</option>
-                      <option value="Ambos">Ambos</option>
+                      <option value="Commercial">Commercial</option>
+                      <option value="Residential">Residential</option>
+                      <option value="Both">Both</option>
                     </select>
                   </div>
                 </div>
@@ -387,6 +330,19 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                 Card Settings
               </h4>
               <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className={ui.label}>Coverage Type</label>
+                  <select
+                    value={coverageType}
+                    onChange={(e) => setCoverageType(e.target.value as CoverageType | '')}
+                    className={ui.select + ' mt-1'}
+                  >
+                    <option value="">Select...</option>
+                    {Object.entries(COVERAGE_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className={ui.label}>Initial Status</label>
                   <select
@@ -403,7 +359,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                 </div>
               </div>
               <div className="mt-3">
-                <label className={ui.label}>Notas adicionales</label>
+                <label className={ui.label}>Additional Notes</label>
                 <textarea
                   value={additionalNotes}
                   onChange={(e) => setAdditionalNotes(e.target.value)}
@@ -417,7 +373,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
           </div>
         </form>
 
-        {/* Footer actions - fixed at bottom */}
+        {/* Footer actions */}
         <div className="flex shrink-0 items-center gap-3 border-t border-slate-100 px-6 py-4">
           <button
             type="submit"
