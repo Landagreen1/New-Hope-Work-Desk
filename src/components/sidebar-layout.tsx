@@ -1,5 +1,6 @@
 "use client";
 
+import { LogOut } from "lucide-react";
 import Image from "next/image";
 import { type ReactNode } from "react";
 
@@ -28,6 +29,7 @@ export function SidebarLayout({
   displayName,
   navigation,
   onNavigate,
+  onSignOut,
   badges,
   headerRight,
   children,
@@ -36,6 +38,7 @@ export function SidebarLayout({
   displayName?: string;
   navigation: NavigationState;
   onNavigate: (nav: NavigationState) => void;
+  onSignOut?: () => void;
   badges?: Record<string, number>;
   headerRight?: ReactNode;
   children: ReactNode;
@@ -82,6 +85,17 @@ export function SidebarLayout({
                 {roleLabel}
               </span>
             </div>
+          )}
+          {onSignOut && (
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-50"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
           )}
         </div>
       </header>

@@ -7744,7 +7744,7 @@ function ManagerView({
         </section>
       ) : null}
 
-      {managerTab === "quotes" ? (
+      {managerTab === "quotes" && managerDatabaseView === "quotes" ? (
         <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 p-6">
             <div>

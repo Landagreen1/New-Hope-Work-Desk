@@ -6,6 +6,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Suspense, useCallback, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { SidebarLayout, type NavigationState, type SubNavId } from "@/components/sidebar-layout";
 import { WorkDeskApp } from "@/components/work-desk-app";
@@ -16,6 +17,7 @@ import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type { ProfileLite } from "@/features/nhwd-shared/types";
 import RenewalsPage from "@/features/renewals/RenewalsPage";
 import WorkloadLog from "@/features/workload/WorkloadLog";
+import { createClient } from "@/lib/supabase/client";
 import type { DashboardData, SessionProfile } from "@/lib/types";
 
 function LoadingWorkspace({ label }: { label: string }) {
@@ -163,9 +165,17 @@ export function RoleWorkspace({
   sessionProfile: SessionProfile;
   initialData: DashboardData;
 }) {
+  const router = useRouter();
   const [navigation, setNavigation] = useState<NavigationState>(
     () => getDefaultNav(sessionProfile.role),
   );
+
+  const handleSignOut = useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  }, [router]);
 
   const profile = useMemo<ProfileLite>(
     () => ({
@@ -272,6 +282,7 @@ export function RoleWorkspace({
       displayName={sessionProfile.displayName}
       navigation={navigation}
       onNavigate={handleNavigate}
+      onSignOut={() => void handleSignOut()}
     >
       {renderContent()}
     </SidebarLayout>
