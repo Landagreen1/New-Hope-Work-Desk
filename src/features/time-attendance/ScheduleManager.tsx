@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, Calendar, ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react';
+import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, Copy, Plus, RefreshCw, Trash2, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { ProfileLite } from '../nhwd-shared/types';
@@ -12,73 +12,115 @@ interface ScheduleManagerProps {
   initialProfile: ProfileLite;
 }
 
-function getFirstDayOfMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
+function getMonday(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  d.setDate(d.getDate() - diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
-function getLastDayOfMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
 }
 
 function formatDate(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-function getCalendarDays(monthStart: Date): Date[] {
-  const firstDay = new Date(monthStart);
-  const lastDay = getLastDayOfMonth(monthStart);
-
-  // Start from Monday of the week containing the 1st
-  const startDay = new Date(firstDay);
-  const dow = startDay.getDay();
-  const diff = dow === 0 ? 6 : dow - 1; // Monday = 0 offset
-  startDay.setDate(startDay.getDate() - diff);
-
-  // End on Sunday of the week containing the last day
-  const endDay = new Date(lastDay);
-  const endDow = endDay.getDay();
-  const endDiff = endDow === 0 ? 0 : 7 - endDow;
-  endDay.setDate(endDay.getDate() + endDiff);
-
-  const days: Date[] = [];
-  const current = new Date(startDay);
-  while (current <= endDay) {
-    days.push(new Date(current));
-    current.setDate(current.getDate() + 1);
-  }
-  return days;
+function formatShortDate(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// ─── Schedule Templates ───────────────────────────────────────────────────────
+
+interface ScheduleTemplate {
+  id: string;
+  label: string;
+  description: string;
+  shifts: Array<{ dayOfWeek: number; start: string; end: string }>; // 0=Mon, 5=Sat, 6=Sun
+}
+
+const TEMPLATES: ScheduleTemplate[] = [
+  {
+    id: 'regular_weekday',
+    label: 'Regular (Mon-Fri)',
+    description: '09:00 - 17:30, Monday through Friday',
+    shifts: [
+      { dayOfWeek: 0, start: '09:00', end: '17:30' },
+      { dayOfWeek: 1, start: '09:00', end: '17:30' },
+      { dayOfWeek: 2, start: '09:00', end: '17:30' },
+      { dayOfWeek: 3, start: '09:00', end: '17:30' },
+      { dayOfWeek: 4, start: '09:00', end: '17:30' },
+    ],
+  },
+  {
+    id: 'regular_with_saturday',
+    label: 'Regular + Saturday',
+    description: '09:00 - 17:30 weekdays, 10:00 - 17:30 Saturday',
+    shifts: [
+      { dayOfWeek: 0, start: '09:00', end: '17:30' },
+      { dayOfWeek: 1, start: '09:00', end: '17:30' },
+      { dayOfWeek: 2, start: '09:00', end: '17:30' },
+      { dayOfWeek: 3, start: '09:00', end: '17:30' },
+      { dayOfWeek: 4, start: '09:00', end: '17:30' },
+      { dayOfWeek: 5, start: '10:00', end: '17:30' },
+    ],
+  },
+  {
+    id: 'saturday_only',
+    label: 'Saturday Only',
+    description: '10:00 - 17:30, Saturday',
+    shifts: [
+      { dayOfWeek: 5, start: '10:00', end: '17:30' },
+    ],
+  },
+];
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ScheduleManager({ initialProfile }: ScheduleManagerProps) {
-  const [currentMonth, setCurrentMonth] = useState(() => getFirstDayOfMonth(new Date()));
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [schedules, setSchedules] = useState<EmployeeSchedule[]>([]);
+  const [profiles, setProfiles] = useState<Array<{ id: string; display_name: string; initials: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Add shift form
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [formProfileId, setFormProfileId] = useState('');
   const [formDate, setFormDate] = useState('');
   const [formStart, setFormStart] = useState('09:00');
-  const [formEnd, setFormEnd] = useState('17:00');
+  const [formEnd, setFormEnd] = useState('17:30');
   const [formType, setFormType] = useState('regular');
-  const [formProfileId, setFormProfileId] = useState('');
-  const [profiles, setProfiles] = useState<Array<{ id: string; display_name: string }>>([]);
   const [saving, setSaving] = useState(false);
+
+  // Template apply modal
+  const [showTemplate, setShowTemplate] = useState(false);
+  const [templateId, setTemplateId] = useState(TEMPLATES[0].id);
+  const [templateProfiles, setTemplateProfiles] = useState<string[]>([]);
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
 
   const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
 
-  const calendarDays = useMemo(() => getCalendarDays(currentMonth), [currentMonth]);
+  const weekDates = useMemo(() =>
+    Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]
+  );
 
-  // Fetch schedules for the entire visible range (may span prev/next month padding)
+  // ─── Data loading ─────────────────────────────────────────────────────────
+
   const fetchSchedules = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const rangeStart = calendarDays[0];
-      const rangeEnd = calendarDays[calendarDays.length - 1];
-      const params = new URLSearchParams({
-        month_start: formatDate(rangeStart),
-        month_end: formatDate(rangeEnd),
-      });
+      const params = new URLSearchParams({ week: formatDate(weekStart) });
       if (!isManager) params.set('profile_id', initialProfile.id);
       const res = await fetch(`/api/schedules?${params}`);
       if (!res.ok) throw new Error('Failed to load schedules.');
@@ -86,20 +128,26 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
       setSchedules(body.schedules as EmployeeSchedule[]);
     } catch (err) { setError(err instanceof Error ? err.message : 'Load failed.'); }
     finally { setLoading(false); }
-  }, [calendarDays, isManager, initialProfile.id]);
+  }, [weekStart, isManager, initialProfile.id]);
 
   useEffect(() => { void fetchSchedules(); }, [fetchSchedules]);
 
   useEffect(() => {
     if (!isManager) return;
     fetch('/api/admin/users').then(r => r.json()).then((body) => {
-      const users = (body.users ?? []) as Array<{ id: string; display_name: string; is_active: boolean }>;
-      setProfiles(users.filter(u => u.is_active).map(u => ({ id: u.id, display_name: u.display_name })));
+      const users = (body.users ?? []) as Array<{ id: string; display_name: string; initials: string; is_active: boolean }>;
+      setProfiles(users.filter(u => u.is_active).map(u => ({ id: u.id, display_name: u.display_name, initials: u.initials || u.display_name.slice(0, 2).toUpperCase() })));
     }).catch(() => {});
   }, [isManager]);
 
-  const handleCreateSchedule = async () => {
-    if (!formDate || !formProfileId) return;
+  // ─── Actions ──────────────────────────────────────────────────────────────
+
+  const prevWeek = () => setWeekStart(addDays(weekStart, -7));
+  const nextWeek = () => setWeekStart(addDays(weekStart, 7));
+  const goToday = () => setWeekStart(getMonday(new Date()));
+
+  const handleCreateShift = async () => {
+    if (!formProfileId || !formDate) return;
     setSaving(true); setError(null);
     try {
       const res = await fetch('/api/schedules', {
@@ -114,128 +162,268 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
         }),
       });
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Failed.'); }
-      setShowForm(false);
+      setShowAddForm(false);
+      setNotice('Shift added.');
       await fetchSchedules();
     } catch (err) { setError(err instanceof Error ? err.message : 'Save failed.'); }
     finally { setSaving(false); }
   };
 
-  const prevMonth = () => {
-    const d = new Date(currentMonth);
-    d.setMonth(d.getMonth() - 1);
-    setCurrentMonth(d);
+  const handleDeleteShift = async (scheduleId: string) => {
+    if (!window.confirm('Delete this shift?')) return;
+    try {
+      const res = await fetch('/api/schedules', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedule_id: scheduleId }),
+      });
+      if (!res.ok) throw new Error('Delete failed.');
+      await fetchSchedules();
+    } catch (err) { setError(err instanceof Error ? err.message : 'Delete failed.'); }
   };
-  const nextMonth = () => {
-    const d = new Date(currentMonth);
-    d.setMonth(d.getMonth() + 1);
-    setCurrentMonth(d);
+
+  const handleApplyTemplate = async () => {
+    if (!templateProfiles.length) return;
+    setApplyingTemplate(true); setError(null);
+    const template = TEMPLATES.find(t => t.id === templateId);
+    if (!template) return;
+
+    try {
+      const promises: Promise<Response>[] = [];
+      for (const profileId of templateProfiles) {
+        for (const shift of template.shifts) {
+          const date = formatDate(addDays(weekStart, shift.dayOfWeek));
+          promises.push(
+            fetch('/api/schedules', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                profile_id: profileId,
+                schedule_date: date,
+                shift_start: shift.start,
+                shift_end: shift.end,
+                shift_type: 'regular',
+              }),
+            })
+          );
+        }
+      }
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok)).length;
+      setShowTemplate(false);
+      setTemplateProfiles([]);
+      setNotice(failed ? `Template applied with ${failed} conflicts (existing shifts skipped).` : 'Template applied successfully.');
+      await fetchSchedules();
+    } catch (err) { setError(err instanceof Error ? err.message : 'Template apply failed.'); }
+    finally { setApplyingTemplate(false); }
   };
-  const goToday = () => setCurrentMonth(getFirstDayOfMonth(new Date()));
+
+  // ─── Derived data ─────────────────────────────────────────────────────────
+
+  // Group schedules: { [date]: { [profileId]: EmployeeSchedule[] } }
+  const scheduleGrid = useMemo(() => {
+    const grid: Record<string, Record<string, EmployeeSchedule[]>> = {};
+    for (const date of weekDates) {
+      grid[formatDate(date)] = {};
+    }
+    for (const s of schedules) {
+      const key = s.schedule_date;
+      if (!grid[key]) grid[key] = {};
+      if (!grid[key][s.profile_id]) grid[key][s.profile_id] = [];
+      grid[key][s.profile_id].push(s);
+    }
+    return grid;
+  }, [schedules, weekDates]);
+
+  // Unique employees who have at least one shift this week
+  const scheduledEmployees = useMemo(() => {
+    const idSet = new Set<string>();
+    for (const s of schedules) idSet.add(s.profile_id);
+    // If manager, also show all active employees
+    if (isManager) {
+      for (const p of profiles) idSet.add(p.id);
+    }
+    const list = Array.from(idSet).map(id => {
+      const profile = profiles.find(p => p.id === id);
+      const fromSchedule = schedules.find(s => s.profile_id === id);
+      return {
+        id,
+        display_name: profile?.display_name ?? fromSchedule?.profiles?.display_name ?? 'Unknown',
+        initials: profile?.initials ?? fromSchedule?.profiles?.initials ?? '??',
+      };
+    });
+    return list.sort((a, b) => a.display_name.localeCompare(b.display_name));
+  }, [schedules, profiles, isManager]);
+
+  // Count per day
+  const dailyCounts = useMemo(() => {
+    return weekDates.map(date => {
+      const dateStr = formatDate(date);
+      const uniqueProfiles = new Set<string>();
+      for (const s of schedules) {
+        if (s.schedule_date === dateStr) uniqueProfiles.add(s.profile_id);
+      }
+      return uniqueProfiles.size;
+    });
+  }, [schedules, weekDates]);
 
   const todayStr = formatDate(new Date());
 
-  // Group schedules by date for quick lookup
-  const schedulesByDate = useMemo(() => {
-    const map: Record<string, EmployeeSchedule[]> = {};
-    for (const s of schedules) {
-      const key = s.schedule_date;
-      if (!map[key]) map[key] = [];
-      map[key].push(s);
-    }
-    return map;
-  }, [schedules]);
-
-  const monthLabel = currentMonth.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-5">
       {error && <div className={ui.error}><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
+      {notice && <div className={ui.success} onClick={() => setNotice(null)}>{notice}</div>}
 
-      {/* Month navigation */}
-      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-2">
+      {/* Week navigation + actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-3">
           <Calendar className="h-5 w-5 text-[#223f7a]" />
-          <h3 className="text-sm font-black text-slate-800">{monthLabel}</h3>
+          <div>
+            <h3 className="text-sm font-black text-slate-900">
+              {formatShortDate(weekStart)} – {formatShortDate(addDays(weekStart, 6))}
+            </h3>
+            <p className="text-xs font-semibold text-slate-400">Weekly Schedule</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={prevMonth} className={ui.btnSecondary + ' px-2 py-2'}><ChevronLeft className="h-4 w-4" /></button>
-          <button type="button" onClick={goToday} className={ui.btnSecondary + ' text-xs'}>Today</button>
-          <button type="button" onClick={nextMonth} className={ui.btnSecondary + ' px-2 py-2'}><ChevronRight className="h-4 w-4" /></button>
-          {isManager && <button type="button" onClick={() => setShowForm(true)} className={ui.btnPrimary + ' text-xs'}><Plus className="h-3.5 w-3.5" /> Add Shift</button>}
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={prevWeek} className={ui.btnSecondary + ' !px-2.5 !py-2'}><ChevronLeft className="h-4 w-4" /></button>
+          <button type="button" onClick={goToday} className={ui.btnSecondary + ' !text-xs'}>This Week</button>
+          <button type="button" onClick={nextWeek} className={ui.btnSecondary + ' !px-2.5 !py-2'}><ChevronRight className="h-4 w-4" /></button>
+          {isManager && (
+            <>
+              <button type="button" onClick={() => setShowTemplate(true)} className={ui.btnSecondary + ' !text-xs'}>
+                <Copy className="h-3.5 w-3.5" /> Apply Template
+              </button>
+              <button type="button" onClick={() => { setShowAddForm(true); setFormDate(formatDate(weekStart)); }} className={ui.btnPrimary + ' !text-xs'}>
+                <Plus className="h-3.5 w-3.5" /> Add Shift
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Monthly calendar grid */}
+      {/* Weekly grid */}
       {loading ? (
         <div className="flex items-center justify-center py-12"><RefreshCw className="h-5 w-5 animate-spin text-slate-400" /></div>
       ) : (
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          {/* Weekday headers */}
-          <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
-            {WEEKDAY_HEADERS.map((day) => (
-              <div key={day} className="px-2 py-2 text-center text-[10px] font-black uppercase text-slate-400">
-                {day}
-              </div>
-            ))}
-          </div>
-
-          {/* Calendar days */}
-          <div className="grid grid-cols-7">
-            {calendarDays.map((date) => {
+          {/* Day headers */}
+          <div className="grid grid-cols-[180px_repeat(7,1fr)] border-b border-slate-100 bg-slate-50">
+            <div className="flex items-center gap-2 px-4 py-3">
+              <Users className="h-4 w-4 text-slate-400" />
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Employee</span>
+            </div>
+            {weekDates.map((date, i) => {
               const dateStr = formatDate(date);
               const isToday = dateStr === todayStr;
-              const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
-              const daySchedules = schedulesByDate[dateStr] ?? [];
-
+              const isSat = i === 5;
+              const isSun = i === 6;
               return (
                 <div
                   key={dateStr}
-                  className={`min-h-[90px] border-b border-r border-slate-100 p-1.5 transition-colors ${
-                    isToday
-                      ? 'bg-[#f0f4ff] ring-1 ring-inset ring-[#223f7a]/20'
-                      : isCurrentMonth
-                        ? 'bg-white'
-                        : 'bg-slate-50/50'
-                  }`}
+                  className={`px-2 py-3 text-center border-l border-slate-100 ${isToday ? 'bg-[#eef3fb]' : ''}`}
                 >
-                  <p className={`text-xs font-bold ${
-                    isToday
-                      ? 'text-[#223f7a]'
-                      : isCurrentMonth
-                        ? 'text-slate-700'
-                        : 'text-slate-300'
-                  }`}>
+                  <p className={`text-[10px] font-black uppercase tracking-wider ${isToday ? 'text-[#223f7a]' : isSat || isSun ? 'text-violet-600' : 'text-slate-400'}`}>
+                    {WEEKDAYS[i]}
+                  </p>
+                  <p className={`text-sm font-black ${isToday ? 'text-[#223f7a]' : 'text-slate-700'}`}>
                     {date.getDate()}
                   </p>
-                  <div className="mt-1 space-y-0.5 overflow-y-auto max-h-[60px]">
-                    {daySchedules.map((s) => (
-                      <div
-                        key={s.id}
-                        className="rounded px-1.5 py-0.5 bg-gradient-to-r from-[#223f7a]/10 to-[#223f7a]/5 border border-[#223f7a]/10"
-                      >
-                        {isManager && (
-                          <p className="text-[9px] font-black text-[#223f7a] truncate">
-                            {s.profiles?.display_name?.split(' ')[0] ?? '—'}
-                          </p>
-                        )}
-                        <p className="text-[9px] font-semibold text-slate-600">
-                          {s.shift_start?.slice(0, 5)} – {s.shift_end?.slice(0, 5)}
-                        </p>
-                        <span className="text-[8px] font-bold text-slate-400">{SHIFT_TYPE_LABELS[s.shift_type]}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="mt-1 text-[10px] font-bold text-slate-400">
+                    {dailyCounts[i]} staff
+                  </p>
                 </div>
               );
             })}
           </div>
+
+          {/* Employee rows */}
+          <div className="divide-y divide-slate-100">
+            {scheduledEmployees.map((emp) => (
+              <div key={emp.id} className="grid grid-cols-[180px_repeat(7,1fr)] min-h-[60px]">
+                {/* Employee name */}
+                <div className="flex items-center gap-3 px-4 py-3 border-r border-slate-100">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#223f7a] text-[10px] font-black text-white">
+                    {emp.initials}
+                  </div>
+                  <p className="text-xs font-black text-slate-800 truncate">{emp.display_name}</p>
+                </div>
+
+                {/* Day cells */}
+                {weekDates.map((date, i) => {
+                  const dateStr = formatDate(date);
+                  const isToday = dateStr === todayStr;
+                  const shifts = scheduleGrid[dateStr]?.[emp.id] ?? [];
+                  return (
+                    <div
+                      key={dateStr}
+                      className={`relative px-1.5 py-2 border-l border-slate-100 ${isToday ? 'bg-[#f8faff]' : ''}`}
+                    >
+                      {shifts.length > 0 ? (
+                        <div className="space-y-1">
+                          {shifts.map((s) => (
+                            <div
+                              key={s.id}
+                              className="group relative rounded-lg bg-gradient-to-r from-[#223f7a]/10 to-[#223f7a]/5 border border-[#223f7a]/15 px-2 py-1.5"
+                            >
+                              <p className="text-[11px] font-black text-[#223f7a]">
+                                {s.shift_start?.slice(0, 5)} – {s.shift_end?.slice(0, 5)}
+                              </p>
+                              <p className="text-[9px] font-bold text-slate-500">{SHIFT_TYPE_LABELS[s.shift_type]}</p>
+                              {isManager && (
+                                <button
+                                  onClick={() => void handleDeleteShift(s.id)}
+                                  className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white group-hover:flex"
+                                  title="Delete shift"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex h-full items-center justify-center">
+                          {isManager ? (
+                            <button
+                              onClick={() => {
+                                setFormProfileId(emp.id);
+                                setFormDate(dateStr);
+                                setFormStart('09:00');
+                                setFormEnd('17:30');
+                                setShowAddForm(true);
+                              }}
+                              className="rounded-lg border border-dashed border-slate-200 p-2 text-slate-300 transition hover:border-[#223f7a] hover:text-[#223f7a]"
+                              title="Add shift"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-300">Off</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
+            {!scheduledEmployees.length && (
+              <div className="p-8 text-center text-sm font-bold text-slate-400">
+                No employees scheduled this week. Use &quot;Apply Template&quot; to set up the week.
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Add Shift Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+      {/* ─── Add Shift Modal ────────────────────────────────────────────── */}
+      {showAddForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setShowAddForm(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={e => e.stopPropagation()}>
             <h3 className="text-lg font-black text-slate-900 mb-4">Add Shift</h3>
             <div className="space-y-3">
               <div>
@@ -261,8 +449,98 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
               </div>
             </div>
             <div className="mt-5 flex gap-3">
-              <button type="button" onClick={() => void handleCreateSchedule()} disabled={saving || !formProfileId || !formDate} className={ui.btnPrimary}>{saving ? 'Saving...' : 'Save'}</button>
-              <button type="button" onClick={() => setShowForm(false)} className={ui.btnSecondary}>Cancel</button>
+              <button type="button" onClick={() => void handleCreateShift()} disabled={saving || !formProfileId || !formDate} className={ui.btnPrimary}>{saving ? 'Saving...' : 'Save Shift'}</button>
+              <button type="button" onClick={() => setShowAddForm(false)} className={ui.btnSecondary}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Apply Template Modal ───────────────────────────────────────── */}
+      {showTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setShowTemplate(false)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={e => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-slate-900">Apply Schedule Template</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Select a template and employees to schedule for the week of{' '}
+              <span className="font-bold">{formatShortDate(weekStart)} – {formatShortDate(addDays(weekStart, 6))}</span>.
+            </p>
+
+            {/* Template selection */}
+            <div className="mt-5 space-y-2">
+              <label className={ui.label}>Template</label>
+              <div className="mt-2 space-y-2">
+                {TEMPLATES.map((t) => (
+                  <label
+                    key={t.id}
+                    className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition ${templateId === t.id ? 'border-[#223f7a] bg-[#f0f4ff]' : 'border-slate-200 hover:border-slate-300'}`}
+                  >
+                    <input
+                      type="radio"
+                      name="template"
+                      value={t.id}
+                      checked={templateId === t.id}
+                      onChange={() => setTemplateId(t.id)}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <p className="text-sm font-black text-slate-900">{t.label}</p>
+                      <p className="text-xs text-slate-500">{t.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Employee selection */}
+            <div className="mt-5">
+              <label className={ui.label}>Assign To</label>
+              <div className="mt-2 grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto rounded-xl border border-slate-200 p-3">
+                {profiles.map((p) => {
+                  const selected = templateProfiles.includes(p.id);
+                  return (
+                    <label
+                      key={p.id}
+                      className={`flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 transition ${selected ? 'bg-[#223f7a] text-white' : 'hover:bg-slate-50'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => setTemplateProfiles(prev =>
+                          selected ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                        )}
+                        className="sr-only"
+                      />
+                      <div className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[8px] font-black ${selected ? 'bg-white/20 text-white' : 'bg-[#223f7a] text-white'}`}>
+                        {p.initials}
+                      </div>
+                      <span className={`text-xs font-bold truncate ${selected ? 'text-white' : 'text-slate-700'}`}>
+                        {p.display_name}
+                      </span>
+                      {selected && <Check className="ml-auto h-3.5 w-3.5 shrink-0" />}
+                    </label>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setTemplateProfiles(profiles.map(p => p.id))}
+                className="mt-2 text-xs font-bold text-[#223f7a] hover:underline"
+              >
+                Select all
+              </button>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => void handleApplyTemplate()}
+                disabled={applyingTemplate || !templateProfiles.length}
+                className={ui.btnPrimary}
+              >
+                {applyingTemplate ? 'Applying...' : `Apply to ${templateProfiles.length} employee${templateProfiles.length !== 1 ? 's' : ''}`}
+              </button>
+              <button type="button" onClick={() => setShowTemplate(false)} className={ui.btnSecondary}>Cancel</button>
             </div>
           </div>
         </div>

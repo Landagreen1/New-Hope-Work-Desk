@@ -16,13 +16,14 @@ import PTORequests from './PTORequests';
 import ScheduleManager from './ScheduleManager';
 import StaffingCoverage from './StaffingCoverage';
 import TimeClock from './TimeClock';
+import WorkforceAdmin from './WorkforceAdmin';
 
 interface TimeAttendanceWorkspaceProps {
   initialProfile: ProfileLite;
   embedded?: boolean;
 }
 
-type TATab = 'clock' | 'schedule' | 'pto' | 'payroll' | 'staffing';
+type TATab = 'clock' | 'schedule' | 'pto' | 'payroll' | 'staffing' | 'workforce';
 
 interface SubTab {
   id: TATab;
@@ -30,6 +31,7 @@ interface SubTab {
   shortLabel: string;
   icon: React.ComponentType<{ className?: string }>;
   managerOnly?: boolean;
+  superAdminOnly?: boolean;
 }
 
 const TABS: SubTab[] = [
@@ -38,6 +40,7 @@ const TABS: SubTab[] = [
   { id: 'pto', label: 'Time Off', shortLabel: 'PTO', icon: PalmtreeIcon },
   { id: 'payroll', label: 'Payroll', shortLabel: 'Pay', icon: DollarSign },
   { id: 'staffing', label: 'Coverage', shortLabel: 'Staff', icon: Users, managerOnly: true },
+  { id: 'workforce', label: 'Workforce', shortLabel: 'Admin', icon: BarChart3, superAdminOnly: true },
 ];
 
 function LoadingFallback() {
@@ -51,8 +54,13 @@ function LoadingFallback() {
 export default function TimeAttendanceWorkspace({ initialProfile, embedded = false }: TimeAttendanceWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<TATab>('clock');
   const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const isSuperAdmin = initialProfile.role === 'super_admin';
 
-  const visibleTabs = TABS.filter((t) => !t.managerOnly || isManager);
+  const visibleTabs = TABS.filter((t) => {
+    if (t.superAdminOnly) return isSuperAdmin;
+    if (t.managerOnly) return isManager;
+    return true;
+  });
 
   return (
     <section className={embedded ? 'text-slate-950' : ''}>
@@ -89,6 +97,7 @@ export default function TimeAttendanceWorkspace({ initialProfile, embedded = fal
         {activeTab === 'pto' && <PTORequests initialProfile={initialProfile} />}
         {activeTab === 'payroll' && <PayrollDashboard initialProfile={initialProfile} />}
         {activeTab === 'staffing' && isManager && <StaffingCoverage />}
+        {activeTab === 'workforce' && isSuperAdmin && <WorkforceAdmin initialProfile={initialProfile} />}
       </Suspense>
     </section>
   );
