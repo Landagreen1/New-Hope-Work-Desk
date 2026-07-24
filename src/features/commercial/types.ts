@@ -11,7 +11,7 @@ export type BoardColumn =
   | 'archive';
 
 export type RiskLevel = 'low' | 'medium' | 'high';
-export type CardStatus = 'in_progress' | 'done' | 'blocked' | 'waiting';
+export type CardStatus = 'in_progress' | 'price_sent' | 'done' | 'blocked' | 'waiting';
 export type CoverageType =
   | 'gl'
   | 'wc'
@@ -167,6 +167,7 @@ export const RISK_STYLES: Record<RiskLevel, { bg: string; text: string; label: s
 
 export const STATUS_STYLES: Record<CardStatus, { bg: string; text: string; label: string }> = {
   in_progress: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'In Progress' },
+  price_sent: { bg: 'bg-violet-100', text: 'text-violet-800', label: 'Price Sent' },
   done: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'Done' },
   blocked: { bg: 'bg-rose-100', text: 'text-rose-800', label: 'Blocked' },
   waiting: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Waiting' },

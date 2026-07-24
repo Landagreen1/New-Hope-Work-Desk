@@ -531,21 +531,6 @@ export default function CommercialCardDetail({
 
           {/* Sidebar - Custom Fields */}
           <aside className="space-y-4">
-            {/* Risk Level */}
-            <div>
-              <label className={ui.label}>Risk</label>
-              <select
-                value={quote.risk_level}
-                onChange={(e) => void updateField('risk_level', e.target.value)}
-                className={ui.select + ' mt-1 text-xs'}
-                disabled={!canEditFields}
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
-
             {/* Status */}
             <div>
               <label className={ui.label}>Status</label>
@@ -556,6 +541,7 @@ export default function CommercialCardDetail({
                 disabled={!canEditFields}
               >
                 <option value="in_progress">In Progress</option>
+                <option value="price_sent">Price Sent</option>
                 <option value="done">Done</option>
                 <option value="blocked">Blocked</option>
                 <option value="waiting">Waiting</option>

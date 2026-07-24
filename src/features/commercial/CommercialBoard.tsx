@@ -169,8 +169,8 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
   const handleCreateCard = async (data: {
     business_name: string;
     description?: string;
-    risk_level?: string;
     coverage_type?: string;
+    card_status?: string;
     board_column: BoardColumn;
   }) => {
     try {
