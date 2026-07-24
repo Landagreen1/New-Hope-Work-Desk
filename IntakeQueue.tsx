@@ -2396,7 +2396,6 @@ function ReportDrillDownTable({
               <th className="px-4 py-3">Channel</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Created</th>
-              <th className="px-4 py-3">Time to Accept</th>
               <th className="px-4 py-3">Time to Price</th>
               <th className="px-4 py-3">Total Cycle</th>
               <th className="px-4 py-3">Finalized</th>
@@ -2428,7 +2427,6 @@ function ReportDrillDownTable({
                   </span>
                 </td>
                 <td className="px-4 py-3 text-xs text-slate-600">{formatDateTime(row.createdAt)}</td>
-                <td className="px-4 py-3 text-xs font-bold">{formatDuration(row.timeToAccept)}</td>
                 <td className="px-4 py-3 text-xs font-bold">{formatDuration(row.timeToPrice)}</td>
                 <td className="px-4 py-3 text-xs font-bold">{formatDuration(row.totalCycle)}</td>
                 <td className="px-4 py-3 text-xs text-slate-600">{row.finalizedAt ? formatDateTime(row.finalizedAt) : "—"}</td>
@@ -2444,7 +2442,7 @@ function ReportDrillDownTable({
               </tr>
             ))}
             {!filtered.length && (
-              <tr><td colSpan={14} className="px-4 py-10 text-center text-sm font-bold text-slate-400">No quotes match this filter for the selected date range.</td></tr>
+              <tr><td colSpan={13} className="px-4 py-10 text-center text-sm font-bold text-slate-400">No quotes match this filter for the selected date range.</td></tr>
             )}
           </tbody>
         </table>
