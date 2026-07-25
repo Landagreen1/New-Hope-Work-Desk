@@ -4,7 +4,7 @@ export type ClockStatus = 'available' | 'lunch' | 'unavailable';
 export type BreakType = 'lunch' | 'short' | 'personal';
 export type ShiftType = 'regular' | 'overtime' | 'half_day' | 'training' | 'on_call';
 export type ScheduleStatus = 'scheduled' | 'published' | 'completed' | 'missed' | 'cancelled';
-export type PTOType = 'vacation' | 'sick' | 'personal' | 'bereavement' | 'unpaid';
+export type PTOType = 'vacation' | 'birthday';
 export type PTOStatus = 'pending' | 'approved' | 'denied' | 'cancelled';
 export type PaymentTemplate = 'monthly' | 'biweekly' | 'semi_monthly';
 export type PayType = 'hourly' | 'salary';
@@ -184,10 +184,7 @@ export const CLOCK_STATUS_STYLES: Record<ClockStatus, { bg: string; text: string
 
 export const PTO_TYPE_LABELS: Record<PTOType, string> = {
   vacation: 'Vacation',
-  sick: 'Sick Leave',
-  personal: 'Personal Day',
-  bereavement: 'Bereavement',
-  unpaid: 'Unpaid Leave',
+  birthday: 'Birthday Day',
 };
 
 export const PTO_STATUS_STYLES: Record<PTOStatus, { bg: string; text: string; label: string }> = {

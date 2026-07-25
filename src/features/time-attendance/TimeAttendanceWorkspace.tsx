@@ -25,22 +25,21 @@ interface TimeAttendanceWorkspaceProps {
 
 type TATab = 'clock' | 'schedule' | 'pto' | 'payroll' | 'staffing' | 'workforce';
 
-interface SubTab {
+interface NavItem {
   id: TATab;
   label: string;
-  shortLabel: string;
   icon: React.ComponentType<{ className?: string }>;
   managerOnly?: boolean;
   superAdminOnly?: boolean;
 }
 
-const TABS: SubTab[] = [
-  { id: 'clock', label: 'Time Clock', shortLabel: 'Clock', icon: Clock },
-  { id: 'schedule', label: 'Schedule', shortLabel: 'Schedule', icon: Calendar },
-  { id: 'pto', label: 'Time Off', shortLabel: 'PTO', icon: PalmtreeIcon },
-  { id: 'payroll', label: 'Payroll', shortLabel: 'Pay', icon: DollarSign },
-  { id: 'staffing', label: 'Coverage', shortLabel: 'Staff', icon: Users, managerOnly: true },
-  { id: 'workforce', label: 'Workforce', shortLabel: 'Admin', icon: BarChart3, superAdminOnly: true },
+const NAV_ITEMS: NavItem[] = [
+  { id: 'clock', label: 'Time Clock', icon: Clock },
+  { id: 'schedule', label: 'Schedule', icon: Calendar },
+  { id: 'pto', label: 'Time Off', icon: PalmtreeIcon },
+  { id: 'payroll', label: 'Payroll', icon: DollarSign },
+  { id: 'staffing', label: 'Coverage', icon: Users, managerOnly: true },
+  { id: 'workforce', label: 'Workforce', icon: BarChart3, superAdminOnly: true },
 ];
 
 function LoadingFallback() {
@@ -56,49 +55,113 @@ export default function TimeAttendanceWorkspace({ initialProfile, embedded = fal
   const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
   const isSuperAdmin = initialProfile.role === 'super_admin';
 
-  const visibleTabs = TABS.filter((t) => {
-    if (t.superAdminOnly) return isSuperAdmin;
-    if (t.managerOnly) return isManager;
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (item.superAdminOnly) return isSuperAdmin;
+    if (item.managerOnly) return isManager;
     return true;
   });
 
+  const activeItem = visibleItems.find((item) => item.id === activeTab) ?? visibleItems[0];
+
   return (
     <section className={embedded ? 'text-slate-950' : ''}>
-      {/* Sub-navigation */}
-      <div className="mb-5 flex items-center gap-1 overflow-x-auto rounded-2xl border border-[#d4dff0] bg-gradient-to-b from-white to-[#f8fafd] p-1.5 shadow-sm">
-        {visibleTabs.map((tab) => {
-          const Icon = tab.icon;
-          const selected = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`group flex min-w-fit items-center gap-2 rounded-xl px-3.5 py-2.5 text-left transition-all duration-200 ${
-                selected
-                  ? 'bg-gradient-to-b from-[#223f7a] to-[#1a3265] text-white shadow-md shadow-[#223f7a]/20'
-                  : 'text-slate-500 hover:bg-white hover:text-[#223f7a] hover:shadow-sm'
-              }`}
-            >
-              <Icon className={`h-4 w-4 ${selected ? 'text-white' : 'text-slate-400 group-hover:text-[#223f7a]'}`} />
-              <span className="text-xs font-black sm:text-sm">
-                <span className="sm:hidden">{tab.shortLabel}</span>
-                <span className="hidden sm:inline">{tab.label}</span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
+        {/* Left sidebar navigation */}
+        <aside className="hidden xl:block">
+          <div className="sticky top-5 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                Time & Attendance
+              </p>
+              <h3 className="mt-1 text-lg font-black text-slate-900">
+                {initialProfile.display_name?.split(' ')[0] ?? 'Dashboard'}
+              </h3>
+            </div>
+            <nav className="space-y-1 p-3">
+              {visibleItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveTab(item.id)}
+                    className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-black transition ${
+                      isActive
+                        ? 'bg-[#223f7a] text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <span
+                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${
+                        isActive ? 'bg-white/15' : 'bg-slate-100 text-[#223f7a]'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </aside>
 
-      {/* Tab content */}
-      <Suspense fallback={<LoadingFallback />}>
-        {activeTab === 'clock' && <TimeClock initialProfile={initialProfile} />}
-        {activeTab === 'schedule' && <ScheduleManager initialProfile={initialProfile} />}
-        {activeTab === 'pto' && <PTORequests initialProfile={initialProfile} />}
-        {activeTab === 'payroll' && <PayrollDashboard initialProfile={initialProfile} />}
-        {activeTab === 'staffing' && isManager && <StaffingCoverage />}
-        {activeTab === 'workforce' && isSuperAdmin && <WorkforceAdmin initialProfile={initialProfile} />}
-      </Suspense>
+        {/* Mobile: horizontal tab bar (visible on small screens only) */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm xl:hidden">
+          <div className="flex gap-1 overflow-x-auto">
+            {visibleItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveTab(item.id)}
+                  className={`flex min-w-fit items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition ${
+                    isActive
+                      ? 'bg-[#223f7a] text-white shadow-sm'
+                      : 'text-slate-500 hover:bg-slate-100 hover:text-[#223f7a]'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Main content area */}
+        <div className="min-w-0">
+          {/* Active section header */}
+          <div className="mb-5 rounded-[28px] border border-[#c9d5e9] bg-gradient-to-br from-white to-[#f3f6fb] p-5 shadow-sm sm:p-6">
+            <div className="flex items-center gap-4">
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#223f7a] text-white shadow-sm">
+                <activeItem.icon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#4d6aa8]">
+                  Time & Attendance
+                </p>
+                <h3 className="mt-1 text-2xl font-black tracking-tight text-[#17305f]">
+                  {activeItem.label}
+                </h3>
+              </div>
+            </div>
+          </div>
+
+          {/* Tab content */}
+          <Suspense fallback={<LoadingFallback />}>
+            {activeTab === 'clock' && <TimeClock initialProfile={initialProfile} />}
+            {activeTab === 'schedule' && <ScheduleManager initialProfile={initialProfile} />}
+            {activeTab === 'pto' && <PTORequests initialProfile={initialProfile} />}
+            {activeTab === 'payroll' && <PayrollDashboard initialProfile={initialProfile} />}
+            {activeTab === 'staffing' && isManager && <StaffingCoverage />}
+            {activeTab === 'workforce' && isSuperAdmin && <WorkforceAdmin initialProfile={initialProfile} />}
+          </Suspense>
+        </div>
+      </div>
     </section>
   );
 }
