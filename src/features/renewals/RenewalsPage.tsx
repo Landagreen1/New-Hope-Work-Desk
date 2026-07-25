@@ -34,6 +34,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getSupabase } from '../nhwd-shared/client';
+import DateTimePicker from '../nhwd-shared/DateTimePicker';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { renewalStatusTone, statusLabel, ui } from '../nhwd-shared/ui';
@@ -770,7 +771,7 @@ function RenewalDrawer({
             <div className="grid gap-5 lg:grid-cols-2">
               <div>
                 <p className={ui.sectionTitle}>Next follow-up</p>
-                <input type="datetime-local" className={ui.input} disabled={busy || !activeRecord} value={nextFollowUp} onChange={(event) => setNextFollowUp(event.target.value)} />
+                <DateTimePicker value={nextFollowUp} onChange={setNextFollowUp} disabled={busy || !activeRecord} />
                 <button type="button" className={`${ui.btnSecondary} mt-3`} disabled={busy || !activeRecord} onClick={() => void saveFollowUp()}><CalendarClock className="h-4 w-4" />Schedule and Monitor</button>
               </div>
               <div>

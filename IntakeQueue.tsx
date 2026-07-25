@@ -77,6 +77,7 @@ import type {
 
 import IntakeDataDisplay, { type IntakeDataDetails } from "@/features/cs-intake/IntakeDataDisplay";
 import DatePicker from "@/features/nhwd-shared/DatePicker";
+import DateTimePicker from "@/features/nhwd-shared/DateTimePicker";
 
 const workTypeLabels: Record<WorkType, string> = {
   new_quote: "New Quote",
@@ -1801,13 +1802,9 @@ function StartRescueTimerForm({
         agent&apos;s single 3-minute response period expires.
       </div>
       <Field label="Time quote came in">
-        <input
-          name="receivedAt"
-          type="datetime-local"
-          required
+        <DateTimePicker
           value={receivedLocal}
-          onChange={(event) => setReceivedLocal(event.target.value)}
-          className="field"
+          onChange={(value) => setReceivedLocal(value)}
         />
       </Field>
       <Field label="Customer name">

@@ -55,6 +55,7 @@ import { createClient } from "@/lib/supabase/client";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import DatePicker from "@/features/nhwd-shared/DatePicker";
+import DateTimePicker from "@/features/nhwd-shared/DateTimePicker";
 import type {
   Agent,
   CustomerServiceUser,
@@ -1910,13 +1911,9 @@ function StartRescueTimerForm({
         agent&apos;s single 3-minute response period expires.
       </div>
       <Field label="Time quote came in">
-        <input
-          name="receivedAt"
-          type="datetime-local"
-          required
+        <DateTimePicker
           value={receivedLocal}
-          onChange={(event) => setReceivedLocal(event.target.value)}
-          className="field"
+          onChange={(value) => setReceivedLocal(value)}
         />
       </Field>
       <Field label="Customer name">

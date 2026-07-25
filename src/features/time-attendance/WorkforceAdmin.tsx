@@ -4,6 +4,7 @@ import { AlertCircle, Check, Clock, DollarSign, Edit3, PalmtreeIcon, RefreshCw, 
 import { useCallback, useEffect, useState } from 'react';
 
 import type { ProfileLite } from '../nhwd-shared/types';
+import DateTimePicker from '../nhwd-shared/DateTimePicker';
 import { ui } from '../nhwd-shared/ui';
 import { PTO_STATUS_STYLES, PTO_TYPE_LABELS } from './types';
 
@@ -381,14 +382,14 @@ function ClockEditSection() {
                 <td className={`${ui.td} font-black`}>{entry.profiles?.display_name ?? '—'}</td>
                 <td className={ui.td}>
                   {editId === entry.id ? (
-                    <input type="datetime-local" value={editClockIn} onChange={e => setEditClockIn(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+                    <DateTimePicker value={editClockIn} onChange={setEditClockIn} />
                   ) : (
                     <span className="text-xs">{formatDT(entry.clock_in)}</span>
                   )}
                 </td>
                 <td className={ui.td}>
                   {editId === entry.id ? (
-                    <input type="datetime-local" value={editClockOut} onChange={e => setEditClockOut(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+                    <DateTimePicker value={editClockOut} onChange={setEditClockOut} />
                   ) : (
                     <span className="text-xs">{formatDT(entry.clock_out)}</span>
                   )}
