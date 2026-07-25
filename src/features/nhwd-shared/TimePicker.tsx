@@ -6,40 +6,91 @@ import { useEffect, useRef, useState } from 'react';
 interface TimePickerProps {
   value: string; // HH:mm (24-hour)
   onChange: (value: string) => void;
-  label?: string;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
 }
 
-function to12Hour(h24: number): { hour: number; period: 'AM' | 'PM' } {
-  if (h24 === 0) return { hour: 12, period: 'AM' };
-  if (h24 < 12) return { hour: h24, period: 'AM' };
-  if (h24 === 12) return { hour: 12, period: 'PM' };
-  return { hour: h24 - 12, period: 'PM' };
+function to12(h24: number): { hour: number; minute: number; period: 'AM' | 'PM'; display: string } {
+  const period: 'AM' | 'PM' = h24 >= 12 ? 'PM' : 'AM';
+  const hour = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+  return { hour, minute: 0, period, display: '' };
 }
 
-function to24Hour(hour: number, period: 'AM' | 'PM'): number {
-  if (period === 'AM') return hour === 12 ? 0 : hour;
-  return hour === 12 ? 12 : hour + 12;
+function formatDisplay(value: string): string {
+  if (!value) return '';
+  const [hStr, mStr] = value.split(':');
+  const h24 = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10) || 0;
+  if (isNaN(h24)) return '';
+  const period = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
 }
 
-function parseTime(value: string): { hour: number; minute: number; period: 'AM' | 'PM' } {
-  const [hStr, mStr] = (value || '09:00').split(':');
-  const h24 = parseInt(hStr, 10) || 0;
-  const minute = parseInt(mStr, 10) || 0;
-  const { hour, period } = to12Hour(h24);
-  return { hour, minute, period };
+// Generate preset times every 30 minutes from 6:00 AM to 10:00 PM
+function generatePresets(): Array<{ label: string; value: string }> {
+  const presets: Array<{ label: string; value: string }> = [];
+  for (let h = 6; h <= 22; h++) {
+    for (const m of [0, 30]) {
+      if (h === 22 && m === 30) break;
+      const h24 = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      const period = h >= 12 ? 'PM' : 'AM';
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      const label = `${h12}:${String(m).padStart(2, '0')} ${period}`;
+      presets.push({ label, value: h24 });
+    }
+  }
+  return presets;
 }
 
-const HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+const PRESETS = generatePresets();
+
+function parseManualInput(input: string): string | null {
+  const trimmed = input.trim().toUpperCase();
+  if (!trimmed) return null;
+
+  // Try HH:MM AM/PM format
+  const ampmMatch = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
+  if (ampmMatch) {
+    let h = parseInt(ampmMatch[1], 10);
+    const m = parseInt(ampmMatch[2], 10);
+    const period = ampmMatch[3];
+    if (h < 1 || h > 12 || m < 0 || m > 59) return null;
+    if (period === 'AM' && h === 12) h = 0;
+    else if (period === 'PM' && h !== 12) h += 12;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  // Try HH:MM (24-hour) format
+  const h24Match = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+  if (h24Match) {
+    const h = parseInt(h24Match[1], 10);
+    const m = parseInt(h24Match[2], 10);
+    if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  // Try just hour with AM/PM: "9AM", "2PM"
+  const shortMatch = trimmed.match(/^(\d{1,2})\s*(AM|PM)$/);
+  if (shortMatch) {
+    let h = parseInt(shortMatch[1], 10);
+    const period = shortMatch[2];
+    if (h < 1 || h > 12) return null;
+    if (period === 'AM' && h === 12) h = 0;
+    else if (period === 'PM' && h !== 12) h += 12;
+    return `${String(h).padStart(2, '0')}:00`;
+  }
+
+  return null;
+}
 
 export default function TimePicker({ value, onChange, placeholder = 'Select time', disabled = false, className = '' }: TimePickerProps) {
   const [open, setOpen] = useState(false);
+  const [manualInput, setManualInput] = useState('');
+  const [manualError, setManualError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const { hour, minute, period } = parseTime(value);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Close on click outside
   useEffect(() => {
@@ -51,25 +102,39 @@ export default function TimePicker({ value, onChange, placeholder = 'Select time
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const emit = (h: number, m: number, p: 'AM' | 'PM') => {
-    const h24 = to24Hour(h, p);
-    onChange(`${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+  // Scroll to selected preset when opening
+  useEffect(() => {
+    if (open && listRef.current && value) {
+      const selected = listRef.current.querySelector('[data-selected="true"]');
+      if (selected) selected.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }, [open, value]);
+
+  const handleManualSubmit = () => {
+    const parsed = parseManualInput(manualInput);
+    if (parsed) {
+      onChange(parsed);
+      setManualInput('');
+      setManualError(false);
+      setOpen(false);
+    } else {
+      setManualError(true);
+    }
   };
 
-  const handleHour = (h: number) => emit(h, minute, period);
-  const handleMinute = (m: number) => emit(hour, m, period);
-  const handlePeriod = (p: 'AM' | 'PM') => emit(hour, minute, p);
+  const handlePresetClick = (preset: string) => {
+    onChange(preset);
+    setOpen(false);
+  };
 
-  const displayValue = value
-    ? `${hour}:${String(minute).padStart(2, '0')} ${period}`
-    : '';
+  const displayValue = formatDisplay(value);
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       {/* Trigger */}
       <button
         type="button"
-        onClick={() => !disabled && setOpen(!open)}
+        onClick={() => { if (!disabled) { setOpen(!open); setManualError(false); setManualInput(''); } }}
         disabled={disabled}
         className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left text-sm font-semibold transition outline-none ${
           open
@@ -85,72 +150,52 @@ export default function TimePicker({ value, onChange, placeholder = 'Select time
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-[280px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl animate-in fade-in-0 zoom-in-95">
-          {/* AM/PM Toggle */}
-          <div className="flex justify-center gap-1 mb-4 rounded-xl bg-slate-100 p-1">
-            {(['AM', 'PM'] as const).map(p => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => handlePeriod(p)}
-                className={`flex-1 rounded-lg py-2 text-sm font-black transition ${
-                  period === p
-                    ? 'bg-[#223f7a] text-white shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
+        <div className="absolute left-0 top-full z-50 mt-2 w-[200px] rounded-2xl border border-slate-200 bg-white shadow-xl animate-in fade-in-0 zoom-in-95">
+          {/* Manual input */}
+          <div className="border-b border-slate-100 p-3">
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={manualInput}
+                onChange={(e) => { setManualInput(e.target.value); setManualError(false); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleManualSubmit(); }}
+                placeholder="e.g. 9:30 AM"
+                className={`flex-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold outline-none transition ${
+                  manualError ? 'border-rose-300 bg-rose-50' : 'border-slate-200 focus:border-[#223f7a]'
                 }`}
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={handleManualSubmit}
+                className="rounded-lg bg-[#223f7a] px-2.5 py-1.5 text-[10px] font-black text-white hover:bg-[#17305f]"
               >
-                {p}
+                Set
               </button>
-            ))}
+            </div>
+            {manualError && <p className="mt-1 text-[10px] font-bold text-rose-600">Try: 9:30 AM or 14:00</p>}
           </div>
 
-          {/* Hour selection */}
-          <div className="mb-3">
-            <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Hour</p>
-            <div className="grid grid-cols-6 gap-1">
-              {HOURS.map(h => (
+          {/* Preset list */}
+          <div ref={listRef} className="max-h-[240px] overflow-y-auto p-1.5">
+            {PRESETS.map((preset) => {
+              const isSelected = preset.value === value;
+              return (
                 <button
-                  key={h}
+                  key={preset.value}
                   type="button"
-                  onClick={() => handleHour(h)}
-                  className={`grid h-9 place-items-center rounded-lg text-sm font-bold transition ${
-                    hour === h
-                      ? 'bg-[#223f7a] text-white shadow-sm'
+                  data-selected={isSelected}
+                  onClick={() => handlePresetClick(preset.value)}
+                  className={`w-full rounded-lg px-3 py-2 text-left text-sm font-bold transition ${
+                    isSelected
+                      ? 'bg-[#223f7a] text-white'
                       : 'text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  {h}
+                  {preset.label}
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Minute selection */}
-          <div>
-            <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Minute</p>
-            <div className="grid grid-cols-6 gap-1">
-              {MINUTES.map(m => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => handleMinute(m)}
-                  className={`grid h-9 place-items-center rounded-lg text-sm font-bold transition ${
-                    minute === m
-                      ? 'bg-[#223f7a] text-white shadow-sm'
-                      : 'text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  :{String(m).padStart(2, '0')}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Current value display */}
-          <div className="mt-4 flex items-center justify-center border-t border-slate-100 pt-3">
-            <p className="text-lg font-black text-[#223f7a]">
-              {hour}:{String(minute).padStart(2, '0')} {period}
-            </p>
+              );
+            })}
           </div>
         </div>
       )}
