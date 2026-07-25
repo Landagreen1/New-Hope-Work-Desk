@@ -3,6 +3,8 @@
 import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, Copy, Plus, RefreshCw, Trash2, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import DatePicker from '../nhwd-shared/DatePicker';
+import TimePicker from '../nhwd-shared/TimePicker';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 import type { EmployeeSchedule } from './types';
@@ -435,11 +437,11 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
               </div>
               <div>
                 <label className={ui.label}>Date</label>
-                <input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} className={ui.input} />
+                <DatePicker value={formDate} onChange={setFormDate} placeholder="Select date" />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className={ui.label}>Start</label><input type="time" value={formStart} onChange={e => setFormStart(e.target.value)} className={ui.input} /></div>
-                <div><label className={ui.label}>End</label><input type="time" value={formEnd} onChange={e => setFormEnd(e.target.value)} className={ui.input} /></div>
+                <div><label className={ui.label}>Start</label><TimePicker value={formStart} onChange={setFormStart} /></div>
+                <div><label className={ui.label}>End</label><TimePicker value={formEnd} onChange={setFormEnd} /></div>
               </div>
               <div>
                 <label className={ui.label}>Type</label>

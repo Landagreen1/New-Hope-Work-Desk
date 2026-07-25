@@ -3,6 +3,7 @@
 import { AlertCircle, Calendar, CheckCircle2, Plus, RefreshCw, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
+import DatePicker from '../nhwd-shared/DatePicker';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 import type { PTOBalance, PTORequest, PTOType } from './types';
@@ -205,11 +206,11 @@ export default function PTORequests({ initialProfile }: PTORequestsProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={ui.label}>Start</label>
-                  <input type="date" min={todayStr} value={formStart} onChange={e => setFormStart(e.target.value)} className={ui.input} />
+                  <DatePicker value={formStart} onChange={setFormStart} min={todayStr} placeholder="Start date" />
                 </div>
                 <div>
                   <label className={ui.label}>End</label>
-                  <input type="date" min={formStart || todayStr} value={formEnd} onChange={e => setFormEnd(e.target.value)} className={ui.input} />
+                  <DatePicker value={formEnd} onChange={setFormEnd} min={formStart || todayStr} placeholder="End date" />
                 </div>
               </div>
 

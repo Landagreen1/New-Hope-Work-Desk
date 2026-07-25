@@ -76,6 +76,7 @@ import type {
 } from "@/lib/types";
 
 import IntakeDataDisplay, { type IntakeDataDetails } from "@/features/cs-intake/IntakeDataDisplay";
+import DatePicker from "@/features/nhwd-shared/DatePicker";
 
 const workTypeLabels: Record<WorkType, string> = {
   new_quote: "New Quote",
@@ -1609,11 +1610,10 @@ function MyTeamPanel({
         </p>
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Field label="Day">
-            <input
-              type="date"
+            <DatePicker
               value={day}
-              onChange={(event) => setDay(event.target.value)}
-              className="field"
+              onChange={(value) => setDay(value)}
+              placeholder="Filter by day"
             />
           </Field>
           <Field label="Search">
@@ -4628,13 +4628,10 @@ export function WorkDeskApp({
                   </div>
                   <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <Field label="Day">
-                      <input
-                        type="date"
+                      <DatePicker
                         value={quoteDayFilter}
-                        onChange={(event) =>
-                          setQuoteDayFilter(event.target.value)
-                        }
-                        className="field"
+                        onChange={(value) => setQuoteDayFilter(value)}
+                        placeholder="Filter by day"
                       />
                     </Field>
                     <Field label="Status">
@@ -7322,11 +7319,10 @@ function ManagerView({
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <Field label="Day">
-                <input
-                  type="date"
+                <DatePicker
                   value={managerQuoteDay}
-                  onChange={(event) => setManagerQuoteDay(event.target.value)}
-                  className="field"
+                  onChange={(value) => setManagerQuoteDay(value)}
+                  placeholder="Filter by day"
                 />
               </Field>
               <Field label="Status">
@@ -7511,20 +7507,10 @@ function ManagerView({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Start date">
-                  <input
-                    type="date"
-                    value={reportStart}
-                    onChange={(event) => setReportStart(event.target.value)}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold"
-                  />
+                  <DatePicker value={reportStart} onChange={setReportStart} placeholder="Start date" />
                 </Field>
                 <Field label="End date">
-                  <input
-                    type="date"
-                    value={reportEnd}
-                    onChange={(event) => setReportEnd(event.target.value)}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold"
-                  />
+                  <DatePicker value={reportEnd} onChange={setReportEnd} placeholder="End date" />
                 </Field>
               </div>
             </div>

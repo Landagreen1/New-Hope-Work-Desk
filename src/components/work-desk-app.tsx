@@ -54,6 +54,7 @@ import { loadDashboardData } from "@/lib/dashboard-data";
 import { createClient } from "@/lib/supabase/client";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
+import DatePicker from "@/features/nhwd-shared/DatePicker";
 import type {
   Agent,
   CustomerServiceUser,
@@ -1718,11 +1719,10 @@ function MyTeamPanel({
         </p>
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Field label="Day">
-            <input
-              type="date"
+            <DatePicker
               value={day}
-              onChange={(event) => setDay(event.target.value)}
-              className="field"
+              onChange={(value) => setDay(value)}
+              placeholder="Filter by day"
             />
           </Field>
           <Field label="Search">
@@ -4888,13 +4888,10 @@ export function WorkDeskApp({
                   </div>
                   <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <Field label="Day">
-                      <input
-                        type="date"
+                      <DatePicker
                         value={quoteDayFilter}
-                        onChange={(event) =>
-                          setQuoteDayFilter(event.target.value)
-                        }
-                        className="field"
+                        onChange={(value) => setQuoteDayFilter(value)}
+                        placeholder="Filter by day"
                       />
                     </Field>
                     <Field label="Status">
@@ -5105,8 +5102,8 @@ export function WorkDeskApp({
                       <button type="button" className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black" onClick={() => setAgentPerformancePreset("today")}>Today</button>
                       <button type="button" className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black" onClick={() => setAgentPerformancePreset("yesterday")}>Yesterday</button>
                       <button type="button" className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black" onClick={() => setAgentPerformancePreset("week")}>Current Week</button>
-                      <label><span className="block text-[10px] font-black uppercase text-slate-400">From</span><input type="date" className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold" value={agentPerformanceStart} onChange={(event) => setAgentPerformanceStart(event.target.value)} /></label>
-                      <label><span className="block text-[10px] font-black uppercase text-slate-400">To</span><input type="date" className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold" value={agentPerformanceEnd} onChange={(event) => setAgentPerformanceEnd(event.target.value)} /></label>
+                      <label><span className="block text-[10px] font-black uppercase text-slate-400">From</span><DatePicker value={agentPerformanceStart} onChange={setAgentPerformanceStart} placeholder="From" /></label>
+                      <label><span className="block text-[10px] font-black uppercase text-slate-400">To</span><DatePicker value={agentPerformanceEnd} onChange={setAgentPerformanceEnd} placeholder="To" /></label>
                     </div>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -7981,7 +7978,7 @@ function ManagerView({
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <label>
                 <span className="text-xs font-black uppercase tracking-wider text-slate-400">Day</span>
-                <input type="date" value={managerQuoteDay} onChange={(event) => setManagerQuoteDay(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-semibold" />
+                <DatePicker value={managerQuoteDay} onChange={setManagerQuoteDay} placeholder="Filter by day" className="mt-1" />
               </label>
               <label>
                 <span className="text-xs font-black uppercase tracking-wider text-slate-400">Status</span>
@@ -8133,20 +8130,10 @@ function ManagerView({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Start date">
-                  <input
-                    type="date"
-                    value={reportStart}
-                    onChange={(event) => setReportStart(event.target.value)}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold"
-                  />
+                  <DatePicker value={reportStart} onChange={setReportStart} placeholder="Start date" />
                 </Field>
                 <Field label="End date">
-                  <input
-                    type="date"
-                    value={reportEnd}
-                    onChange={(event) => setReportEnd(event.target.value)}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold"
-                  />
+                  <DatePicker value={reportEnd} onChange={setReportEnd} placeholder="End date" />
                 </Field>
               </div>
             </div>

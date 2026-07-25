@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { useState } from 'react';
 
 import { ui } from '../nhwd-shared/ui';
+import DatePicker from '../nhwd-shared/DatePicker';
 import type { BoardColumn, CoverageType } from './types';
 import { BOARD_COLUMNS, COVERAGE_LABELS } from './types';
 
@@ -213,12 +214,7 @@ export default function NewCardForm({ column, onSubmit, onCancel }: NewCardFormP
                   </div>
                   <div>
                     <label className={ui.label}>Date of Birth</label>
-                    <input
-                      type="date"
-                      value={ownerDob}
-                      onChange={(e) => setOwnerDob(e.target.value)}
-                      className={ui.input + ' mt-1'}
-                    />
+                    <DatePicker value={ownerDob} onChange={setOwnerDob} placeholder="Date of birth" className="mt-1" />
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">

@@ -32,6 +32,7 @@ import {
   saveDraft,
   submitIntake,
 } from './api';
+import DatePicker from '../nhwd-shared/DatePicker';
 
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
@@ -402,7 +403,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
           <Field label="First name" required><input className={ui.input} disabled={disabled} value={submission.insured_first_name} onChange={(event) => patch({ insured_first_name: event.target.value })} /></Field>
           <Field label="Middle name"><input className={ui.input} disabled={disabled} value={(submission as Record<string, unknown>).insured_middle_name as string || ''} onChange={(event) => patch({ insured_middle_name: event.target.value || null } as Partial<DraftSubmission>)} /></Field>
           <Field label="Last name" required><input className={ui.input} disabled={disabled} value={submission.insured_last_name} onChange={(event) => patch({ insured_last_name: event.target.value })} /></Field>
-          <Field label="Date of birth" required><input type="date" className={ui.input} disabled={disabled} value={submission.insured_dob || ''} onChange={(event) => patch({ insured_dob: event.target.value || null })} /></Field>
+          <Field label="Date of birth" required><DatePicker value={submission.insured_dob || ''} onChange={(value) => patch({ insured_dob: value || null })} disabled={disabled} placeholder="Date of birth" /></Field>
           <Field label="Primary phone" required><input type="tel" className={ui.input} disabled={disabled} value={submission.insured_phone_primary || ''} onChange={(event) => patch({ insured_phone_primary: event.target.value || null })} /></Field>
           <Field label="Alternate phone"><input type="tel" className={ui.input} disabled={disabled} value={submission.insured_phone_alt || ''} onChange={(event) => patch({ insured_phone_alt: event.target.value || null })} /></Field>
           <Field label="Email"><input type="email" className={ui.input} disabled={disabled} value={submission.insured_email || ''} onChange={(event) => patch({ insured_email: event.target.value || null })} /></Field>
@@ -457,7 +458,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
                   <>
                     <Field label="First name" required><input className={ui.input} disabled={disabled} value={driver.first_name} onChange={(event) => patchDriver(index, { first_name: event.target.value })} /></Field>
                     <Field label="Last name" required><input className={ui.input} disabled={disabled} value={driver.last_name} onChange={(event) => patchDriver(index, { last_name: event.target.value })} /></Field>
-                    <Field label="Date of birth" required><input type="date" className={ui.input} disabled={disabled} value={driver.dob || ''} onChange={(event) => patchDriver(index, { dob: event.target.value || null })} /></Field>
+                    <Field label="Date of birth" required><DatePicker value={driver.dob || ''} onChange={(value) => patchDriver(index, { dob: value || null })} disabled={disabled} placeholder="Date of birth" /></Field>
                     <Field label="Relationship"><select className={ui.select} disabled={disabled} value={driver.relationship || 'other'} onChange={(event) => patchDriver(index, { relationship: event.target.value })}><option value="spouse">Spouse</option><option value="child">Child</option><option value="employee">Employee</option><option value="other">Other</option></select></Field>
                   </>
                 )}
@@ -514,7 +515,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
           <Field label="Current carrier"><input className={ui.input} disabled={disabled} value={submission.current_carrier || ''} onChange={(event) => patch({ current_carrier: event.target.value || null })} /></Field>
           <Field label="Current policy number"><input className={ui.input} disabled={disabled} value={submission.current_policy_number || ''} onChange={(event) => patch({ current_policy_number: event.target.value || null })} /></Field>
           <Field label="Current premium"><input type="number" min="0" step="0.01" className={ui.input} disabled={disabled} value={submission.current_premium ?? ''} onChange={(event) => patch({ current_premium: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
-          <Field label="Expiration date"><input type="date" className={ui.input} disabled={disabled} value={submission.current_expiration || ''} onChange={(event) => patch({ current_expiration: event.target.value || null })} /></Field>
+          <Field label="Expiration date"><DatePicker value={submission.current_expiration || ''} onChange={(value) => patch({ current_expiration: value || null })} disabled={disabled} placeholder="Expiration date" /></Field>
           <Field label="Continuous coverage (months)"><input type="number" min="0" className={ui.input} disabled={disabled} value={submission.months_continuous_coverage ?? ''} onChange={(event) => patch({ months_continuous_coverage: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
         </div>
         <div className="mt-4 flex flex-wrap gap-5">

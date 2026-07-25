@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getSupabase } from "../nhwd-shared/client";
+import DatePicker from "../nhwd-shared/DatePicker";
 import type { ProfileLite } from "../nhwd-shared/types";
 import {
   listWorkloadAssignees,
@@ -348,11 +349,11 @@ export default function WorkloadLog({
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
           <label>
             <span className="text-xs font-black uppercase tracking-wider text-slate-400">From</span>
-            <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-semibold" />
+            <DatePicker value={fromDate} onChange={setFromDate} placeholder="From" className="mt-1" />
           </label>
           <label>
             <span className="text-xs font-black uppercase tracking-wider text-slate-400">To</span>
-            <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-semibold" />
+            <DatePicker value={toDate} onChange={setToDate} placeholder="To" className="mt-1" />
           </label>
           <label>
             <span className="text-xs font-black uppercase tracking-wider text-slate-400">Type</span>
