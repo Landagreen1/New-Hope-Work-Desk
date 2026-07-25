@@ -1,11 +1,9 @@
 "use client";
 
 import {
-  ClipboardCheck,
-  Headphones,
   RefreshCw,
 } from "lucide-react";
-import { Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { SidebarLayout, type NavigationState, type SubNavId } from "@/components/sidebar-layout";
@@ -40,52 +38,13 @@ function ManagerCustomerServiceWorkspace({
 }) {
   const [tab, setTab] = useState<"intakes" | "queue">(initialSubNav ?? "intakes");
 
+  // Sync with sidebar navigation changes
+  useEffect(() => {
+    if (initialSubNav) setTab(initialSubNav);
+  }, [initialSubNav]);
+
   return (
     <div className="space-y-5">
-      <section className="rounded-[28px] border border-[#c9d5e9] bg-gradient-to-br from-white to-[#eef3fb] p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#526b9a]">
-              Customer Service Management
-            </p>
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
-              Quote Intake &amp; Sales Handoff
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-500">
-              Review intakes, return incomplete records, assign submitted
-              requests, and confirm that completed intakes become Quotes Database
-              records.
-            </p>
-          </div>
-          <div className="flex gap-0.5 rounded-2xl border border-slate-200 bg-white p-1">
-            <button
-              type="button"
-              onClick={() => setTab("intakes")}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black transition-all ${
-                tab === "intakes"
-                  ? "bg-[#223f7a] text-white shadow-sm"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-              }`}
-            >
-              <Headphones className="h-4 w-4" />
-              Quote Intakes
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("queue")}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black transition-all ${
-                tab === "queue"
-                  ? "bg-[#223f7a] text-white shadow-sm"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-              }`}
-            >
-              <ClipboardCheck className="h-4 w-4" />
-              Sales Queue
-            </button>
-          </div>
-        </div>
-      </section>
-
       {tab === "intakes" ? (
         <Suspense fallback={<LoadingWorkspace label="Quote Intake" />}>
           <CsIntakeLanding initialProfile={profile} embedded />
@@ -251,9 +210,15 @@ export function RoleWorkspace({
 
     // --- Time & Attendance ---
     if (module === "time_attendance") {
+      const taSection = subNav === "ta_schedule" ? "schedule"
+        : subNav === "ta_pto" ? "pto"
+        : subNav === "ta_payroll" ? "payroll"
+        : subNav === "ta_staffing" ? "staffing"
+        : subNav === "ta_workforce" ? "workforce"
+        : "clock";
       return (
         <Suspense fallback={<LoadingWorkspace label="Time & Attendance" />}>
-          <TimeAttendanceWorkspace initialProfile={profile} embedded />
+          <TimeAttendanceWorkspace initialProfile={profile} embedded activeSection={taSection} />
         </Suspense>
       );
     }

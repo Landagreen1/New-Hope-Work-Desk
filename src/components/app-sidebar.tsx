@@ -60,7 +60,12 @@ export type SubNavId =
   // Renewals
   | "renewals_dashboard"
   // Time & Attendance
-  | "ta_dashboard"
+  | "ta_clock"
+  | "ta_schedule"
+  | "ta_pto"
+  | "ta_payroll"
+  | "ta_staffing"
+  | "ta_workforce"
   // User Admin
   | "ua_users";
 
@@ -162,13 +167,21 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
 
   // Time & Attendance (manager/super_admin only)
   if (isManager) {
+    const taSubItems: SubNavItem[] = [
+      { id: "ta_clock", label: "Time Clock", icon: Clock },
+      { id: "ta_schedule", label: "Schedule", icon: Calendar },
+      { id: "ta_pto", label: "Time Off", icon: Calendar },
+      { id: "ta_payroll", label: "Payroll", icon: LayoutDashboard },
+      { id: "ta_staffing", label: "Coverage", icon: UsersRound },
+    ];
+    if (role === "super_admin") {
+      taSubItems.push({ id: "ta_workforce", label: "Workforce", icon: BarChart3 });
+    }
     modules.push({
       id: "time_attendance",
       label: "Time & Attendance",
       icon: Calendar,
-      subItems: [
-        { id: "ta_dashboard", label: "Dashboard", icon: Clock },
-      ],
+      subItems: taSubItems,
     });
   }
 
