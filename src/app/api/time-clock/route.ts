@@ -180,6 +180,51 @@ export async function PATCH(request: Request) {
       return Response.json({ error: "Invalid status." }, { status: 400 });
     }
 
+    // If changing TO lunch, auto-start a lunch break so the time is tracked and deducted
+    if (newStatus === "lunch") {
+      // Check if there's already an active break
+      const { data: existingBreak } = await supabase
+        .from("time_clock_breaks")
+        .select("id")
+        .eq("clock_entry_id", activeEntry.id)
+        .is("break_end", null)
+        .maybeSingle();
+
+      if (!existingBreak) {
+        await supabase
+          .from("time_clock_breaks")
+          .insert({ clock_entry_id: activeEntry.id, break_type: "lunch" });
+      }
+    }
+
+    // If changing FROM lunch to something else, auto-end the active break
+    if (newStatus !== "lunch") {
+      const { data: activeBreakRow } = await supabase
+        .from("time_clock_breaks")
+        .select("id, break_start")
+        .eq("clock_entry_id", activeEntry.id)
+        .is("break_end", null)
+        .maybeSingle();
+
+      if (activeBreakRow) {
+        const now = new Date();
+        const breakStart = new Date(activeBreakRow.break_start);
+        const durationMinutes = Math.round((now.getTime() - breakStart.getTime()) / 60000);
+
+        await supabase
+          .from("time_clock_breaks")
+          .update({ break_end: now.toISOString(), duration_minutes: durationMinutes })
+          .eq("id", activeBreakRow.id);
+
+        // Update total break minutes
+        const newBreakMinutes = (activeEntry.break_minutes || 0) + durationMinutes;
+        await supabase
+          .from("time_clock_entries")
+          .update({ break_minutes: newBreakMinutes })
+          .eq("id", activeEntry.id);
+      }
+    }
+
     const { error } = await supabase
       .from("time_clock_entries")
       .update({ clock_status: newStatus })
@@ -193,5 +238,55 @@ export async function PATCH(request: Request) {
     return Response.json({ success: true, status: newStatus });
   }
 
-  return Response.json({ error: "Invalid action. Use 'clock_out' or 'change_status'." }, { status: 400 });
+  // Admin edit: adjust any clock entry by ID (manager/super_admin only)
+  if (action === "edit") {
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    if (profile?.role !== "manager" && profile?.role !== "super_admin") {
+      return Response.json({ error: "Only managers can edit clock entries." }, { status: 403 });
+    }
+
+    const entryId = String(body.entry_id ?? "");
+    if (!entryId) return Response.json({ error: "entry_id is required." }, { status: 400 });
+
+    const adjustmentReason = String(body.adjustment_reason ?? "").trim();
+    if (!adjustmentReason) return Response.json({ error: "adjustment_reason is required." }, { status: 400 });
+
+    const updates: Record<string, unknown> = {
+      adjusted_by: user.id,
+      adjustment_reason: adjustmentReason,
+    };
+
+    if (body.clock_in) updates.clock_in = body.clock_in;
+    if (body.clock_out) updates.clock_out = body.clock_out;
+    if (body.break_minutes !== undefined) updates.break_minutes = Number(body.break_minutes);
+
+    // Recalculate total_hours if clock_in and clock_out are both known
+    const { data: entry } = await supabase
+      .from("time_clock_entries")
+      .select("clock_in, clock_out, break_minutes")
+      .eq("id", entryId)
+      .single();
+
+    if (!entry) return Response.json({ error: "Entry not found." }, { status: 404 });
+
+    const finalClockIn = (updates.clock_in ?? entry.clock_in) as string;
+    const finalClockOut = (updates.clock_out ?? entry.clock_out) as string | null;
+    const finalBreakMin = (updates.break_minutes ?? entry.break_minutes ?? 0) as number;
+
+    if (finalClockIn && finalClockOut) {
+      const totalMinutes = (new Date(finalClockOut).getTime() - new Date(finalClockIn).getTime()) / 60000;
+      const workMinutes = totalMinutes - finalBreakMin;
+      updates.total_hours = Math.round((workMinutes / 60) * 100) / 100;
+    }
+
+    const { error } = await supabase
+      .from("time_clock_entries")
+      .update(updates)
+      .eq("id", entryId);
+
+    if (error) return Response.json({ error: error.message }, { status: 400 });
+    return Response.json({ success: true });
+  }
+
+  return Response.json({ error: "Invalid action. Use 'clock_out', 'change_status', or 'edit'." }, { status: 400 });
 }

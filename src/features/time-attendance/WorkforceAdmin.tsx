@@ -312,6 +312,7 @@ function ClockEditSection() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editClockIn, setEditClockIn] = useState('');
   const [editClockOut, setEditClockOut] = useState('');
+  const [editBreakMin, setEditBreakMin] = useState('');
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -335,9 +336,11 @@ function ClockEditSection() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'edit',
           entry_id: entryId,
           clock_in: editClockIn || undefined,
           clock_out: editClockOut || undefined,
+          break_minutes: editBreakMin !== '' ? Number(editBreakMin) : undefined,
           adjustment_reason: reason.trim(),
         }),
       });
@@ -395,7 +398,20 @@ function ClockEditSection() {
                   )}
                 </td>
                 <td className={`${ui.td} font-bold`}>{entry.total_hours != null ? `${entry.total_hours.toFixed(1)}h` : '—'}</td>
-                <td className={ui.td}>{entry.break_minutes}m</td>
+                <td className={ui.td}>
+                  {editId === entry.id ? (
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={editBreakMin}
+                      onChange={e => setEditBreakMin(e.target.value)}
+                      className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold outline-none focus:border-[#223f7a]"
+                    />
+                  ) : (
+                    <span className="text-xs font-bold">{entry.break_minutes}m</span>
+                  )}
+                </td>
                 <td className={ui.td}>
                   {entry.adjusted_by ? (
                     <span className={`${ui.badge} ${ui.badgeTone.progress}`}>Edited</span>
@@ -419,6 +435,7 @@ function ClockEditSection() {
                         setEditId(entry.id);
                         setEditClockIn(entry.clock_in ? new Date(entry.clock_in).toISOString().slice(0, 16) : '');
                         setEditClockOut(entry.clock_out ? new Date(entry.clock_out).toISOString().slice(0, 16) : '');
+                        setEditBreakMin(String(entry.break_minutes ?? 0));
                       }}
                       className={ui.btnSecondary + ' !px-3 !py-1.5 !text-xs'}
                     >
