@@ -74,6 +74,7 @@ export interface CommercialQuote {
   commission_denial_reason: string | null;
   commission_notes: string | null;
   sold_premium: number | null;
+  total_premium: number | null;
   sold_at: string | null;
   // Soft delete
   is_deleted: boolean;

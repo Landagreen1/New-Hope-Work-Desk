@@ -579,8 +579,9 @@ export default function CommercialCardDetail({
               </select>
             </div>
 
-            {/* Sold Premium — visible when card is in sold or later columns */}
+            {/* Sold Premium & Total Premium — visible when card is in sold or later columns */}
             {(['sold', 'commission_approved', 'commission_not_approved'].includes(quote.board_column)) && (
+              <>
               <div>
                 <label className={ui.label}>Sold Premium ($)</label>
                 <input
@@ -600,6 +601,26 @@ export default function CommercialCardDetail({
                   Total annual premium for this policy.
                 </p>
               </div>
+              <div>
+                <label className={ui.label}>Total Premium ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={quote.total_premium ?? ''}
+                  onBlur={(e) => {
+                    const val = e.target.value ? parseFloat(e.target.value) : null;
+                    if (val !== quote.total_premium) void updateField('total_premium', val);
+                  }}
+                  placeholder="e.g. 5000.00"
+                  className={ui.input + ' mt-1 text-xs'}
+                  disabled={!canEditFields}
+                />
+                <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                  Total premium across all policies on this card.
+                </p>
+              </div>
+              </>
             )}
 
             {/* Time tracking */}

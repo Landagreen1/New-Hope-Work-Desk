@@ -127,6 +127,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     "is_mirrored",
     "assigned_to",
     "sold_premium",
+    "total_premium",
     "commission_notes",
   ];
 
