@@ -206,6 +206,14 @@ function TimeOffSection() {
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
 
+  // Balance management
+  const [employees, setEmployees] = useState<Array<{ id: string; display_name: string }>>([]);
+  const [balances, setBalances] = useState<Record<string, { vacation_days: number; personal_days: number; vacation_used: number; personal_used: number }>>({});
+  const [editBalanceId, setEditBalanceId] = useState<string | null>(null);
+  const [editVacation, setEditVacation] = useState('');
+  const [editBirthday, setEditBirthday] = useState('');
+  const [savingBalance, setSavingBalance] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
@@ -216,7 +224,28 @@ function TimeOffSection() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  // Load employees and their balances
+  const loadBalances = useCallback(async () => {
+    try {
+      const usersRes = await fetch('/api/admin/users');
+      const { users } = await usersRes.json() as { users: Array<{ id: string; display_name: string; is_active: boolean }> };
+      const active = users.filter(u => u.is_active).sort((a, b) => a.display_name.localeCompare(b.display_name));
+      setEmployees(active);
+
+      const year = new Date().getFullYear();
+      const balMap: Record<string, { vacation_days: number; personal_days: number; vacation_used: number; personal_used: number }> = {};
+      await Promise.all(active.map(async (u) => {
+        const res = await fetch(`/api/pto/balance?profile_id=${u.id}&year=${year}`);
+        if (res.ok) {
+          const { balance } = await res.json();
+          balMap[u.id] = { vacation_days: balance.vacation_days ?? 10, personal_days: balance.personal_days ?? 1, vacation_used: balance.vacation_used ?? 0, personal_used: balance.personal_used ?? 0 };
+        }
+      }));
+      setBalances(balMap);
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => { void load(); void loadBalances(); }, [load, loadBalances]);
 
   const handleDecision = async (requestId: string, decision: 'approved' | 'denied') => {
     setProcessing(requestId); setError(null);
@@ -235,30 +264,117 @@ function TimeOffSection() {
     finally { setProcessing(null); }
   };
 
+  const handleSaveBalance = async (profileId: string) => {
+    setSavingBalance(true); setError(null);
+    try {
+      const res = await fetch('/api/pto/balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile_id: profileId, vacation_days: Number(editVacation), personal_days: Number(editBirthday) }),
+      });
+      if (!res.ok) throw new Error('Save failed.');
+      setEditBalanceId(null);
+      await loadBalances();
+    } catch (err) { setError(err instanceof Error ? err.message : 'Save failed.'); }
+    finally { setSavingBalance(false); }
+  };
+
   if (loading) return <div className="flex justify-center py-12"><RefreshCw className="h-5 w-5 animate-spin text-slate-400" /></div>;
 
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="border-b border-slate-100 p-5">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Workforce</p>
-        <h3 className="mt-1 text-xl font-black">Time Off Requests</h3>
-        <p className="mt-1 text-sm text-slate-500">Approve or deny employee PTO requests.</p>
+    <div className="space-y-5">
+      {error && <div className={ui.error}><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
+
+      {/* ─── PTO Balances Editor (super_admin) ─── */}
+      <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="border-b border-slate-100 p-5">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Workforce</p>
+          <h3 className="mt-1 text-xl font-black">Employee PTO Balances</h3>
+          <p className="mt-1 text-sm text-slate-500">Edit vacation days and birthday day allocation for each employee ({new Date().getFullYear()}).</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className={ui.table}>
+            <thead>
+              <tr>
+                <th className={ui.th}>Employee</th>
+                <th className={ui.th}>Vacation Days</th>
+                <th className={ui.th}>Vacation Used</th>
+                <th className={ui.th}>Birthday Day</th>
+                <th className={ui.th}>Birthday Used</th>
+                <th className={ui.th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {employees.map((emp) => {
+                const bal = balances[emp.id] ?? { vacation_days: 10, personal_days: 1, vacation_used: 0, personal_used: 0 };
+                const isEditing = editBalanceId === emp.id;
+                return (
+                  <tr key={emp.id} className="hover:bg-[#f8faff]">
+                    <td className={`${ui.td} font-black text-slate-900`}>{emp.display_name}</td>
+                    <td className={ui.td}>
+                      {isEditing ? (
+                        <input type="number" min="0" step="1" value={editVacation} onChange={e => setEditVacation(e.target.value)} className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-bold outline-none focus:border-[#223f7a]" />
+                      ) : (
+                        <span className="text-sm font-black">{bal.vacation_days}</span>
+                      )}
+                    </td>
+                    <td className={`${ui.td} text-sm font-bold text-slate-500`}>{bal.vacation_used}</td>
+                    <td className={ui.td}>
+                      {isEditing ? (
+                        <input type="number" min="0" max="5" step="1" value={editBirthday} onChange={e => setEditBirthday(e.target.value)} className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-bold outline-none focus:border-[#223f7a]" />
+                      ) : (
+                        <span className="text-sm font-black">{bal.personal_days}</span>
+                      )}
+                    </td>
+                    <td className={`${ui.td} text-sm font-bold text-slate-500`}>{bal.personal_used}</td>
+                    <td className={ui.td}>
+                      {isEditing ? (
+                        <div className="flex gap-2">
+                          <button onClick={() => void handleSaveBalance(emp.id)} disabled={savingBalance} className={ui.btnPrimary + ' !px-3 !py-1.5 !text-xs'}>
+                            <Save className="h-3.5 w-3.5" />{savingBalance ? '...' : 'Save'}
+                          </button>
+                          <button onClick={() => setEditBalanceId(null)} className={ui.btnSecondary + ' !px-3 !py-1.5 !text-xs'}>
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setEditBalanceId(emp.id); setEditVacation(String(bal.vacation_days)); setEditBirthday(String(bal.personal_days)); }}
+                          className={ui.btnSecondary + ' !px-3 !py-1.5 !text-xs'}
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />Edit
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-      {error && <div className={`${ui.error} mx-5 mt-4`}><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
-      <div className="overflow-x-auto">
-        <table className={ui.table}>
-          <thead>
-            <tr>
-              <th className={ui.th}>Employee</th>
-              <th className={ui.th}>Type</th>
-              <th className={ui.th}>Dates</th>
-              <th className={ui.th}>Days</th>
-              <th className={ui.th}>Reason</th>
-              <th className={ui.th}>Status</th>
-              <th className={ui.th}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+
+      {/* ─── PTO Requests ─── */}
+      <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="border-b border-slate-100 p-5">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Workforce</p>
+          <h3 className="mt-1 text-xl font-black">Time Off Requests</h3>
+          <p className="mt-1 text-sm text-slate-500">Approve or deny employee PTO requests.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className={ui.table}>
+            <thead>
+              <tr>
+                <th className={ui.th}>Employee</th>
+                <th className={ui.th}>Type</th>
+                <th className={ui.th}>Dates</th>
+                <th className={ui.th}>Days</th>
+                <th className={ui.th}>Reason</th>
+                <th className={ui.th}>Status</th>
+                <th className={ui.th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
             {requests.map((req) => {
               const style = PTO_STATUS_STYLES[req.status as keyof typeof PTO_STATUS_STYLES] ?? PTO_STATUS_STYLES.pending;
               return (
@@ -300,6 +416,7 @@ function TimeOffSection() {
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   );
 }

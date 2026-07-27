@@ -42,3 +42,51 @@ export async function GET(request: Request) {
 
   return Response.json({ balance });
 }
+
+/**
+ * POST /api/pto/balance
+ * Create or update PTO balance for an employee (super_admin only).
+ * Body: { profile_id, year?, vacation_days, personal_days }
+ * personal_days is used for "birthday day" (1 special day).
+ */
+export async function POST(request: Request) {
+  const supabase = await createClient();
+  if (!supabase) return Response.json({ error: "Supabase is not configured." }, { status: 503 });
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
+
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "super_admin") {
+    return Response.json({ error: "Only super admins can update PTO balances." }, { status: 403 });
+  }
+
+  let body: Record<string, unknown>;
+  try { body = (await request.json()) as Record<string, unknown>; } catch {
+    return Response.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const profileId = String(body.profile_id ?? "");
+  const year = Number(body.year ?? new Date().getFullYear());
+  const vacationDays = Number(body.vacation_days ?? 10);
+  const personalDays = Number(body.personal_days ?? 1); // birthday day
+
+  if (!profileId) return Response.json({ error: "profile_id is required." }, { status: 400 });
+
+  const { data, error } = await supabase
+    .from("pto_balances")
+    .upsert({
+      profile_id: profileId,
+      year,
+      vacation_days: vacationDays,
+      personal_days: personalDays,
+      // Keep other fields at defaults or unchanged
+      sick_days: 0,
+      carryover_days: 0,
+    }, { onConflict: "profile_id,year" })
+    .select("id")
+    .single();
+
+  if (error) return Response.json({ error: error.message }, { status: 400 });
+  return Response.json({ success: true, id: data.id });
+}
