@@ -4,6 +4,7 @@ import { AlertCircle, Check, Clock, DollarSign, Edit3, PalmtreeIcon, RefreshCw, 
 import { useCallback, useEffect, useState } from 'react';
 
 import type { ProfileLite } from '../nhwd-shared/types';
+import DatePicker from '../nhwd-shared/DatePicker';
 import DateTimePicker from '../nhwd-shared/DateTimePicker';
 import { ui } from '../nhwd-shared/ui';
 import { PTO_STATUS_STYLES, PTO_TYPE_LABELS } from './types';
@@ -306,8 +307,12 @@ function TimeOffSection() {
 // ─── Clock Edits ──────────────────────────────────────────────────────────────
 
 function ClockEditSection() {
+  const [employees, setEmployees] = useState<Array<{ id: string; display_name: string }>>([]);
+  const [selectedProfile, setSelectedProfile] = useState('');
+  const [filterDate, setFilterDate] = useState('');
   const [entries, setEntries] = useState<ClockEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editClockIn, setEditClockIn] = useState('');
@@ -315,17 +320,31 @@ function ClockEditSection() {
   const [editBreakMin, setEditBreakMin] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      const res = await fetch('/api/time-clock?range=month&date=' + new Date().toISOString().split('T')[0]);
-      const { entries: data } = await res.json();
-      setEntries(data ?? []);
-    } catch (err) { setError(err instanceof Error ? err.message : 'Load failed.'); }
-    finally { setLoading(false); }
+  // Load employee list on mount
+  useEffect(() => {
+    fetch('/api/admin/users').then(r => r.json()).then((body) => {
+      const users = (body.users ?? []) as Array<{ id: string; display_name: string; is_active: boolean }>;
+      setEmployees(users.filter(u => u.is_active).sort((a, b) => a.display_name.localeCompare(b.display_name)));
+    }).catch(() => {});
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  const load = useCallback(async () => {
+    if (!selectedProfile) return;
+    setLoading(true); setError(null);
+    try {
+      const dateParam = filterDate || new Date().toISOString().split('T')[0];
+      const res = await fetch(`/api/time-clock?profile_id=${selectedProfile}&date=${dateParam}&range=month`);
+      const { entries: data } = await res.json();
+      let filtered = (data ?? []) as ClockEntry[];
+      // If a specific date is selected, filter to just that day
+      if (filterDate) {
+        filtered = filtered.filter(e => e.clock_in.startsWith(filterDate));
+      }
+      setEntries(filtered);
+      setLoaded(true);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Load failed.'); }
+    finally { setLoading(false); }
+  }, [selectedProfile, filterDate]);
 
   const handleSave = async (entryId: string) => {
     setSaving(true); setError(null);
@@ -356,101 +375,139 @@ function ClockEditSection() {
     return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  if (loading) return <div className="flex justify-center py-12"><RefreshCw className="h-5 w-5 animate-spin text-slate-400" /></div>;
-
   return (
     <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="border-b border-slate-100 p-5">
         <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Workforce</p>
         <h3 className="mt-1 text-xl font-black">Clock-In/Out Edits</h3>
-        <p className="mt-1 text-sm text-slate-500">View and adjust employee clock entries for the current month. All edits are audited.</p>
+        <p className="mt-1 text-sm text-slate-500">Select an employee to view and adjust their clock entries. All edits are audited.</p>
       </div>
+
+      {/* Filters */}
+      <div className="border-b border-slate-100 px-5 py-4">
+        <div className="grid gap-3 sm:grid-cols-[1fr_200px_auto]">
+          <div>
+            <label className={ui.label}>Employee</label>
+            <select
+              value={selectedProfile}
+              onChange={(e) => { setSelectedProfile(e.target.value); setLoaded(false); setEntries([]); }}
+              className={ui.select}
+            >
+              <option value="">Select an employee...</option>
+              {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.display_name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={ui.label}>Date (optional)</label>
+            <DatePicker value={filterDate} onChange={(v) => { setFilterDate(v); setLoaded(false); }} placeholder="All month" className="mt-2" />
+          </div>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={!selectedProfile || loading}
+              className={ui.btnPrimary + ' mt-2'}
+            >
+              {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Load Entries'}
+            </button>
+          </div>
+        </div>
+      </div>
+
       {error && <div className={`${ui.error} mx-5 mt-4`}><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
-      <div className="overflow-x-auto">
-        <table className={ui.table}>
-          <thead>
-            <tr>
-              <th className={ui.th}>Employee</th>
-              <th className={ui.th}>Clock In</th>
-              <th className={ui.th}>Clock Out</th>
-              <th className={ui.th}>Hours</th>
-              <th className={ui.th}>Breaks</th>
-              <th className={ui.th}>Adjusted</th>
-              <th className={ui.th}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry) => (
-              <tr key={entry.id} className="hover:bg-[#f8faff]">
-                <td className={`${ui.td} font-black`}>{entry.profiles?.display_name ?? '—'}</td>
-                <td className={ui.td}>
-                  {editId === entry.id ? (
-                    <DateTimePicker value={editClockIn} onChange={setEditClockIn} />
-                  ) : (
-                    <span className="text-xs">{formatDT(entry.clock_in)}</span>
-                  )}
-                </td>
-                <td className={ui.td}>
-                  {editId === entry.id ? (
-                    <DateTimePicker value={editClockOut} onChange={setEditClockOut} />
-                  ) : (
-                    <span className="text-xs">{formatDT(entry.clock_out)}</span>
-                  )}
-                </td>
-                <td className={`${ui.td} font-bold`}>{entry.total_hours != null ? `${entry.total_hours.toFixed(1)}h` : '—'}</td>
-                <td className={ui.td}>
-                  {editId === entry.id ? (
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={editBreakMin}
-                      onChange={e => setEditBreakMin(e.target.value)}
-                      className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold outline-none focus:border-[#223f7a]"
-                    />
-                  ) : (
-                    <span className="text-xs font-bold">{entry.break_minutes}m</span>
-                  )}
-                </td>
-                <td className={ui.td}>
-                  {entry.adjusted_by ? (
-                    <span className={`${ui.badge} ${ui.badgeTone.progress}`}>Edited</span>
-                  ) : (
-                    <span className="text-xs text-slate-400">—</span>
-                  )}
-                </td>
-                <td className={ui.td}>
-                  {editId === entry.id ? (
-                    <div className="flex gap-2">
-                      <button onClick={() => void handleSave(entry.id)} disabled={saving} className={ui.btnPrimary + ' !px-3 !py-1.5 !text-xs'}>
-                        <Save className="h-3.5 w-3.5" />{saving ? '...' : 'Save'}
-                      </button>
-                      <button onClick={() => setEditId(null)} className={ui.btnSecondary + ' !px-3 !py-1.5 !text-xs'}>
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setEditId(entry.id);
-                        setEditClockIn(entry.clock_in ? new Date(entry.clock_in).toISOString().slice(0, 16) : '');
-                        setEditClockOut(entry.clock_out ? new Date(entry.clock_out).toISOString().slice(0, 16) : '');
-                        setEditBreakMin(String(entry.break_minutes ?? 0));
-                      }}
-                      className={ui.btnSecondary + ' !px-3 !py-1.5 !text-xs'}
-                    >
-                      <Edit3 className="h-3.5 w-3.5" />Edit
-                    </button>
-                  )}
-                </td>
+
+      {/* Results */}
+      {!loaded && !loading && (
+        <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">Select an employee and click &quot;Load Entries&quot; to view their clock data.</div>
+      )}
+
+      {loaded && (
+        <div className="overflow-x-auto">
+          <table className={ui.table}>
+            <thead>
+              <tr>
+                <th className={ui.th}>Date</th>
+                <th className={ui.th}>Clock In</th>
+                <th className={ui.th}>Clock Out</th>
+                <th className={ui.th}>Hours</th>
+                <th className={ui.th}>Breaks</th>
+                <th className={ui.th}>Adjusted</th>
+                <th className={ui.th}>Actions</th>
               </tr>
-            ))}
-            {!entries.length && (
-              <tr><td colSpan={7} className="px-4 py-10 text-center text-sm font-bold text-slate-400">No clock entries found for this month.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {entries.map((entry) => (
+                <tr key={entry.id} className="hover:bg-[#f8faff]">
+                  <td className={`${ui.td} text-xs font-bold text-slate-700`}>{new Date(entry.clock_in).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                  <td className={ui.td}>
+                    {editId === entry.id ? (
+                      <DateTimePicker value={editClockIn} onChange={setEditClockIn} />
+                    ) : (
+                      <span className="text-xs">{formatDT(entry.clock_in)}</span>
+                    )}
+                  </td>
+                  <td className={ui.td}>
+                    {editId === entry.id ? (
+                      <DateTimePicker value={editClockOut} onChange={setEditClockOut} />
+                    ) : (
+                      <span className="text-xs">{formatDT(entry.clock_out)}</span>
+                    )}
+                  </td>
+                  <td className={`${ui.td} font-bold`}>{entry.total_hours != null ? `${entry.total_hours.toFixed(1)}h` : '—'}</td>
+                  <td className={ui.td}>
+                    {editId === entry.id ? (
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={editBreakMin}
+                        onChange={e => setEditBreakMin(e.target.value)}
+                        className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold outline-none focus:border-[#223f7a]"
+                      />
+                    ) : (
+                      <span className="text-xs font-bold">{entry.break_minutes}m</span>
+                    )}
+                  </td>
+                  <td className={ui.td}>
+                    {entry.adjusted_by ? (
+                      <span className={`${ui.badge} ${ui.badgeTone.progress}`}>Edited</span>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td className={ui.td}>
+                    {editId === entry.id ? (
+                      <div className="flex gap-2">
+                        <button onClick={() => void handleSave(entry.id)} disabled={saving} className={ui.btnPrimary + ' !px-3 !py-1.5 !text-xs'}>
+                          <Save className="h-3.5 w-3.5" />{saving ? '...' : 'Save'}
+                        </button>
+                        <button onClick={() => setEditId(null)} className={ui.btnSecondary + ' !px-3 !py-1.5 !text-xs'}>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditId(entry.id);
+                          setEditClockIn(entry.clock_in ? new Date(entry.clock_in).toISOString().slice(0, 16) : '');
+                          setEditClockOut(entry.clock_out ? new Date(entry.clock_out).toISOString().slice(0, 16) : '');
+                          setEditBreakMin(String(entry.break_minutes ?? 0));
+                        }}
+                        className={ui.btnSecondary + ' !px-3 !py-1.5 !text-xs'}
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />Edit
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!entries.length && (
+                <tr><td colSpan={7} className="px-4 py-10 text-center text-sm font-bold text-slate-400">No clock entries found for this selection.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
