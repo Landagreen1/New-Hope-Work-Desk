@@ -269,69 +269,67 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
         </div>
       )}
 
-      {/* Main Clock Card (agent only — managers don't need to clock in from here) */}
-      {!isManager && (
-        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col items-center gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="text-center lg:text-left">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-                {clockedIn ? 'Currently Clocked In' : 'Not Clocked In'}
+      {/* Main Clock Card — everyone can clock in/out */}
+      <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col items-center gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="text-center lg:text-left">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+              {clockedIn ? 'Currently Clocked In' : 'Not Clocked In'}
+            </p>
+            {clockedIn && statusStyle && (
+              <div className="mt-2 flex items-center justify-center gap-2 lg:justify-start">
+                <span className={`h-3 w-3 rounded-full ${statusStyle.dot} animate-pulse`} />
+                <span className={`rounded-full px-3 py-1 text-xs font-black ${statusStyle.bg} ${statusStyle.text}`}>{statusStyle.label}</span>
+              </div>
+            )}
+            <p className="mt-3 font-mono text-4xl font-black tracking-tight text-slate-900 sm:text-5xl">
+              {clockedIn ? formatElapsed(elapsed) : '00:00:00'}
+            </p>
+            {clockedIn && currentEntry && (
+              <p className="mt-2 text-xs font-semibold text-slate-500">
+                Clocked in at {formatTime(currentEntry.clock_in)}
+                {currentEntry.break_minutes > 0 && ` · ${currentEntry.break_minutes} min break`}
               </p>
-              {clockedIn && statusStyle && (
-                <div className="mt-2 flex items-center justify-center gap-2 lg:justify-start">
-                  <span className={`h-3 w-3 rounded-full ${statusStyle.dot} animate-pulse`} />
-                  <span className={`rounded-full px-3 py-1 text-xs font-black ${statusStyle.bg} ${statusStyle.text}`}>{statusStyle.label}</span>
-                </div>
-              )}
-              <p className="mt-3 font-mono text-4xl font-black tracking-tight text-slate-900 sm:text-5xl">
-                {clockedIn ? formatElapsed(elapsed) : '00:00:00'}
-              </p>
-              {clockedIn && currentEntry && (
-                <p className="mt-2 text-xs font-semibold text-slate-500">
-                  Clocked in at {formatTime(currentEntry.clock_in)}
-                  {currentEntry.break_minutes > 0 && ` · ${currentEntry.break_minutes} min break`}
-                </p>
-              )}
-              {activeBreak && (
-                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2">
-                  <p className="text-xs font-black text-amber-700">On Break · {formatElapsed(breakElapsed)}</p>
-                </div>
-              )}
-            </div>
-            <div className="flex flex-col items-center gap-3">
-              {!clockedIn ? (
-                <button type="button" onClick={() => void handleClockIn('available')} disabled={busy} className="grid h-28 w-28 place-items-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-200 transition hover:bg-emerald-600 hover:shadow-xl disabled:opacity-50"><LogIn className="h-10 w-10" /></button>
-              ) : (
-                <button type="button" onClick={() => void handleClockOut()} disabled={busy} className="grid h-28 w-28 place-items-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-200 transition hover:bg-rose-600 hover:shadow-xl disabled:opacity-50"><LogOut className="h-10 w-10" /></button>
-              )}
-              <p className="text-xs font-black text-slate-500">{!clockedIn ? 'Clock In' : 'Clock Out'}</p>
-              {clockedIn && (
-                <div className="mt-2 flex flex-wrap justify-center gap-2">
-                  {!activeBreak ? (
-                    <>
-                      <button type="button" onClick={() => void handleStartBreak('lunch')} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-700 hover:bg-amber-100 disabled:opacity-50"><Coffee className="h-3.5 w-3.5" /> Lunch</button>
-                      <button type="button" onClick={() => void handleStartBreak('short')} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"><Pause className="h-3.5 w-3.5" /> Short Break</button>
-                    </>
-                  ) : (
-                    <button type="button" onClick={() => void handleEndBreak()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"><Play className="h-3.5 w-3.5" /> End Break</button>
-                  )}
-                </div>
-              )}
-              {clockedIn && !activeBreak && (
-                <div className="mt-2 flex gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
-                  {(['available', 'lunch', 'unavailable'] as ClockStatus[]).map((s) => {
-                    const style = CLOCK_STATUS_STYLES[s];
-                    const isActive = currentEntry?.clock_status === s;
-                    return (
-                      <button key={s} type="button" onClick={() => void handleChangeStatus(s)} disabled={busy || isActive} className={`rounded-lg px-2.5 py-1.5 text-[10px] font-black transition ${isActive ? `${style.bg} ${style.text}` : 'text-slate-500 hover:bg-white'} disabled:opacity-50`}>{style.label}</button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            )}
+            {activeBreak && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2">
+                <p className="text-xs font-black text-amber-700">On Break · {formatElapsed(breakElapsed)}</p>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col items-center gap-3">
+            {!clockedIn ? (
+              <button type="button" onClick={() => void handleClockIn('available')} disabled={busy} className="grid h-28 w-28 place-items-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-200 transition hover:bg-emerald-600 hover:shadow-xl disabled:opacity-50"><LogIn className="h-10 w-10" /></button>
+            ) : (
+              <button type="button" onClick={() => void handleClockOut()} disabled={busy} className="grid h-28 w-28 place-items-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-200 transition hover:bg-rose-600 hover:shadow-xl disabled:opacity-50"><LogOut className="h-10 w-10" /></button>
+            )}
+            <p className="text-xs font-black text-slate-500">{!clockedIn ? 'Clock In' : 'Clock Out'}</p>
+            {clockedIn && (
+              <div className="mt-2 flex flex-wrap justify-center gap-2">
+                {!activeBreak ? (
+                  <>
+                    <button type="button" onClick={() => void handleStartBreak('lunch')} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-700 hover:bg-amber-100 disabled:opacity-50"><Coffee className="h-3.5 w-3.5" /> Lunch</button>
+                    <button type="button" onClick={() => void handleStartBreak('short')} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"><Pause className="h-3.5 w-3.5" /> Short Break</button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => void handleEndBreak()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"><Play className="h-3.5 w-3.5" /> End Break</button>
+                )}
+              </div>
+            )}
+            {clockedIn && !activeBreak && (
+              <div className="mt-2 flex gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+                {(['available', 'lunch', 'unavailable'] as ClockStatus[]).map((s) => {
+                  const style = CLOCK_STATUS_STYLES[s];
+                  const isActive = currentEntry?.clock_status === s;
+                  return (
+                    <button key={s} type="button" onClick={() => void handleChangeStatus(s)} disabled={busy || isActive} className={`rounded-lg px-2.5 py-1.5 text-[10px] font-black transition ${isActive ? `${style.bg} ${style.text}` : 'text-slate-500 hover:bg-white'} disabled:opacity-50`}>{style.label}</button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
