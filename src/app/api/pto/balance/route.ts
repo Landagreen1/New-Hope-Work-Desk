@@ -73,20 +73,40 @@ export async function POST(request: Request) {
 
   if (!profileId) return Response.json({ error: "profile_id is required." }, { status: 400 });
 
-  const { data, error } = await supabase
+  // Check if balance row already exists
+  const { data: existing } = await supabase
     .from("pto_balances")
-    .upsert({
-      profile_id: profileId,
-      year,
-      vacation_days: vacationDays,
-      personal_days: personalDays,
-      // Keep other fields at defaults or unchanged
-      sick_days: 0,
-      carryover_days: 0,
-    }, { onConflict: "profile_id,year" })
     .select("id")
-    .single();
+    .eq("profile_id", profileId)
+    .eq("year", year)
+    .maybeSingle();
 
-  if (error) return Response.json({ error: error.message }, { status: 400 });
-  return Response.json({ success: true, id: data.id });
+  if (existing) {
+    // Update only the allocation fields
+    const { error } = await supabase
+      .from("pto_balances")
+      .update({ vacation_days: vacationDays, personal_days: personalDays })
+      .eq("id", existing.id);
+    if (error) return Response.json({ error: error.message }, { status: 400 });
+    return Response.json({ success: true, id: existing.id });
+  } else {
+    // Insert new row with defaults
+    const { data, error } = await supabase
+      .from("pto_balances")
+      .insert({
+        profile_id: profileId,
+        year,
+        vacation_days: vacationDays,
+        personal_days: personalDays,
+        sick_days: 0,
+        carryover_days: 0,
+        vacation_used: 0,
+        sick_used: 0,
+        personal_used: 0,
+      })
+      .select("id")
+      .single();
+    if (error) return Response.json({ error: error.message }, { status: 400 });
+    return Response.json({ success: true, id: data.id });
+  }
 }
