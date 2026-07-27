@@ -1,7 +1,7 @@
 'use client';
 
-import { AlertCircle, CheckCircle2, ChevronRight, DollarSign, Download, Lock, RefreshCw } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { AlertCircle, CheckCircle2, ChevronRight, Clock, DollarSign, Download, Edit3, Lock, RefreshCw, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 
 import DatePicker from '../nhwd-shared/DatePicker';
 import type { ProfileLite } from '../nhwd-shared/types';
@@ -66,6 +66,7 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processedId, setProcessedId] = useState<string | null>(null);
+  const [detailEmployee, setDetailEmployee] = useState<EmployeeSummary | null>(null);
 
   // Step 1 → Step 2: Calculate
   const handleCalculate = useCallback(async () => {
@@ -255,13 +256,13 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
                   </thead>
                   <tbody>
                     {summaries.map((s) => (
-                      <tr key={s.profile_id} className="hover:bg-[#f8faff]">
+                      <tr key={s.profile_id} className="hover:bg-[#f8faff] cursor-pointer" onClick={() => setDetailEmployee(s)}>
                         <td className={ui.td}>
                           <div className="flex items-center gap-2">
                             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#223f7a] text-[9px] font-black text-white">{s.initials}</span>
                             <div>
                               <p className="text-sm font-black text-slate-900">{s.display_name}</p>
-                              <p className="text-[10px] text-slate-400">{s.days_worked} days · {s.entries_count} sessions</p>
+                              <p className="text-[10px] text-slate-400">{s.days_worked} days · {s.entries_count} sessions <span className="text-[#223f7a]">· View details →</span></p>
                             </div>
                           </div>
                         </td>
@@ -311,6 +312,18 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
         </div>
       )}
 
+      {/* ─── Employee Detail Modal for Payroll Period ─── */}
+      {detailEmployee && (
+        <PayrollEmployeeDetail
+          profileId={detailEmployee.profile_id}
+          name={detailEmployee.display_name}
+          periodStart={periodStart}
+          periodEnd={periodEnd}
+          onClose={() => setDetailEmployee(null)}
+          onRefresh={() => void handleCalculate()}
+        />
+      )}
+
       {/* ─── Step 3: Done ─── */}
       {step === 'done' && (
         <div className="rounded-[28px] border border-emerald-200 bg-gradient-to-br from-white to-emerald-50 p-8 shadow-sm text-center">
@@ -330,6 +343,240 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+// ─── Payroll Employee Detail Modal ────────────────────────────────────────────
+
+interface ClockEntry {
+  id: string;
+  profile_id: string;
+  clock_in: string;
+  clock_out: string | null;
+  break_minutes: number;
+  total_hours: number | null;
+  clock_status: string;
+  adjusted_by: string | null;
+  adjustment_reason: string | null;
+}
+
+function PayrollEmployeeDetail({
+  profileId,
+  name,
+  periodStart,
+  periodEnd,
+  onClose,
+  onRefresh,
+}: {
+  profileId: string;
+  name: string;
+  periodStart: string;
+  periodEnd: string;
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  const [entries, setEntries] = useState<ClockEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editClockIn, setEditClockIn] = useState('');
+  const [editClockOut, setEditClockOut] = useState('');
+  const [editBreakMin, setEditBreakMin] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadEntries = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/time-clock?profile_id=${profileId}&date=${periodStart}&range=month`);
+      if (!res.ok) throw new Error('Load failed.');
+      const body = await res.json();
+      // Filter to period range
+      const all = (body.entries as ClockEntry[]).filter(e => {
+        const d = e.clock_in.split('T')[0];
+        return d >= periodStart && d <= periodEnd;
+      });
+      setEntries(all);
+    } catch { setEntries([]); }
+    finally { setLoading(false); }
+  }, [profileId, periodStart, periodEnd]);
+
+  useEffect(() => { void loadEntries(); }, [loadEntries]);
+
+  const handleSave = async (entryId: string) => {
+    const reason = window.prompt('Reason for this adjustment:');
+    if (!reason?.trim()) return;
+    setSaving(true); setError(null);
+    try {
+      const res = await fetch('/api/time-clock', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'edit',
+          entry_id: entryId,
+          clock_in: editClockIn || undefined,
+          clock_out: editClockOut || undefined,
+          break_minutes: editBreakMin !== '' ? Number(editBreakMin) : undefined,
+          adjustment_reason: reason.trim(),
+        }),
+      });
+      if (!res.ok) throw new Error('Save failed.');
+      setEditId(null);
+      await loadEntries();
+      onRefresh(); // Recalculate payroll totals
+    } catch (err) { setError(err instanceof Error ? err.message : 'Save failed.'); }
+    finally { setSaving(false); }
+  };
+
+  // Group by day
+  const entriesByDay: Record<string, ClockEntry[]> = {};
+  for (const e of entries) {
+    const key = e.clock_in.split('T')[0];
+    if (!entriesByDay[key]) entriesByDay[key] = [];
+    entriesByDay[key].push(e);
+  }
+  const sortedDays = Object.keys(entriesByDay).sort((a, b) => b.localeCompare(a));
+
+  const totalHours = entries.reduce((sum, e) => sum + (e.total_hours ?? 0), 0);
+  const totalBreakMin = entries.reduce((sum, e) => sum + (e.break_minutes ?? 0), 0);
+
+  // Warnings
+  const warnings: string[] = [];
+  // Check for entries with > 10 hours (likely forgot to clock out)
+  const longEntries = entries.filter(e => (e.total_hours ?? 0) > 10);
+  if (longEntries.length) warnings.push(`${longEntries.length} session(s) over 10 hours — possible forgotten clock-out`);
+  // Check for days with 0 break minutes
+  const daysWithNoBreak = sortedDays.filter(day => {
+    const dayEntries = entriesByDay[day];
+    const dayTotal = dayEntries.reduce((sum, e) => sum + (e.total_hours ?? 0), 0);
+    const dayBreak = dayEntries.reduce((sum, e) => sum + (e.break_minutes ?? 0), 0);
+    return dayTotal >= 5 && dayBreak === 0; // Worked 5+ hours with no break
+  });
+  if (daysWithNoBreak.length) warnings.push(`${daysWithNoBreak.length} day(s) with 5+ hours worked and no lunch break recorded`);
+
+  const fmtTime = (iso: string) => {
+    try { return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch { return iso; }
+  };
+  const fmtDT = (iso: string) => iso ? new Date(iso).toISOString().slice(0, 16) : '';
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6" onMouseDown={onClose}>
+      <div className="mx-auto max-w-4xl rounded-[30px] bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#4d6aa8]">Payroll Review</p>
+            <h3 className="mt-1 text-xl font-black text-slate-900">{name}</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Period: {periodStart} → {periodEnd} · Click Edit to fix any entry</p>
+          </div>
+          <button onClick={onClose} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-200"><X className="mr-1 inline h-3.5 w-3.5" />Close</button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16"><RefreshCw className="h-5 w-5 animate-spin text-slate-400" /></div>
+        ) : (
+          <div className="p-6 space-y-5">
+            {/* Summary + Warnings */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-2xl bg-slate-50 p-4"><p className="text-[10px] font-black uppercase text-slate-400">Hours</p><p className="mt-1 text-2xl font-black">{totalHours.toFixed(1)}h</p></div>
+              <div className="rounded-2xl bg-amber-50 p-4"><p className="text-[10px] font-black uppercase text-amber-700">Breaks</p><p className="mt-1 text-2xl font-black text-amber-800">{totalBreakMin}m</p></div>
+              <div className="rounded-2xl bg-blue-50 p-4"><p className="text-[10px] font-black uppercase text-blue-700">Days</p><p className="mt-1 text-2xl font-black text-blue-900">{sortedDays.length}</p></div>
+            </div>
+
+            {warnings.length > 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-1">
+                <p className="text-xs font-black text-amber-800"><AlertCircle className="mr-1 inline h-3.5 w-3.5" />Attention Needed</p>
+                {warnings.map((w, i) => <p key={i} className="text-xs font-semibold text-amber-700">• {w}</p>)}
+              </div>
+            )}
+
+            {error && <div className={ui.error}>{error}</div>}
+
+            {/* Day-by-day entries with edit capability */}
+            <div className="rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-400">Clock Entries — Edit to fix errors before processing</p>
+              </div>
+              <div className="max-h-[450px] overflow-y-auto divide-y divide-slate-100">
+                {sortedDays.map((day) => {
+                  const dayEntries = entriesByDay[day];
+                  const dayHours = dayEntries.reduce((sum, e) => sum + (e.total_hours ?? 0), 0);
+                  const dayBreaks = dayEntries.reduce((sum, e) => sum + (e.break_minutes ?? 0), 0);
+                  const dayLabel = new Date(day + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                  const hasIssue = dayHours > 10 || (dayHours >= 5 && dayBreaks === 0);
+
+                  return (
+                    <div key={day} className={`px-4 py-3 ${hasIssue ? 'bg-amber-50/50' : ''}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-black text-slate-800">{dayLabel}</p>
+                          {dayHours > 10 && <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-black text-rose-700 ring-1 ring-rose-200">Long shift</span>}
+                          {dayHours >= 5 && dayBreaks === 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-black text-amber-700 ring-1 ring-amber-200">No break</span>}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {dayBreaks > 0 && <span className="text-[10px] font-bold text-amber-600">{dayBreaks}m break</span>}
+                          <span className="text-sm font-black text-slate-900">{dayHours.toFixed(1)}h</span>
+                        </div>
+                      </div>
+                      <div className="mt-2 space-y-1.5">
+                        {dayEntries.map((entry) => (
+                          <div key={entry.id} className="rounded-lg bg-white border border-slate-100 px-3 py-2">
+                            {editId === entry.id ? (
+                              <div className="space-y-2">
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div>
+                                    <p className="text-[9px] font-black uppercase text-slate-400">Clock In</p>
+                                    <input type="datetime-local" value={editClockIn} onChange={e => setEditClockIn(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-semibold" />
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] font-black uppercase text-slate-400">Clock Out</p>
+                                    <input type="datetime-local" value={editClockOut} onChange={e => setEditClockOut(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-semibold" />
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] font-black uppercase text-slate-400">Break (min)</p>
+                                    <input type="number" min="0" value={editBreakMin} onChange={e => setEditBreakMin(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-semibold" />
+                                  </div>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button onClick={() => void handleSave(entry.id)} disabled={saving} className={ui.btnPrimary + ' !px-3 !py-1.5 !text-xs'}>{saving ? '...' : 'Save'}</button>
+                                  <button onClick={() => setEditId(null)} className={ui.btnSecondary + ' !px-3 !py-1.5 !text-xs'}>Cancel</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <p className="text-xs font-bold text-slate-700">
+                                    {fmtTime(entry.clock_in)}
+                                    {entry.clock_out ? ` — ${fmtTime(entry.clock_out)}` : ' — Active (no clock-out!)'}
+                                  </p>
+                                  {entry.break_minutes > 0 && <span className="text-[10px] font-bold text-amber-600">{entry.break_minutes}m brk</span>}
+                                  {entry.adjusted_by && <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[9px] font-black text-violet-700">Edited</span>}
+                                  {!entry.clock_out && <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[9px] font-black text-rose-700">Missing clock-out</span>}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-black text-slate-700">{entry.total_hours != null ? `${entry.total_hours.toFixed(1)}h` : '—'}</span>
+                                  <button
+                                    onClick={() => { setEditId(entry.id); setEditClockIn(fmtDT(entry.clock_in)); setEditClockOut(entry.clock_out ? fmtDT(entry.clock_out) : ''); setEditBreakMin(String(entry.break_minutes ?? 0)); }}
+                                    className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-black text-[#223f7a] hover:bg-slate-200"
+                                  >
+                                    <Edit3 className="mr-0.5 inline h-3 w-3" />Edit
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {sortedDays.length === 0 && <div className="px-4 py-8 text-center text-sm font-bold text-slate-400">No entries in this period.</div>}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
