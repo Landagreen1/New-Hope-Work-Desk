@@ -99,6 +99,7 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [detailProfileId, setDetailProfileId] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const breakTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -380,7 +381,14 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
                 const currentStatus = CLOCK_STATUS_STYLES[lastEntry.clock_status];
 
                 return (
-                  <div key={pid} className="px-5 py-4">
+                  <div
+                    key={pid}
+                    className="px-5 py-4 cursor-pointer transition hover:bg-[#f8faff]"
+                    onClick={() => setDetailProfileId(pid)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter') setDetailProfileId(pid); }}
+                  >
                     {/* Employee header */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -400,6 +408,7 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
                           <p className="mt-0.5 text-xs font-semibold text-slate-500">
                             {entries.length} session{entries.length !== 1 ? 's' : ''}
                             {totalBreak > 0 && ` · ${totalBreak}m break`}
+                            <span className="ml-2 text-[#223f7a]">Click for full history →</span>
                           </p>
                         </div>
                       </div>
@@ -425,6 +434,14 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
             })()}
           </div>
         </div>
+      )}
+
+      {/* ─── Employee Detail Modal (manager clicks an employee) ─── */}
+      {isManager && detailProfileId && (
+        <EmployeeDetailModal
+          profileId={detailProfileId}
+          onClose={() => setDetailProfileId(null)}
+        />
       )}
 
       {/* ─── Agent: Weekly day-by-day view ─── */}
@@ -494,6 +511,162 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Employee Detail Modal ────────────────────────────────────────────────────
+
+function EmployeeDetailModal({ profileId, onClose }: { profileId: string; onClose: () => void }) {
+  const [entries, setEntries] = useState<TimeClockEntry[]>([]);
+  const [schedules, setSchedules] = useState<EmployeeSchedule[]>([]);
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      try {
+        // Fetch this employee's clock entries for the current month
+        const today = new Date();
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const dateStr = formatDateKey(monthStart);
+        const [clockRes, schedRes] = await Promise.all([
+          fetch(`/api/time-clock?profile_id=${profileId}&date=${dateStr}&range=month`),
+          fetch(`/api/schedules?profile_id=${profileId}&week=${formatDateKey(getMonday(today))}`),
+        ]);
+
+        if (clockRes.ok) {
+          const body = await clockRes.json();
+          const data = body.entries as TimeClockEntry[];
+          setEntries(data);
+          if (data.length > 0 && data[0].profiles) setName(data[0].profiles.display_name);
+        }
+        if (schedRes.ok) {
+          const body = await schedRes.json();
+          setSchedules(body.schedules as EmployeeSchedule[]);
+        }
+      } catch { /* silent */ }
+      finally { setLoading(false); }
+    })();
+  }, [profileId]);
+
+  // Group entries by day
+  const entriesByDay: Record<string, TimeClockEntry[]> = {};
+  for (const e of entries) {
+    const key = new Date(e.clock_in).toISOString().split('T')[0];
+    if (!entriesByDay[key]) entriesByDay[key] = [];
+    entriesByDay[key].push(e);
+  }
+  const sortedDays = Object.keys(entriesByDay).sort((a, b) => b.localeCompare(a));
+
+  // Total stats
+  const totalHours = entries.reduce((sum, e) => sum + (e.total_hours ?? 0), 0);
+  const totalBreakMin = entries.reduce((sum, e) => sum + (e.break_minutes ?? 0), 0);
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6" onMouseDown={onClose}>
+      <div className="mx-auto max-w-3xl rounded-[30px] bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#4d6aa8]">Employee Detail</p>
+            <h3 className="mt-1 text-xl font-black text-slate-900">{name || 'Loading...'}</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Clock history and schedule for current month</p>
+          </div>
+          <button onClick={onClose} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-200">Close</button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16"><RefreshCw className="h-5 w-5 animate-spin text-slate-400" /></div>
+        ) : (
+          <div className="p-6 space-y-5">
+            {/* Summary stats */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase text-slate-400">Total Hours</p>
+                <p className="mt-1 text-2xl font-black text-slate-900">{totalHours.toFixed(1)}h</p>
+              </div>
+              <div className="rounded-2xl bg-amber-50 p-4">
+                <p className="text-[10px] font-black uppercase text-amber-700">Total Breaks</p>
+                <p className="mt-1 text-2xl font-black text-amber-800">{totalBreakMin}m</p>
+                <p className="text-[10px] text-amber-600">{(totalBreakMin / 60).toFixed(1)}h deducted</p>
+              </div>
+              <div className="rounded-2xl bg-blue-50 p-4">
+                <p className="text-[10px] font-black uppercase text-blue-700">Days Worked</p>
+                <p className="mt-1 text-2xl font-black text-blue-900">{sortedDays.length}</p>
+              </div>
+            </div>
+
+            {/* This week's schedule */}
+            {schedules.length > 0 && (
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3">This Week&apos;s Schedule</p>
+                <div className="flex flex-wrap gap-2">
+                  {schedules.map((s) => (
+                    <div key={s.id} className="rounded-xl bg-[#eef3fb] px-3 py-2">
+                      <p className="text-[10px] font-black text-[#223f7a]">
+                        {new Date(s.schedule_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                      </p>
+                      <p className="text-xs font-bold text-slate-700">{s.shift_start?.slice(0, 5)} – {s.shift_end?.slice(0, 5)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Day-by-day clock history */}
+            <div className="rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-400">Clock History (This Month)</p>
+              </div>
+              <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
+                {sortedDays.map((day) => {
+                  const dayEntries = entriesByDay[day];
+                  const dayHours = dayEntries.reduce((sum, e) => sum + (e.total_hours ?? 0), 0);
+                  const dayBreaks = dayEntries.reduce((sum, e) => sum + (e.break_minutes ?? 0), 0);
+                  const dayLabel = new Date(day + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+                  return (
+                    <div key={day} className="px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-black text-slate-800">{dayLabel}</p>
+                        <div className="flex items-center gap-3">
+                          {dayBreaks > 0 && (
+                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700 ring-1 ring-amber-200">
+                              {dayBreaks}m break
+                            </span>
+                          )}
+                          <span className="text-sm font-black text-slate-900">{dayHours.toFixed(1)}h</span>
+                        </div>
+                      </div>
+                      <div className="mt-2 space-y-1">
+                        {dayEntries.map((entry) => (
+                          <div key={entry.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-1.5">
+                            <p className="text-xs font-bold text-slate-600">
+                              {formatTime(entry.clock_in)}
+                              {entry.clock_out ? ` — ${formatTime(entry.clock_out)}` : ' — Active'}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              {entry.break_minutes > 0 && (
+                                <span className="text-[10px] font-bold text-amber-600">{entry.break_minutes}m brk</span>
+                              )}
+                              <span className="text-xs font-black text-slate-700">{formatHours(entry.total_hours)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {sortedDays.length === 0 && (
+                  <div className="px-4 py-8 text-center text-sm font-bold text-slate-400">No clock entries this month.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
