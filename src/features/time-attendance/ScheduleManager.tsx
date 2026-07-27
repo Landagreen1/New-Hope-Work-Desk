@@ -84,6 +84,31 @@ const TEMPLATES: ScheduleTemplate[] = [
       { dayOfWeek: 5, start: '10:00', end: '17:30' },
     ],
   },
+  {
+    id: 'after_hours_weekday',
+    label: 'After Hours (Mon-Fri)',
+    description: '12:00 - 20:30, Monday through Friday',
+    shifts: [
+      { dayOfWeek: 0, start: '12:00', end: '20:30' },
+      { dayOfWeek: 1, start: '12:00', end: '20:30' },
+      { dayOfWeek: 2, start: '12:00', end: '20:30' },
+      { dayOfWeek: 3, start: '12:00', end: '20:30' },
+      { dayOfWeek: 4, start: '12:00', end: '20:30' },
+    ],
+  },
+  {
+    id: 'after_hours_saturday',
+    label: 'After Hours + Saturday',
+    description: '12:00 - 20:30 weekdays, 12:00 - 20:30 Saturday',
+    shifts: [
+      { dayOfWeek: 0, start: '12:00', end: '20:30' },
+      { dayOfWeek: 1, start: '12:00', end: '20:30' },
+      { dayOfWeek: 2, start: '12:00', end: '20:30' },
+      { dayOfWeek: 3, start: '12:00', end: '20:30' },
+      { dayOfWeek: 4, start: '12:00', end: '20:30' },
+      { dayOfWeek: 5, start: '12:00', end: '20:30' },
+    ],
+  },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
