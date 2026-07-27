@@ -149,6 +149,14 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json({ error: error.message }, { status: 400 });
   }
 
+  // Log activity: attachment uploaded
+  await supabase.from("commercial_quote_activity_log").insert({
+    quote_id: id,
+    actor_id: user.id,
+    event_type: "attachment_uploaded",
+    details: { file_name: file.name, file_size: file.size },
+  });
+
   return Response.json({ attachment: data }, { status: 201 });
 }
 
@@ -218,6 +226,14 @@ export async function DELETE(request: Request, context: RouteContext) {
   if (deleteError) {
     return Response.json({ error: deleteError.message }, { status: 400 });
   }
+
+  // Log activity: attachment deleted
+  await supabase.from("commercial_quote_activity_log").insert({
+    quote_id: id,
+    actor_id: user.id,
+    event_type: "attachment_deleted",
+    details: { attachment_id: attachmentId },
+  });
 
   return Response.json({ success: true });
 }

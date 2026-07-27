@@ -57,6 +57,11 @@ export type SubNavId =
   | "cs_queue"
   // Commercial
   | "commercial_board"
+  | "commercial_database"
+  | "commercial_commissions"
+  | "commercial_timing"
+  | "commercial_commission_report"
+  | "commercial_reports"
   // Renewals
   | "renewals_dashboard"
   // Time & Attendance
@@ -143,13 +148,23 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
 
   // Commercial
   if (isManager || isCommercial) {
+    const commercialSubs: SubNavItem[] = [
+      { id: "commercial_board", label: "Kanban Board", icon: Building2 },
+      { id: "commercial_database", label: "Database", icon: Table2 },
+    ];
+    if (isManager) {
+      commercialSubs.push(
+        { id: "commercial_commissions", label: "Commission Review", icon: ShieldCheck },
+        { id: "commercial_timing", label: "Timing Report", icon: Clock },
+        { id: "commercial_commission_report", label: "Commission Report", icon: BarChart3 },
+        { id: "commercial_reports", label: "Overview", icon: Gauge },
+      );
+    }
     modules.push({
       id: "commercial",
       label: "Commercial",
       icon: Building2,
-      subItems: [
-        { id: "commercial_board", label: "Kanban Board", icon: Building2 },
-      ],
+      subItems: commercialSubs,
     });
   }
 

@@ -155,6 +155,15 @@ export async function PATCH(request: Request, context: RouteContext) {
     return Response.json({ error: error.message }, { status: 400 });
   }
 
+  // Log activity: field updated
+  const fieldNames = Object.keys(updates);
+  await supabase.from("commercial_quote_activity_log").insert({
+    quote_id: id,
+    actor_id: user.id,
+    event_type: "field_updated",
+    details: { fields: fieldNames, updates },
+  });
+
   return Response.json({ id: data.id });
 }
 

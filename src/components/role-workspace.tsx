@@ -8,7 +8,12 @@ import { useRouter } from "next/navigation";
 
 import { SidebarLayout, type NavigationState, type SubNavId } from "@/components/sidebar-layout";
 import { WorkDeskApp } from "@/components/work-desk-app";
-import CommercialWorkspace from "@/features/commercial/CommercialWorkspace";
+import CommercialBoard from "@/features/commercial/CommercialBoard";
+import CommercialCommissionReport from "@/features/commercial/CommercialCommissionReport";
+import CommercialCommissionReview from "@/features/commercial/CommercialCommissionReview";
+import CommercialDatabase from "@/features/commercial/CommercialDatabase";
+import CommercialReports from "@/features/commercial/CommercialReports";
+import CommercialTimingReport from "@/features/commercial/CommercialTimingReport";
 import TimeAttendanceWorkspace from "@/features/time-attendance/TimeAttendanceWorkspace";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
@@ -190,8 +195,25 @@ export function RoleWorkspace({
     // --- Commercial ---
     if (module === "commercial") {
       return (
-        <Suspense fallback={<LoadingWorkspace label="Commercial Board" />}>
-          <CommercialWorkspace initialProfile={profile} embedded />
+        <Suspense fallback={<LoadingWorkspace label="Commercial" />}>
+          {subNav === "commercial_database" && (
+            <CommercialDatabase initialProfile={profile} embedded />
+          )}
+          {subNav === "commercial_commissions" && isManager && (
+            <CommercialCommissionReview initialProfile={profile} embedded />
+          )}
+          {subNav === "commercial_timing" && isManager && (
+            <CommercialTimingReport initialProfile={profile} embedded />
+          )}
+          {subNav === "commercial_commission_report" && isManager && (
+            <CommercialCommissionReport initialProfile={profile} embedded />
+          )}
+          {subNav === "commercial_reports" && isManager && (
+            <CommercialReports initialProfile={profile} embedded />
+          )}
+          {(subNav === "commercial_board" || (!["commercial_database", "commercial_commissions", "commercial_timing", "commercial_commission_report", "commercial_reports"].includes(subNav))) && (
+            <CommercialBoard initialProfile={profile} embedded />
+          )}
         </Suspense>
       );
     }

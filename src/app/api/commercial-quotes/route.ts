@@ -173,6 +173,14 @@ export async function POST(request: Request) {
     moved_by: user.id,
   });
 
+  // Log activity: card created
+  await supabase.from("commercial_quote_activity_log").insert({
+    quote_id: data.id,
+    actor_id: user.id,
+    event_type: "created",
+    details: { business_name: businessName, board_column: targetColumn },
+  });
+
   // Create default checklist: Email / Recording / Form
   const { data: checklist } = await supabase
     .from("commercial_quote_checklists")

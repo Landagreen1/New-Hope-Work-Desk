@@ -101,5 +101,13 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json({ error: error.message }, { status: 400 });
   }
 
+  // Log activity: comment added
+  await supabase.from("commercial_quote_activity_log").insert({
+    quote_id: id,
+    actor_id: user.id,
+    event_type: "comment_added",
+    details: { comment_id: data.id, preview: content.slice(0, 100) },
+  });
+
   return Response.json({ comment: data }, { status: 201 });
 }

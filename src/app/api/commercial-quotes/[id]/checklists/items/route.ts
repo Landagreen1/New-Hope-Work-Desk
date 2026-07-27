@@ -95,6 +95,14 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json({ error: error.message }, { status: 400 });
   }
 
+  // Log activity: checklist item added
+  await supabase.from("commercial_quote_activity_log").insert({
+    quote_id: id,
+    actor_id: user.id,
+    event_type: "checklist_item_added",
+    details: { checklist_id: checklistId, label },
+  });
+
   return Response.json({ item: data }, { status: 201 });
 }
 
@@ -182,6 +190,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     return Response.json({ error: error.message }, { status: 400 });
   }
 
+  // Log activity: checklist item toggled
+  await supabase.from("commercial_quote_activity_log").insert({
+    quote_id: id,
+    actor_id: user.id,
+    event_type: "checklist_item_toggled",
+    details: { item_id: itemId, label: data.label, is_checked: data.is_checked },
+  });
+
   return Response.json({ item: data });
 }
 
@@ -251,6 +267,14 @@ export async function DELETE(request: Request, context: RouteContext) {
   if (error) {
     return Response.json({ error: error.message }, { status: 400 });
   }
+
+  // Log activity: checklist item deleted
+  await supabase.from("commercial_quote_activity_log").insert({
+    quote_id: id,
+    actor_id: user.id,
+    event_type: "checklist_item_deleted",
+    details: { item_id: itemId },
+  });
 
   return Response.json({ success: true });
 }
