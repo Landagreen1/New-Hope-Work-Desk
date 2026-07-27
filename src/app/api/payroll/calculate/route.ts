@@ -32,6 +32,22 @@ export async function GET(request: Request) {
     return Response.json({ error: "period_start and period_end are required." }, { status: 400 });
   }
 
+  // Check for overlapping already-processed periods
+  const { data: overlapping } = await supabase
+    .from("payroll_periods")
+    .select("id, period_start, period_end, status")
+    .eq("status", "processed")
+    .lte("period_start", periodEnd)
+    .gte("period_end", periodStart);
+
+  if (overlapping && overlapping.length > 0) {
+    const conflicts = overlapping.map(p => `${p.period_start} to ${p.period_end}`).join(', ');
+    return Response.json({
+      error: `This period overlaps with already-processed payroll: ${conflicts}. Choose dates that don't overlap with existing periods.`,
+      overlapping_periods: overlapping,
+    }, { status: 409 });
+  }
+
   // Get all active employees with payment settings
   const { data: employees } = await supabase
     .from("profiles")

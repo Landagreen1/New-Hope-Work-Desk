@@ -67,6 +67,20 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
   const [error, setError] = useState<string | null>(null);
   const [processedId, setProcessedId] = useState<string | null>(null);
   const [detailEmployee, setDetailEmployee] = useState<EmployeeSummary | null>(null);
+  const [processedPeriods, setProcessedPeriods] = useState<Array<{ id: string; period_start: string; period_end: string; pay_date: string; processed_at: string }>>([]);
+
+  // Fetch already-processed periods
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/payroll/periods');
+        if (res.ok) {
+          const body = await res.json();
+          setProcessedPeriods((body.periods ?? []).filter((p: { status: string }) => p.status === 'processed'));
+        }
+      } catch { /* silent */ }
+    })();
+  }, [step]); // Refresh when step changes (e.g., after processing)
 
   // Step 1 → Step 2: Calculate
   const handleCalculate = useCallback(async () => {
@@ -207,6 +221,29 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
               {loading ? <><RefreshCw className="h-4 w-4 animate-spin" /> Calculating...</> : <>Calculate Payroll <ChevronRight className="h-4 w-4" /></>}
             </button>
           </div>
+
+          {/* Already processed periods */}
+          {processedPeriods.length > 0 && (
+            <div className="mt-6 rounded-2xl border border-slate-200 p-4">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3">
+                <Lock className="mr-1 inline h-3.5 w-3.5" />Already Processed Periods
+              </p>
+              <div className="space-y-2">
+                {processedPeriods.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2.5">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{p.period_start} → {p.period_end}</p>
+                      <p className="text-[10px] text-slate-400">Pay date: {p.pay_date} · Processed: {new Date(p.processed_at).toLocaleDateString()}</p>
+                    </div>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-200">Locked</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-[10px] font-semibold text-slate-400">
+                These periods cannot be re-processed. Select dates that don&apos;t overlap with locked periods.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
