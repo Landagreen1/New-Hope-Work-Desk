@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 
 import type { ProfileLite } from '../nhwd-shared/types';
-import PayrollDashboard from './PayrollDashboard';
+import PayrollProcessor from './PayrollProcessor';
 import PTORequests from './PTORequests';
 import ScheduleManager from './ScheduleManager';
 import StaffingCoverage from './StaffingCoverage';
@@ -41,7 +41,7 @@ export default function TimeAttendanceWorkspace({ initialProfile, embedded = fal
         {tab === 'clock' && <TimeClock initialProfile={initialProfile} />}
         {tab === 'schedule' && <ScheduleManager initialProfile={initialProfile} />}
         {tab === 'pto' && <PTORequests initialProfile={initialProfile} />}
-        {tab === 'payroll' && <PayrollDashboard initialProfile={initialProfile} />}
+        {tab === 'payroll' && <PayrollProcessor initialProfile={initialProfile} />}
         {tab === 'staffing' && isManager && <StaffingCoverage />}
         {tab === 'workforce' && isSuperAdmin && <WorkforceAdmin initialProfile={initialProfile} />}
       </Suspense>
