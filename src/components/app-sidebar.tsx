@@ -180,17 +180,19 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
     });
   }
 
-  // Time & Attendance (manager/super_admin only)
-  if (isManager) {
+  // Time & Attendance (all roles — super_admin gets extra tabs)
+  {
     const taSubItems: SubNavItem[] = [
       { id: "ta_clock", label: "Time Clock", icon: Clock },
       { id: "ta_schedule", label: "Schedule", icon: Calendar },
       { id: "ta_pto", label: "Time Off", icon: Calendar },
-      { id: "ta_payroll", label: "Payroll", icon: LayoutDashboard },
-      { id: "ta_staffing", label: "Coverage", icon: UsersRound },
     ];
     if (role === "super_admin") {
-      taSubItems.push({ id: "ta_workforce", label: "Workforce", icon: BarChart3 });
+      taSubItems.push(
+        { id: "ta_payroll", label: "Payroll", icon: LayoutDashboard },
+        { id: "ta_staffing", label: "Coverage", icon: UsersRound },
+        { id: "ta_workforce", label: "Workforce", icon: BarChart3 },
+      );
     }
     modules.push({
       id: "time_attendance",
