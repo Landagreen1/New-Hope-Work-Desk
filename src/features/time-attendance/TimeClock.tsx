@@ -338,7 +338,7 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
         <div className={ui.stat}><p className={ui.statLabel}>Entries</p><p className={ui.statValue + ' text-2xl'}>{weekEntries.length}</p></div>
       </div>
 
-      {/* ─── Manager: Today's entries only, with late tags ─── */}
+      {/* ─── Manager: Today grouped by employee, late tag on first clock-in only ─── */}
       {isManager && (
         <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -351,44 +351,78 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
             <span className="text-xs font-bold text-slate-400">{todayEntries.length} entr{todayEntries.length === 1 ? 'y' : 'ies'}</span>
           </div>
           <div className="divide-y divide-slate-100">
-            {todayEntries.length > 0 ? todayEntries.map((entry) => {
-              const entryStatus = CLOCK_STATUS_STYLES[entry.clock_status];
-              const profileId = entry.profile_id;
-              const scheduledStart = scheduleByProfile[profileId];
-              const entryIsLate = scheduledStart ? isLate(entry.clock_in, scheduledStart) : false;
-              const minsLate = entryIsLate && scheduledStart ? lateMinutes(entry.clock_in, scheduledStart) : 0;
+            {(() => {
+              // Group entries by employee
+              const grouped: Record<string, { name: string; entries: typeof todayEntries }> = {};
+              for (const entry of todayEntries) {
+                const pid = entry.profile_id;
+                if (!grouped[pid]) grouped[pid] = { name: entry.profiles?.display_name ?? 'Unknown', entries: [] };
+                grouped[pid].entries.push(entry);
+              }
+              // Sort entries within each group by clock_in ascending (earliest first)
+              for (const g of Object.values(grouped)) {
+                g.entries.sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime());
+              }
+              const employees = Object.entries(grouped).sort((a, b) => a[1].name.localeCompare(b[1].name));
 
-              return (
-                <div key={entry.id} className="flex items-center justify-between px-5 py-3.5">
-                  <div className="flex items-center gap-3">
-                    <span className={`h-2.5 w-2.5 rounded-full ${entryStatus.dot}`} />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-black text-slate-900">
-                          {entry.profiles?.display_name ?? 'Unknown'}
-                        </p>
-                        {entryIsLate && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-black text-rose-700 ring-1 ring-rose-200">
-                            <AlertTriangle className="h-3 w-3" /> Late {minsLate}m
-                          </span>
-                        )}
+              if (!employees.length) {
+                return <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">No clock entries today.</div>;
+              }
+
+              return employees.map(([pid, { name, entries }]) => {
+                const firstEntry = entries[0];
+                const scheduledStart = scheduleByProfile[pid];
+                const firstIsLate = scheduledStart && firstEntry ? isLate(firstEntry.clock_in, scheduledStart) : false;
+                const minsLateVal = firstIsLate && scheduledStart ? lateMinutes(firstEntry.clock_in, scheduledStart) : 0;
+                const totalHrs = entries.reduce((sum, e) => sum + (e.total_hours ?? 0), 0);
+                const totalBreak = entries.reduce((sum, e) => sum + (e.break_minutes ?? 0), 0);
+                const lastEntry = entries[entries.length - 1];
+                const currentStatus = CLOCK_STATUS_STYLES[lastEntry.clock_status];
+
+                return (
+                  <div key={pid} className="px-5 py-4">
+                    {/* Employee header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className={`h-3 w-3 rounded-full ${currentStatus.dot} ${!lastEntry.clock_out ? 'animate-pulse' : ''}`} />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-black text-slate-900">{name}</p>
+                            {firstIsLate && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-black text-rose-700 ring-1 ring-rose-200">
+                                <AlertTriangle className="h-3 w-3" /> Late {minsLateVal}m
+                              </span>
+                            )}
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${currentStatus.bg} ${currentStatus.text}`}>
+                              {!lastEntry.clock_out ? currentStatus.label : 'Clocked Out'}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                            {entries.length} session{entries.length !== 1 ? 's' : ''}
+                            {totalBreak > 0 && ` · ${totalBreak}m break`}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                        {formatTime(entry.clock_in)}
-                        {entry.clock_out ? ` — ${formatTime(entry.clock_out)}` : ' — Active'}
-                        {entry.break_minutes > 0 && ` · ${entry.break_minutes}m break`}
-                      </p>
+                      <span className="text-lg font-black text-slate-900">{totalHrs > 0 ? `${totalHrs.toFixed(1)}h` : '—'}</span>
+                    </div>
+
+                    {/* Individual entries */}
+                    <div className="mt-2.5 ml-6 space-y-1.5">
+                      {entries.map((entry) => (
+                        <div key={entry.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                          <p className="text-xs font-bold text-slate-700">
+                            {formatTime(entry.clock_in)}
+                            {entry.clock_out ? ` — ${formatTime(entry.clock_out)}` : ' — Active'}
+                            {entry.break_minutes > 0 && <span className="ml-2 text-slate-400">({entry.break_minutes}m break)</span>}
+                          </p>
+                          <span className="text-xs font-black text-slate-600">{formatHours(entry.total_hours)}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${entryStatus.bg} ${entryStatus.text}`}>{entryStatus.label}</span>
-                    <span className="text-sm font-black text-slate-700">{formatHours(entry.total_hours)}</span>
-                  </div>
-                </div>
-              );
-            }) : (
-              <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">No clock entries today.</div>
-            )}
+                );
+              });
+            })()}
           </div>
         </div>
       )}
