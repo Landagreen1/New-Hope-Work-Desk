@@ -68,7 +68,8 @@ export async function GET(request: Request) {
     return Response.json({ error: error.message }, { status: 400 });
   }
 
-  // Strip sensitive fields from commercial agents (they should not see risk, commission info)
+  // Strip sensitive fields from commercial agents
+  // Commission info is only visible to the card owner or managers/super_admin
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
@@ -77,15 +78,27 @@ export async function GET(request: Request) {
 
   let quotes = data ?? [];
   if (profile?.role === "commercial") {
-    quotes = quotes.map((q: Record<string, unknown>) => ({
-      ...q,
-      risk_level: undefined,
-      commission_status: undefined,
-      commission_decision_by: undefined,
-      commission_decision_at: undefined,
-      commission_denial_reason: undefined,
-      commission_notes: undefined,
-    }));
+    quotes = quotes
+      // Hide cards in commission columns that don't belong to this agent
+      .filter((q: Record<string, unknown>) => {
+        if (q.board_column === "commission_approved" || q.board_column === "commission_not_approved") {
+          return q.assigned_to === user.id;
+        }
+        return true;
+      })
+      .map((q: Record<string, unknown>) => {
+        // Strip risk from all cards for agents
+        const stripped: Record<string, unknown> = { ...q, risk_level: undefined };
+        // Strip commission fields from cards not owned by this agent
+        if (q.assigned_to !== user.id) {
+          stripped.commission_status = undefined;
+          stripped.commission_decision_by = undefined;
+          stripped.commission_decision_at = undefined;
+          stripped.commission_denial_reason = undefined;
+          stripped.commission_notes = undefined;
+        }
+        return stripped;
+      });
   }
 
   return Response.json({ quotes });

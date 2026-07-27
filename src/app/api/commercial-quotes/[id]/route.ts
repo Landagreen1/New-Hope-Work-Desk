@@ -61,6 +61,7 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   // Strip sensitive fields from commercial agents
+  // Commission info only visible to card owner or managers/super_admin
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
@@ -69,14 +70,18 @@ export async function GET(request: Request, context: RouteContext) {
 
   let quote = data;
   if (profile?.role === "commercial") {
+    const isOwner = data.assigned_to === user.id;
     quote = {
       ...quote,
       risk_level: undefined,
-      commission_status: undefined,
-      commission_decision_by: undefined,
-      commission_decision_at: undefined,
-      commission_denial_reason: undefined,
-      commission_notes: undefined,
+      // Only strip commission fields if not the card owner
+      ...(isOwner ? {} : {
+        commission_status: undefined,
+        commission_decision_by: undefined,
+        commission_decision_at: undefined,
+        commission_denial_reason: undefined,
+        commission_notes: undefined,
+      }),
     };
   }
 

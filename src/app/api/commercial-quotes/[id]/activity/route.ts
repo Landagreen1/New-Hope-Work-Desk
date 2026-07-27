@@ -45,7 +45,32 @@ export async function GET(request: Request, context: RouteContext) {
     return Response.json({ error: error.message }, { status: 400 });
   }
 
-  return Response.json({ activity: data ?? [] });
+  let activity = data ?? [];
+
+  // For commercial agents who don't own this card, filter out commission-related events
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role === "commercial") {
+    // Check if this agent owns the card
+    const { data: card } = await supabase
+      .from("commercial_quotes")
+      .select("assigned_to")
+      .eq("id", id)
+      .single();
+
+    if (card && card.assigned_to !== user.id) {
+      const commissionEvents = ["commission_approved", "commission_denied"];
+      activity = activity.filter(
+        (entry: Record<string, unknown>) => !commissionEvents.includes(entry.event_type as string)
+      );
+    }
+  }
+
+  return Response.json({ activity });
 }
 
 /**

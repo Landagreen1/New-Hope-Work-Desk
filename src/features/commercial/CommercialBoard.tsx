@@ -201,8 +201,11 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
     ? BOARD_COLUMNS.filter((c) => c.id === 'archive')
     : BOARD_COLUMNS.filter((c) => {
         if (c.id === 'archive') return false;
-        // Commercial agents should not see commission columns
-        if (!isManager && MANAGER_ONLY_COLUMNS.includes(c.id)) return false;
+        // Commercial agents only see commission columns if they own cards there
+        if (!isManager && MANAGER_ONLY_COLUMNS.includes(c.id)) {
+          // Show commission column if the agent has their own cards in it
+          return quotes.some((q) => q.board_column === c.id && q.assigned_to === initialProfile.id);
+        }
         return true;
       });
 
