@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   Activity,
@@ -375,9 +375,9 @@ const reportNavigationGroups: ReportNavigationGroup[] = [
       },
       {
         id: "taken",
-        label: "Taken Quotes",
+        label: "Recovered Quotes",
         description:
-          "Quotes rescued after the current agent’s single response timer expired.",
+          "Quotes recovered after the current agent’s single response timer expired.",
         icon: Zap,
       },
       {
@@ -702,7 +702,7 @@ const quoteActivityLabels: Record<string, string> = {
   not_sold: "Marked Not Sold",
   completed: "Work completed",
   cancelled: "Work cancelled",
-  taken: "Quote stolen after timer",
+  taken: "Quote recovered after timer",
   timer_claimed: "Timed quote claimed",
   customer_service_handoff: "Passed to Customer Service",
   activation: "Activation logged",
@@ -774,7 +774,7 @@ const quoteUpdateFilterOptions = [
   ["not_sold", "Not Sold"],
   ["activation", "Activation"],
   ["change", "Change"],
-  ["taken", "Rescue / stolen quote"],
+  ["taken", "Rescue / recovered quote"],
   ["customer_service_handoff", "Customer Service handoff"],
 ] as const;
 
@@ -1912,6 +1912,7 @@ function StartRescueTimerForm({
   return (
     <form action={onSubmit} className="space-y-4 p-6">
       <input type="hidden" name="rotation" value={rotation} />
+      <input type="hidden" name="receivedAt" value={receivedLocal} />
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-900">
         Starting the timer alerts the current agent immediately. The quote
         becomes available to every other eligible agent after the current
@@ -1948,13 +1949,13 @@ function RescueTimerPanel({
   currentUserId,
   canRescue,
   onClaim,
-  onSteal,
+  onRecover,
 }: {
   timer: QuoteTakeTimer;
   currentUserId: string;
   canRescue: boolean;
   onClaim: () => void;
-  onSteal: () => void;
+  onRecover: () => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -2034,11 +2035,11 @@ function RescueTimerPanel({
           onClick={onClaim}
           className="mt-3 w-full rounded-xl bg-[#223f7a] px-4 py-3 text-xs font-black text-white hover:bg-[#17305f]"
         >
-          Take Timed Quote
+          Claim Timed Quote
         </button>
       ) : canRescue ? (
         <button
-          onClick={onSteal}
+          onClick={onRecover}
           disabled={!ready}
           className={cn(
             "mt-3 w-full rounded-xl px-4 py-3 text-xs font-black text-white",
@@ -2048,12 +2049,12 @@ function RescueTimerPanel({
           )}
         >
           {ready
-            ? "Steal Quote"
+            ? "Recover Quote"
             : `Available in ${formatElapsedSeconds(remainingSeconds)}`}
         </button>
       ) : (
         <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-center text-xs font-bold text-slate-500">
-          You must be Available and active in this queue to rescue the quote.
+          You must be Available and active in this queue to recover the quote.
         </p>
       )}
     </div>
@@ -2225,30 +2226,32 @@ function RotationCard({
   upcoming,
   isMyTurn,
   canStartTimer = false,
+  canRecover = false,
   timer,
   currentUserId,
   onAction,
   onPass,
   onStartTimer,
   onClaimTimer,
-  onStealTimer,
+  onRecoverTimer,
 }: {
   variant: RotationKind;
   current: Agent | null;
   upcoming: Agent[];
   isMyTurn: boolean;
   canStartTimer?: boolean;
+  canRecover?: boolean;
   timer?: QuoteTakeTimer;
   currentUserId: string;
   onAction: () => void;
   onPass: () => void;
   onStartTimer?: () => void;
   onClaimTimer?: () => void;
-  onStealTimer?: () => void;
+  onRecoverTimer?: () => void;
 }) {
   const config = rotationConfig[variant];
   const canRescue = Boolean(
-    canStartTimer && timer && timer.currentProfileId !== currentUserId,
+    canRecover && timer && timer.currentProfileId !== currentUserId,
   );
   return (
     <section className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -2313,13 +2316,13 @@ function RotationCard({
         </div>
       )}
 
-      {timer && onClaimTimer && onStealTimer ? (
+      {timer && onClaimTimer && onRecoverTimer ? (
         <RescueTimerPanel
           timer={timer}
           currentUserId={currentUserId}
           canRescue={canRescue}
           onClaim={onClaimTimer}
-          onSteal={onStealTimer}
+          onRecover={onRecoverTimer}
         />
       ) : null}
 
@@ -2362,7 +2365,7 @@ function RotationCard({
       </div>
       {timer ? (
         <p className="mt-3 text-[11px] font-semibold leading-5 text-slate-400">
-          Stealing consumes only the displayed current agent&apos;s turn. The
+          Recovering consumes only the displayed current agent&apos;s turn. The
           next regular queue position does not change.
         </p>
       ) : null}
@@ -3748,11 +3751,11 @@ export function WorkDeskApp({
     );
   }
 
-  async function stealTimedQuote(timerId: string) {
+  async function recoverTimedQuote(timerId: string) {
     await runRpc(
       "steal_timed_quote",
       { p_timer_id: timerId },
-      "Quote stolen. Only the missed agent's turn was consumed; the next queue position was preserved.",
+      "Quote recovered. Only the missed agent's turn was consumed; the next queue position was preserved.",
     );
   }
 
@@ -4417,6 +4420,11 @@ export function WorkDeskApp({
                     canStartTimer={
                       whatsappCurrentId !== null &&
                       currentUserId !== whatsappCurrentId &&
+                      currentUser.availability === "available"
+                    }
+                    canRecover={
+                      whatsappCurrentId !== null &&
+                      currentUserId !== whatsappCurrentId &&
                       currentUser.availability === "available" &&
                       currentUser.whatsappActive
                     }
@@ -4428,8 +4436,8 @@ export function WorkDeskApp({
                     onClaimTimer={() =>
                       whatsappTimer && void claimTimedQuote(whatsappTimer.id)
                     }
-                    onStealTimer={() =>
-                      whatsappTimer && void stealTimedQuote(whatsappTimer.id)
+                    onRecoverTimer={() =>
+                      whatsappTimer && void recoverTimedQuote(whatsappTimer.id)
                     }
                   />
                   <RotationCard
@@ -7355,7 +7363,7 @@ function ManagerView({
         "Price Sent": row.pending,
         "Efficiency %": row.efficiency.toFixed(1),
         "Conversion %": row.conversion.toFixed(1),
-        "Quotes Taken": row.taken,
+        "Quotes Recovered": row.taken,
         Notes: row.notes,
         Category: row.category,
       })),
@@ -7396,14 +7404,14 @@ function ManagerView({
 
   function exportTakenReport() {
     downloadCsv(
-      `taken-quotes-${reportStart}-to-${reportEnd}.csv`,
+      `recovered-quotes-${reportStart}-to-${reportEnd}.csv`,
       reportData.takenRows.map((row) => ({
-        "Taken At": formatDateTime(row.takenAt),
+        "Recovered At": formatDateTime(row.takenAt),
         "Quote Received At": formatDateTime(row.receivedAt),
         Customer: row.customer,
         Source: row.source,
         Queue: row.rotation === "whatsapp" ? "WhatsApp" : "RingCentral",
-        "Taken By": `@${row.takerUsername}`,
+        "Recovered By": `@${row.takerUsername}`,
         "Quote Agent": row.quoteAgent,
         "Missed Agent": row.skippedAgents
           .map((agent) => `@${agent.username}`)
@@ -8482,7 +8490,7 @@ function ManagerView({
                     onClick={exportTimingReport}
                   />
                   <ExportButton
-                    label="Taken Quotes"
+                    label="Recovered Quotes"
                     onClick={exportTakenReport}
                   />
                   <ExportButton
@@ -10339,9 +10347,9 @@ function TakenQuotesReport({
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryCard
-          label="Taken Quotes"
+          label="Recovered Quotes"
           value={summary.total}
-          note="Overdue quotes taken"
+          note="Overdue quotes recovered"
           icon={<Zap className="h-5 w-5 text-amber-700" />}
           tone="bg-amber-50"
         />
@@ -10362,14 +10370,14 @@ function TakenQuotesReport({
         <SummaryCard
           label="WhatsApp"
           value={summary.whatsapp}
-          note="Taken from WA queue"
+          note="Recovered from WA queue"
           icon={<MessageCircleMore className="h-5 w-5 text-emerald-700" />}
           tone="bg-emerald-50"
         />
         <SummaryCard
           label="RingCentral"
           value={summary.ringcentral}
-          note="Taken from RC queue"
+          note="Recovered from RC queue"
           icon={<PhoneCall className="h-5 w-5 text-blue-700" />}
           tone="bg-blue-50"
         />
@@ -10378,11 +10386,11 @@ function TakenQuotesReport({
       <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-6">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
-            Taken Performance
+            Recovery Performance
           </p>
-          <h3 className="mt-1 text-xl font-black">Who takes overdue quotes</h3>
+          <h3 className="mt-1 text-xl font-black">Who recovers overdue quotes</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Counts only successful Take actions. Lower elapsed time means the
+            Counts only successful Recover actions. Lower elapsed time means the
             agent acted sooner after becoming eligible.
           </p>
         </div>
@@ -10391,7 +10399,7 @@ function TakenQuotesReport({
             <thead className="bg-amber-50/60 text-[11px] font-black uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-5 py-3">Agent</th>
-                <th className="px-5 py-3">Taken</th>
+                <th className="px-5 py-3">Recovered</th>
                 <th className="px-5 py-3">WhatsApp</th>
                 <th className="px-5 py-3">RingCentral</th>
                 <th className="px-5 py-3">Avg Elapsed</th>
@@ -10431,7 +10439,7 @@ function TakenQuotesReport({
         </div>
         {!byAgent.length ? (
           <div className="p-8 text-center text-sm font-semibold text-slate-500">
-            No successful Take actions in this date range.
+            No successful Recover actions in this date range.
           </div>
         ) : null}
       </section>
@@ -10439,10 +10447,10 @@ function TakenQuotesReport({
       <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-6">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-            Taken Quote Detail
+            Recovered Quote Detail
           </p>
           <h3 className="mt-1 text-xl font-black">
-            Every successful Take action
+            Every successful Recover action
           </h3>
           <p className="mt-1 text-sm text-slate-500">
             Shows the exact quote, taker, missed current agent, queue, and
@@ -10453,10 +10461,10 @@ function TakenQuotesReport({
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
               <tr>
-                <th className="px-5 py-3">Taken</th>
+                <th className="px-5 py-3">Recovered</th>
                 <th className="px-5 py-3">Customer</th>
                 <th className="px-5 py-3">Queue</th>
-                <th className="px-5 py-3">Taken By</th>
+                <th className="px-5 py-3">Recovered By</th>
                 <th className="px-5 py-3">Missed Agent</th>
                 <th className="px-5 py-3">Elapsed</th>
                 <th className="px-5 py-3">Quote Agent</th>
@@ -10521,7 +10529,7 @@ function TakenQuotesReport({
         </div>
         {!rows.length ? (
           <div className="p-8 text-center text-sm font-semibold text-slate-500">
-            No taken quotes in this date range.
+            No recovered quotes in this date range.
           </div>
         ) : null}
       </section>
@@ -11558,7 +11566,7 @@ function DailyOperationsReport({ rows }: { rows: DailyRow[] }) {
     <ReportShell
       eyebrow="Daily Operations"
       title="Day-by-day performance"
-      note="Compares volume, sales, service activity, passes, and Taken activity by day."
+      note="Compares volume, sales, service activity, passes, and Recover activity by day."
     >
       {rows.length ? (
         <div className="overflow-x-auto">
@@ -11570,7 +11578,7 @@ function DailyOperationsReport({ rows }: { rows: DailyRow[] }) {
                 <th className="py-3">Sold</th>
                 <th className="py-3">Not Sold</th>
                 <th className="py-3">Pending</th>
-                <th className="py-3">Taken</th>
+                <th className="py-3">Recovered</th>
                 <th className="py-3">Passes</th>
                 <th className="py-3">Service</th>
               </tr>
@@ -11635,7 +11643,7 @@ function AgentScorecardReport({ rows }: { rows: AgentScoreRow[] }) {
               <th className="py-3">Efficiency</th>
               <th className="py-3">Avg Price</th>
               <th className="py-3">Notes Coverage</th>
-              <th className="py-3">Taken</th>
+              <th className="py-3">Recovered</th>
               <th className="py-3">Open Load</th>
             </tr>
           </thead>
@@ -11839,7 +11847,7 @@ function QueueHealthReport({
       <ReportShell
         eyebrow="Queue Health"
         title="Rotation health and queue behavior"
-        note="Shows current owner, available coverage, claims, passes, and stolen-quote activity by queue."
+        note="Shows current owner, available coverage, claims, passes, and recovered-quote activity by queue."
       >
         <div className="grid gap-4 xl:grid-cols-3">
           {rows.map((row) => (
@@ -11888,7 +11896,7 @@ function QueueHealthReport({
                 <p>
                   <strong>{row.taken}</strong>
                   <br />
-                  Stolen
+                  Recovered
                 </p>
               </div>
             </div>
@@ -11946,7 +11954,7 @@ function MissedTurnsReport({ rows }: { rows: MissedTurnRow[] }) {
       ) : (
         <EmptyReport
           title="No missed turns"
-          note="No rescue timers expired and resulted in a stolen quote during this period."
+          note="No rescue timers expired and resulted in a recovered quote during this period."
         />
       )}
     </ReportShell>
@@ -12254,7 +12262,7 @@ function SourceRiskReport({
                   <th className="py-3 pr-5">Not Sold</th>
                   <th className="py-3 pr-5">Price Sent</th>
                   <th className="py-3 pr-5">Conversion</th>
-                  <th className="py-3 pr-5">Taken</th>
+                  <th className="py-3 pr-5">Recovered</th>
                   <th className="py-3">Notes</th>
                 </tr>
               </thead>
@@ -12372,7 +12380,7 @@ function ActivationAuditReport({
         <SummaryCard
           label="Activation Tasks"
           value={activations.length}
-          note="Taken as workload"
+          note="Recovered as workload"
           icon={<CheckCircle2 className="h-5 w-5 text-cyan-700" />}
           tone="bg-cyan-50"
         />
