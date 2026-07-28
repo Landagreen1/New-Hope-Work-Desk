@@ -4,6 +4,23 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 /**
+ * Count weekdays (Mon-Fri) between two dates inclusive.
+ */
+function countWeekdays(startStr: string, endStr: string): number {
+  const start = new Date(startStr + "T00:00:00");
+  const end = new Date(endStr + "T00:00:00");
+  if (end < start) return 0;
+  let count = 0;
+  const current = new Date(start);
+  while (current <= end) {
+    const dow = current.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+}
+
+/**
  * GET /api/pto
  * Get PTO requests. Agents see own, managers see all.
  * Query: ?status=pending&profile_id=...
@@ -125,29 +142,58 @@ export async function PATCH(request: Request) {
 
   if (error) return Response.json({ error: error.message }, { status: 400 });
 
-  // If approved, update PTO balance
+  // If approved, update PTO balance — deduct only weekdays
   if (decision === "approved") {
     const { data: req } = await supabase
       .from("pto_requests")
-      .select("profile_id, pto_type, total_days")
+      .select("profile_id, pto_type, start_date, end_date, total_days")
       .eq("id", requestId)
       .single();
 
     if (req) {
+      // Recalculate weekdays to ensure accuracy
+      const weekdays = countWeekdays(req.start_date, req.end_date);
+      const daysToDeduct = weekdays > 0 ? weekdays : Number(req.total_days);
+
       const year = new Date().getFullYear();
       const field = req.pto_type === "vacation" ? "vacation_used"
         : req.pto_type === "sick" ? "sick_used"
         : "personal_used";
 
-      // Upsert balance for current year then increment used
-      const { error: rpcError } = await supabase.rpc("increment_pto_used", {
-        p_profile_id: req.profile_id,
-        p_year: year,
-        p_field: field,
-        p_days: req.total_days,
-      });
-      // If RPC doesn't exist yet, silently ignore
-      if (rpcError) { /* graceful fallback — RPC may not be installed yet */ }
+      // Ensure a balance record exists for this year
+      const { data: existingBalance } = await supabase
+        .from("pto_balances")
+        .select("id, vacation_used, sick_used, personal_used")
+        .eq("profile_id", req.profile_id)
+        .eq("year", year)
+        .maybeSingle();
+
+      if (existingBalance) {
+        // Increment the used field
+        const balanceRecord = existingBalance as unknown as Record<string, unknown>;
+        const currentUsed = Number(balanceRecord[field] ?? 0);
+        const { error: updateError } = await supabase
+          .from("pto_balances")
+          .update({ [field]: currentUsed + daysToDeduct })
+          .eq("id", existingBalance.id as string);
+
+        if (updateError) {
+          console.error("Failed to update PTO balance:", updateError.message);
+        }
+      } else {
+        // Create balance record for this year with the deduction
+        const { error: insertError } = await supabase
+          .from("pto_balances")
+          .insert({
+            profile_id: req.profile_id,
+            year,
+            [field]: daysToDeduct,
+          });
+
+        if (insertError) {
+          console.error("Failed to create PTO balance:", insertError.message);
+        }
+      }
     }
   }
 

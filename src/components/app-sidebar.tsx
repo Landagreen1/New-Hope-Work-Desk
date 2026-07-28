@@ -72,6 +72,7 @@ export type SubNavId =
   | "ta_payroll"
   | "ta_staffing"
   | "ta_workforce"
+  | "ta_reports"
   // User Admin
   | "ua_users";
 
@@ -191,6 +192,7 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
         { id: "ta_payroll", label: "Payroll", icon: LayoutDashboard },
         { id: "ta_staffing", label: "Coverage", icon: UsersRound },
         { id: "ta_workforce", label: "Workforce", icon: BarChart3 },
+        { id: "ta_reports", label: "Reports", icon: TrendingUp },
       );
     }
     modules.push({

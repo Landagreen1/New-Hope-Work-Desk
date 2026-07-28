@@ -70,6 +70,9 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
   const [processedId, setProcessedId] = useState<string | null>(null);
   const [detailEmployee, setDetailEmployee] = useState<EmployeeSummary | null>(null);
   const [processedPeriods, setProcessedPeriods] = useState<Array<{ id: string; period_start: string; period_end: string; pay_date: string; processed_at: string }>>([]);
+  const [historyDetailPeriod, setHistoryDetailPeriod] = useState<{ id: string; period_start: string; period_end: string; pay_date: string } | null>(null);
+  const [historySummaries, setHistorySummaries] = useState<EmployeeSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Fetch already-processed periods
   useEffect(() => {
@@ -136,7 +139,7 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
     finally { setProcessing(false); }
   }, [summaries, periodStart, periodEnd, payDate]);
 
-  // CSV export
+  // CSV export for current calculation
   const handleExport = () => {
     const headers = ['Employee', 'Hours', 'OT Hours', 'Break Hrs', 'PTO Days', 'Rate', 'Regular Pay', 'OT Pay', 'PTO Pay', 'Gross', 'Deductions', 'Net Pay'];
     const rows = summaries.map(s => [
@@ -149,6 +152,58 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
     const a = document.createElement('a');
     a.href = url;
     a.download = `payroll-${periodStart}-to-${periodEnd}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // View details of a historical payroll period
+  const handleViewHistoryDetail = async (period: { id: string; period_start: string; period_end: string; pay_date: string }) => {
+    setHistoryDetailPeriod(period);
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/payroll?period_id=${period.id}`);
+      if (!res.ok) throw new Error('Failed to load period details.');
+      const body = await res.json();
+      const mapped = (body.summaries ?? []).map((s: Record<string, unknown>) => ({
+        profile_id: s.profile_id,
+        display_name: (s.profiles as Record<string, string>)?.display_name ?? 'Unknown',
+        initials: (s.profiles as Record<string, string>)?.initials ?? '??',
+        role: (s.profiles as Record<string, string>)?.role ?? '',
+        hourly_rate: 0,
+        regular_hours: Number(s.regular_hours ?? 0),
+        overtime_hours: Number(s.overtime_hours ?? 0),
+        break_hours: Number(s.break_hours ?? 0),
+        total_hours: Number(s.total_hours ?? 0),
+        pto_days_used: Number(s.pto_days_used ?? 0),
+        pto_hours_paid: Number(s.pto_hours_paid ?? 0),
+        regular_pay: Number(s.regular_pay ?? 0),
+        overtime_pay: Number(s.overtime_pay ?? 0),
+        pto_pay: Number(s.pto_pay ?? 0),
+        gross_pay: Number(s.gross_pay ?? 0),
+        deductions_total: Number(s.deductions_total ?? 0),
+        net_pay: Number(s.net_pay ?? 0),
+        days_worked: Number(s.days_worked ?? 0),
+        entries_count: 0,
+      }));
+      setHistorySummaries(mapped);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Load failed.'); }
+    finally { setHistoryLoading(false); }
+  };
+
+  // CSV export for a historical period
+  const handleHistoryExport = () => {
+    if (!historyDetailPeriod || !historySummaries.length) return;
+    const headers = ['Employee', 'Regular Hours', 'OT Hours', 'Break Hours', 'Total Hours', 'PTO Days', 'Regular Pay', 'OT Pay', 'PTO Pay', 'Gross Pay', 'Deductions', 'Net Pay', 'Days Worked'];
+    const rows = historySummaries.map(s => [
+      `"${s.display_name}"`, s.regular_hours, s.overtime_hours, s.break_hours, s.total_hours,
+      s.pto_days_used, s.regular_pay, s.overtime_pay, s.pto_pay, s.gross_pay, s.deductions_total, s.net_pay, s.days_worked,
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `payroll-${historyDetailPeriod.period_start}-to-${historyDetailPeriod.period_end}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -240,7 +295,16 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
                       <p className="text-sm font-black text-slate-800">{p.period_start} → {p.period_end}</p>
                       <p className="mt-0.5 text-[10px] text-slate-400">Pay date: {p.pay_date} · Processed: {new Date(p.processed_at).toLocaleDateString()}</p>
                     </div>
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-200">Paid</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleViewHistoryDetail(p)}
+                        className="rounded-lg bg-[#223f7a] px-3 py-1.5 text-[10px] font-black text-white hover:bg-[#1a3260] transition"
+                      >
+                        View Details
+                      </button>
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-200">Paid</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -368,6 +432,132 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
           onClose={() => setDetailEmployee(null)}
           onRefresh={() => void handleCalculate()}
         />
+      )}
+
+      {/* ─── Payroll History Detail Modal ─── */}
+      {historyDetailPeriod && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6" onMouseDown={() => setHistoryDetailPeriod(null)}>
+          <div className="mx-auto max-w-5xl rounded-[30px] bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#4d6aa8]">Payroll Period Detail</p>
+                <h3 className="mt-1 text-xl font-black text-slate-900">
+                  {historyDetailPeriod.period_start} → {historyDetailPeriod.period_end}
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-500">Pay date: {historyDetailPeriod.pay_date}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleHistoryExport}
+                  disabled={historySummaries.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white shadow hover:bg-emerald-700 disabled:opacity-50 transition"
+                >
+                  <Download className="h-3.5 w-3.5" /> Download CSV
+                </button>
+                <button onClick={() => setHistoryDetailPeriod(null)} className="rounded-xl bg-slate-100 px-3 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-200">
+                  <X className="mr-1 inline h-3.5 w-3.5" />Close
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-16"><RefreshCw className="h-5 w-5 animate-spin text-slate-400" /></div>
+            ) : historySummaries.length === 0 ? (
+              <div className="px-6 py-12 text-center text-sm font-bold text-slate-400">No summaries found for this period.</div>
+            ) : (
+              <div className="p-6 space-y-5">
+                {/* Summary Stats */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-[10px] font-black uppercase text-slate-400">Employees</p>
+                    <p className="mt-1 text-2xl font-black text-slate-900">{historySummaries.length}</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-[10px] font-black uppercase text-slate-400">Total Hours</p>
+                    <p className="mt-1 text-2xl font-black text-slate-900">{historySummaries.reduce((s, e) => s + e.total_hours, 0).toFixed(1)}h</p>
+                  </div>
+                  <div className="rounded-2xl bg-amber-50 p-4">
+                    <p className="text-[10px] font-black uppercase text-amber-700">Overtime</p>
+                    <p className="mt-1 text-2xl font-black text-amber-800">{historySummaries.reduce((s, e) => s + e.overtime_hours, 0).toFixed(1)}h</p>
+                  </div>
+                  <div className="rounded-2xl bg-emerald-50 p-4">
+                    <p className="text-[10px] font-black uppercase text-emerald-700">Total Gross</p>
+                    <p className="mt-1 text-2xl font-black text-emerald-800">{formatMoney(historySummaries.reduce((s, e) => s + e.gross_pay, 0))}</p>
+                  </div>
+                  <div className="rounded-2xl bg-blue-50 p-4">
+                    <p className="text-[10px] font-black uppercase text-blue-700">Total Net</p>
+                    <p className="mt-1 text-2xl font-black text-blue-800">{formatMoney(historySummaries.reduce((s, e) => s + e.net_pay, 0))}</p>
+                  </div>
+                </div>
+
+                {/* Detail Table */}
+                <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className={ui.table}>
+                      <thead>
+                        <tr>
+                          <th className={ui.th}>Employee</th>
+                          <th className={ui.th}>Regular Hrs</th>
+                          <th className={ui.th}>OT Hrs</th>
+                          <th className={ui.th}>Break Hrs</th>
+                          <th className={ui.th}>Total Hrs</th>
+                          <th className={ui.th}>PTO Days</th>
+                          <th className={ui.th}>Regular Pay</th>
+                          <th className={ui.th}>OT Pay</th>
+                          <th className={ui.th}>PTO Pay</th>
+                          <th className={ui.th}>Gross</th>
+                          <th className={ui.th}>Deductions</th>
+                          <th className={ui.th}>Net Pay</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historySummaries.map(s => (
+                          <tr key={s.profile_id} className={ui.trHover}>
+                            <td className={ui.td}>
+                              <div className="flex items-center gap-2">
+                                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#223f7a] text-[9px] font-black text-white">{s.initials}</span>
+                                <span className="text-xs font-black text-slate-800">{s.display_name}</span>
+                              </div>
+                            </td>
+                            <td className={ui.td + ' text-xs font-bold'}>{s.regular_hours}h</td>
+                            <td className={ui.td + ' text-xs font-bold text-amber-700'}>{s.overtime_hours > 0 ? `${s.overtime_hours}h` : '—'}</td>
+                            <td className={ui.td + ' text-xs font-bold text-slate-500'}>{s.break_hours > 0 ? `${s.break_hours}h` : '—'}</td>
+                            <td className={ui.td + ' text-xs font-black'}>{s.total_hours}h</td>
+                            <td className={ui.td + ' text-xs font-bold text-violet-700'}>{s.pto_days_used > 0 ? `${s.pto_days_used}d` : '—'}</td>
+                            <td className={ui.td + ' text-xs font-bold'}>{formatMoney(s.regular_pay)}</td>
+                            <td className={ui.td + ' text-xs font-bold text-amber-700'}>{s.overtime_pay > 0 ? formatMoney(s.overtime_pay) : '—'}</td>
+                            <td className={ui.td + ' text-xs font-bold text-violet-700'}>{s.pto_pay > 0 ? formatMoney(s.pto_pay) : '—'}</td>
+                            <td className={ui.td + ' text-sm font-black text-slate-800'}>{formatMoney(s.gross_pay)}</td>
+                            <td className={ui.td + ' text-xs font-bold text-rose-600'}>{s.deductions_total > 0 ? `-${formatMoney(s.deductions_total)}` : '—'}</td>
+                            <td className={ui.td + ' text-sm font-black text-emerald-700'}>{formatMoney(s.net_pay)}</td>
+                          </tr>
+                        ))}
+                        {/* Totals row */}
+                        <tr className="bg-slate-50 font-black border-t-2 border-slate-200">
+                          <td className={ui.td + ' text-sm font-black'}>Total</td>
+                          <td className={ui.td + ' text-xs font-black'}>{historySummaries.reduce((s, e) => s + e.regular_hours, 0).toFixed(1)}h</td>
+                          <td className={ui.td + ' text-xs font-black text-amber-700'}>{historySummaries.reduce((s, e) => s + e.overtime_hours, 0).toFixed(1)}h</td>
+                          <td className={ui.td + ' text-xs font-black'}>{historySummaries.reduce((s, e) => s + e.break_hours, 0).toFixed(1)}h</td>
+                          <td className={ui.td + ' text-xs font-black'}>{historySummaries.reduce((s, e) => s + e.total_hours, 0).toFixed(1)}h</td>
+                          <td className={ui.td + ' text-xs font-black'}>{historySummaries.reduce((s, e) => s + e.pto_days_used, 0)}d</td>
+                          <td className={ui.td + ' text-xs font-black'}>{formatMoney(historySummaries.reduce((s, e) => s + e.regular_pay, 0))}</td>
+                          <td className={ui.td + ' text-xs font-black text-amber-700'}>{formatMoney(historySummaries.reduce((s, e) => s + e.overtime_pay, 0))}</td>
+                          <td className={ui.td + ' text-xs font-black text-violet-700'}>{formatMoney(historySummaries.reduce((s, e) => s + e.pto_pay, 0))}</td>
+                          <td className={ui.td + ' text-sm font-black'}>{formatMoney(historySummaries.reduce((s, e) => s + e.gross_pay, 0))}</td>
+                          <td className={ui.td + ' text-xs font-black text-rose-600'}>-{formatMoney(historySummaries.reduce((s, e) => s + e.deductions_total, 0))}</td>
+                          <td className={ui.td + ' text-sm font-black text-emerald-700'}>{formatMoney(historySummaries.reduce((s, e) => s + e.net_pay, 0))}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ─── Step 3: Done ─── */}

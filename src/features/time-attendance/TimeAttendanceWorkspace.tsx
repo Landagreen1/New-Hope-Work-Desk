@@ -5,6 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { canAdministerAttendance } from '@/lib/permissions';
 
 import type { ProfileLite } from '../nhwd-shared/types';
+import AttendanceReports from './AttendanceReports';
 import PayrollDashboard from './PayrollDashboard';
 import PayrollProcessor from './PayrollProcessor';
 import PTORequests from './PTORequests';
@@ -17,7 +18,7 @@ interface TimeAttendanceWorkspaceProps {
   initialProfile: ProfileLite;
   embedded?: boolean;
   /** Active tab driven by the global sidebar navigation */
-  activeSection?: 'clock' | 'schedule' | 'pto' | 'payroll' | 'staffing' | 'workforce';
+  activeSection?: 'clock' | 'schedule' | 'pto' | 'payroll' | 'staffing' | 'workforce' | 'reports';
 }
 
 function LoadingFallback() {
@@ -51,6 +52,7 @@ export default function TimeAttendanceWorkspace({ initialProfile, embedded = fal
         )}
         {tab === 'staffing' && canAdminister && <StaffingCoverage />}
         {tab === 'workforce' && canAdminister && <WorkforceAdmin initialProfile={initialProfile} />}
+        {tab === 'reports' && canAdminister && <AttendanceReports initialProfile={initialProfile} />}
       </Suspense>
     </section>
   );

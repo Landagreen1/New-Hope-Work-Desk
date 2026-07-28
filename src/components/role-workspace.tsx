@@ -225,6 +225,7 @@ export function RoleWorkspace({
         : subNav === "ta_payroll" && permissions.attendanceAdministration ? "payroll"
         : subNav === "ta_staffing" && permissions.attendanceAdministration ? "staffing"
         : subNav === "ta_workforce" && permissions.attendanceAdministration ? "workforce"
+        : subNav === "ta_reports" && permissions.attendanceAdministration ? "reports"
         : "clock";
       return (
         <Suspense fallback={<LoadingWorkspace label="Time & Attendance" />}>
