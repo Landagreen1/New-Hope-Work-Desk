@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Suspense, useState } from 'react';
 
+import { canAccessCommercial, canManageCommercial } from '@/lib/permissions';
 import type { ProfileLite } from '../nhwd-shared/types';
 import CommercialBoard from './CommercialBoard';
 import CommercialCommissionReport from './CommercialCommissionReport';
@@ -52,7 +53,16 @@ function LoadingFallback() {
 
 export default function CommercialWorkspace({ initialProfile, embedded = false }: CommercialWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<CommercialTab>('board');
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const isManager = canManageCommercial(initialProfile.role);
+  const canAccess = canAccessCommercial(initialProfile.role);
+
+  if (!canAccess) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-500">
+        Commercial access is required.
+      </div>
+    );
+  }
 
   const visibleTabs = TABS.filter((t) => !t.managerOnly || isManager);
 

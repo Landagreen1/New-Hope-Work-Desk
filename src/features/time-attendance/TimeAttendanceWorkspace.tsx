@@ -2,7 +2,10 @@
 
 import { Suspense, useEffect, useState } from 'react';
 
+import { canAdministerAttendance } from '@/lib/permissions';
+
 import type { ProfileLite } from '../nhwd-shared/types';
+import PayrollDashboard from './PayrollDashboard';
 import PayrollProcessor from './PayrollProcessor';
 import PTORequests from './PTORequests';
 import ScheduleManager from './ScheduleManager';
@@ -27,8 +30,7 @@ function LoadingFallback() {
 
 export default function TimeAttendanceWorkspace({ initialProfile, embedded = false, activeSection = 'clock' }: TimeAttendanceWorkspaceProps) {
   const [tab, setTab] = useState(activeSection);
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
-  const isSuperAdmin = initialProfile.role === 'super_admin';
+  const canAdminister = canAdministerAttendance(initialProfile.role);
 
   // Sync tab with prop changes (sidebar navigation)
   useEffect(() => {
@@ -41,9 +43,14 @@ export default function TimeAttendanceWorkspace({ initialProfile, embedded = fal
         {tab === 'clock' && <TimeClock initialProfile={initialProfile} />}
         {tab === 'schedule' && <ScheduleManager initialProfile={initialProfile} />}
         {tab === 'pto' && <PTORequests initialProfile={initialProfile} />}
-        {tab === 'payroll' && <PayrollProcessor initialProfile={initialProfile} />}
-        {tab === 'staffing' && isManager && <StaffingCoverage />}
-        {tab === 'workforce' && isSuperAdmin && <WorkforceAdmin initialProfile={initialProfile} />}
+        {tab === 'payroll' && canAdminister && (
+          <div className="space-y-6">
+            <PayrollDashboard initialProfile={initialProfile} />
+            <PayrollProcessor initialProfile={initialProfile} />
+          </div>
+        )}
+        {tab === 'staffing' && canAdminister && <StaffingCoverage />}
+        {tab === 'workforce' && canAdminister && <WorkforceAdmin initialProfile={initialProfile} />}
       </Suspense>
     </section>
   );

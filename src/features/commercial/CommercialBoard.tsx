@@ -16,6 +16,7 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { AlertCircle, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
+import { canManageCommercial } from '@/lib/permissions';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 import BoardColumnComponent from './BoardColumn';
@@ -38,7 +39,7 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
   const [showNewCardForm, setShowNewCardForm] = useState<BoardColumn | null>(null);
   const [showArchive, setShowArchive] = useState(false);
 
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const isManager = canManageCommercial(initialProfile.role);
 
   // ─── Drag-and-drop sensors ───────────────────────────────────────────────────
   const sensors = useSensors(

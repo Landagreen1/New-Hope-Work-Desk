@@ -1,3 +1,4 @@
+import { canAdministerAttendance } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -13,8 +14,12 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const canAdminister = canAdministerAttendance(profile?.role);
+
   const { searchParams } = new URL(request.url);
-  const profileId = searchParams.get("profile_id") || user.id;
+  const requestedProfileId = searchParams.get("profile_id");
+  const profileId = canAdminister ? requestedProfileId || user.id : user.id;
 
   const { data, error } = await supabase
     .from("employee_payment_settings")
@@ -42,7 +47,7 @@ export async function GET(request: Request) {
 
 /**
  * POST /api/payroll/settings
- * Create or update payment settings (manager only).
+ * Create or update payment settings (super admin only).
  * Body: { profile_id, payment_template, hourly_rate, salary_amount, pay_type, ... }
  */
 export async function POST(request: Request) {
@@ -53,8 +58,8 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "manager" && profile?.role !== "super_admin") {
-    return Response.json({ error: "Only managers and super admins can update payment settings." }, { status: 403 });
+  if (!canAdministerAttendance(profile?.role)) {
+    return Response.json({ error: "Only super admins can update payment settings." }, { status: 403 });
   }
 
   let body: Record<string, unknown>;

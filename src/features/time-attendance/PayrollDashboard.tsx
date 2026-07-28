@@ -1,34 +1,29 @@
 'use client';
 
-import { AlertCircle, DollarSign, Download, RefreshCw } from 'lucide-react';
+import { AlertCircle, DollarSign, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
-import type { EmployeePaymentSettings, PayrollPeriod, PayrollSummary } from './types';
+import type { EmployeePaymentSettings, PayrollSummary } from './types';
 import { PAYMENT_TEMPLATE_LABELS } from './types';
 
 interface PayrollDashboardProps { initialProfile: ProfileLite; }
 
 export default function PayrollDashboard({ initialProfile }: PayrollDashboardProps) {
   const [settings, setSettings] = useState<EmployeePaymentSettings | null>(null);
-  const [periods, setPeriods] = useState<PayrollPeriod[]>([]);
   const [summaries, setSummaries] = useState<PayrollSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
-
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [settingsRes, periodsRes, summariesRes] = await Promise.all([
+      const [settingsRes, summariesRes] = await Promise.all([
         fetch(`/api/payroll/settings?profile_id=${initialProfile.id}`),
-        fetch('/api/payroll/periods'),
         fetch(`/api/payroll?profile_id=${initialProfile.id}`),
       ]);
       if (settingsRes.ok) { const b = await settingsRes.json(); setSettings(b.settings); }
-      if (periodsRes.ok) { const b = await periodsRes.json(); setPeriods(b.periods); }
       if (summariesRes.ok) { const b = await summariesRes.json(); setSummaries(b.summaries); }
     } catch (err) { setError(err instanceof Error ? err.message : 'Load failed.'); }
     finally { setLoading(false); }

@@ -3,6 +3,8 @@
 import { AlertCircle, CheckCircle2, ChevronRight, Clock, DollarSign, Download, Edit3, Lock, RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
+import { canAdministerAttendance } from '@/lib/permissions';
+
 import DatePicker from '../nhwd-shared/DatePicker';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
@@ -54,7 +56,7 @@ function suggestPeriodDates(): { start: string; end: string; payDate: string } {
 }
 
 export default function PayrollProcessor({ initialProfile }: PayrollProcessorProps) {
-  const isSuperAdmin = initialProfile.role === 'super_admin';
+  const isSuperAdmin = canAdministerAttendance(initialProfile.role);
   const suggested = suggestPeriodDates();
 
   const [step, setStep] = useState<Step>('period');

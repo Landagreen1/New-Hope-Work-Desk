@@ -1,3 +1,4 @@
+import { canAdministerAttendance } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -14,9 +15,13 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const canAdminister = canAdministerAttendance(profile?.role);
+
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
-  const profileId = searchParams.get("profile_id");
+  const requestedProfileId = searchParams.get("profile_id");
+  const profileId = canAdminister ? requestedProfileId : user.id;
 
   let query = supabase
     .from("pto_requests")
@@ -78,7 +83,7 @@ export async function POST(request: Request) {
 
 /**
  * PATCH /api/pto
- * Approve or deny a PTO request (manager only).
+ * Approve or deny a PTO request (super admin only).
  * Body: { request_id, decision: 'approved' | 'denied', denial_reason? }
  */
 export async function PATCH(request: Request) {
@@ -89,8 +94,8 @@ export async function PATCH(request: Request) {
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "manager" && profile?.role !== "super_admin") {
-    return Response.json({ error: "Only managers can approve/deny PTO requests." }, { status: 403 });
+  if (!canAdministerAttendance(profile?.role)) {
+    return Response.json({ error: "Only super admins can approve or deny PTO requests." }, { status: 403 });
   }
 
   let body: Record<string, unknown>;

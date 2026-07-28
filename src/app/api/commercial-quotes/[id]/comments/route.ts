@@ -1,3 +1,4 @@
+import { canAccessCommercial } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -28,6 +29,19 @@ export async function GET(request: Request, context: RouteContext) {
     return Response.json(
       { error: "Authentication required." },
       { status: 401 },
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
     );
   }
 
@@ -69,6 +83,19 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json(
       { error: "Authentication required." },
       { status: 401 },
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
     );
   }
 

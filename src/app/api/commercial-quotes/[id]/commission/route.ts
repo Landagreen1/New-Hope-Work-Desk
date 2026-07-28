@@ -1,3 +1,4 @@
+import { canManageCommercial } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -32,16 +33,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  // Only managers can approve/deny commissions
+  // Only commercial managers can approve or deny commissions.
   const { data: profile } = await supabase
     .from("profiles")
     .select("role, display_name")
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "manager" && profile?.role !== "super_admin") {
+  if (!profile || !canManageCommercial(profile.role)) {
     return Response.json(
-      { error: "Only managers can approve or deny commissions." },
+      { error: "Commercial management access required." },
       { status: 403 },
     );
   }

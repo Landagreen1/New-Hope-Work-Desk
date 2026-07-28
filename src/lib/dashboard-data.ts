@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
   Agent,
+  AppRole,
   CustomerServiceUser,
   AlertNotification,
   AssignmentMethod,
@@ -29,7 +30,7 @@ type ProfileRow = {
   username: string;
   display_name: string;
   initials: string;
-  role: "agent" | "manager" | "customer_service" | "commercial" | "super_admin";
+  role: AppRole;
   rotation_position: number;
   whatsapp_position: number;
   ringcentral_position: number;
@@ -333,6 +334,8 @@ export async function loadDashboardData(
     throw new Error(errors[0]?.message || "Unable to load Work Desk data.");
 
   const profiles = (profilesResult.data || []) as ProfileRow[];
+  // Supervisors manage their department but never participate in employee
+  // rotations or ordinary Customer Service assignment pools.
   const agentProfiles = profiles.filter((profile) => profile.role === "agent");
   const customerServiceProfiles = profiles.filter(
     (profile) => profile.role === "customer_service",

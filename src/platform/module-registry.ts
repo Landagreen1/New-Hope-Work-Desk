@@ -1,4 +1,14 @@
-export type ModuleRole = 'agent' | 'manager' | 'customer_service' | 'commercial' | 'super_admin';
+import type { AppRole } from '@/lib/types';
+import {
+  APP_ROLES,
+  canAccessCommercial,
+  canAccessCustomerService,
+  canAccessRenewals,
+  canAccessSales,
+  canAccessSalesIntakeQueue,
+} from '@/lib/permissions';
+
+export type ModuleRole = AppRole;
 export type ModuleStatus = 'active' | 'planned';
 
 export interface AppModule {
@@ -10,13 +20,17 @@ export interface AppModule {
   status: ModuleStatus;
 }
 
+function rolesWhere(predicate: (role: AppRole) => boolean): ModuleRole[] {
+  return APP_ROLES.filter(predicate);
+}
+
 export const appModules: AppModule[] = [
   {
     id: 'work-desk',
     name: 'Work Desk',
     description: 'Sales rotations, active work, pending pricing, quote records, and performance reporting.',
     route: '/',
-    roles: ['agent', 'manager', 'customer_service', 'super_admin'],
+    roles: [...APP_ROLES],
     status: 'active',
   },
   {
@@ -24,7 +38,9 @@ export const appModules: AppModule[] = [
     name: 'Operations Tools',
     description: 'Role-aware launcher for Customer Service Quote Intake and Renewals Management.',
     route: '/tools',
-    roles: ['agent', 'manager', 'customer_service', 'super_admin'],
+    roles: rolesWhere((role) =>
+      canAccessSales(role) || canAccessCustomerService(role) || canAccessRenewals(role),
+    ),
     status: 'active',
   },
   {
@@ -32,7 +48,7 @@ export const appModules: AppModule[] = [
     name: 'Customer Service Quote Intake',
     description: 'Structured Personal Auto and Commercial Auto intake for Customer Service.',
     route: '/tools/cs-intake',
-    roles: ['customer_service', 'manager', 'super_admin'],
+    roles: rolesWhere(canAccessCustomerService),
     status: 'active',
   },
   {
@@ -40,7 +56,7 @@ export const appModules: AppModule[] = [
     name: 'Sales Intake Queue',
     description: 'Claim or assign completed Customer Service intakes and convert them into quotes.',
     route: '/tools/cs-intake/queue',
-    roles: ['agent', 'manager', 'super_admin'],
+    roles: rolesWhere(canAccessSalesIntakeQueue),
     status: 'active',
   },
   {
@@ -48,7 +64,7 @@ export const appModules: AppModule[] = [
     name: 'Renewals Management',
     description: 'Import, assign, document, monitor, and re-quote renewals.',
     route: '/tools/renewals',
-    roles: ['agent', 'manager', 'customer_service', 'super_admin'],
+    roles: rolesWhere(canAccessRenewals),
     status: 'active',
   },
   {
@@ -56,7 +72,7 @@ export const appModules: AppModule[] = [
     name: 'Commercial Quotes Board',
     description: 'Kanban board for managing commercial policy quotes pipeline.',
     route: '/',
-    roles: ['commercial', 'manager', 'super_admin'],
+    roles: rolesWhere(canAccessCommercial),
     status: 'active',
   },
 ];

@@ -73,12 +73,21 @@ for (const entry of users) {
     authUser = data.user;
     createdNow = true;
     console.log(`Created ${entry.role}: ${entry.username}`);
-  } else if (resetPasswords) {
-    const { error } = await supabase.auth.admin.updateUserById(authUser.id, { password: entry.password });
-    if (error) throw error;
-    console.log(`Reset temporary password: ${entry.username}`);
   } else {
-    console.log(`Already exists: ${entry.username}`);
+    const authUpdates = {
+      user_metadata: {
+        ...authUser.user_metadata,
+        username: entry.username,
+        display_name: entry.displayName,
+        role: entry.role,
+      },
+      ...(resetPasswords ? { password: entry.password } : {}),
+    };
+    const { error } = await supabase.auth.admin.updateUserById(authUser.id, authUpdates);
+    if (error) throw error;
+    console.log(resetPasswords
+      ? `Updated role and reset temporary password: ${entry.username}`
+      : `Updated role/profile metadata: ${entry.username}`);
   }
 
   idsByUsername.set(entry.username, authUser.id);
@@ -86,27 +95,36 @@ for (const entry of users) {
   const isAgent = entry.role === "agent";
   const { data: existingProfile, error: profileReadError } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id,rotation_position,whatsapp_position,ringcentral_position,workload_position")
     .eq("id", authUser.id)
     .maybeSingle();
   if (profileReadError) throw profileReadError;
 
+  const rotationPosition = Number(entry.rotationPosition ?? existingProfile?.rotation_position ?? 0);
   const profilePayload = {
     id: authUser.id,
     username: entry.username,
     display_name: entry.displayName,
     initials: entry.initials,
     role: entry.role,
-    rotation_position: entry.rotationPosition,
+    rotation_position: rotationPosition,
     is_active: true,
     ...(!existingProfile ? {
-      whatsapp_position: entry.rotationPosition,
-      ringcentral_position: entry.rotationPosition,
-      workload_position: entry.rotationPosition,
+      whatsapp_position: rotationPosition,
+      ringcentral_position: rotationPosition,
+      workload_position: rotationPosition,
       availability: "unavailable",
-      whatsapp_active: isAgent,
-      ringcentral_active: isAgent,
-      workload_active: isAgent,
+    } : {}),
+    // Supervisors and all other non-agent roles must never retain queue
+    // eligibility when an existing Sales Agent is promoted.
+    ...(!isAgent ? {
+      whatsapp_active: false,
+      ringcentral_active: false,
+      workload_active: false,
+    } : !existingProfile ? {
+      whatsapp_active: true,
+      ringcentral_active: true,
+      workload_active: true,
     } : {}),
     ...(createdNow || resetPasswords ? { must_change_password: true } : {}),
   };
@@ -138,14 +156,21 @@ for (const rotation of initialRotations) {
     continue;
   }
 
+  const currentProfileId = idsByUsername.get(rotation.username);
+  const updatedBy = idsByUsername.get("oscar");
+  if (!currentProfileId || !updatedBy) {
+    console.warn(`Skipped missing ${rotation.kind} seed rotation; referenced bootstrap users are not in this provisioning batch.`);
+    continue;
+  }
+
   const { error } = await supabase.from("rotation_state").upsert({
     kind: rotation.kind,
-    current_profile_id: idsByUsername.get(rotation.username),
-    updated_by: idsByUsername.get("oscar"),
+    current_profile_id: currentProfileId,
+    updated_by: updatedBy,
   }, { onConflict: "kind" });
   if (error) throw error;
 }
 
 console.log("\nBootstrap complete.");
-console.log("12 user accounts are ready. Newly created or password-reset accounts must change their password on next login.");
-console.log("Temporary credentials are in private/PRIVATE-USER-CREDENTIALS.txt.");
+console.log(`${users.length} requested user accounts were created or updated. Newly created or password-reset accounts must change their password on next login.`);
+console.log("Temporary credentials remain in private/bootstrap-users.json.");

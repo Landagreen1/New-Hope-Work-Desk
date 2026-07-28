@@ -3,6 +3,8 @@
 import { AlertCircle, Calendar, CheckCircle2, Plus, RefreshCw, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
+import { canAdministerAttendance } from '@/lib/permissions';
+
 import DatePicker from '../nhwd-shared/DatePicker';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
@@ -52,7 +54,7 @@ export default function PTORequests({ initialProfile }: PTORequestsProps) {
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [denialReason, setDenialReason] = useState('');
 
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const canAdminister = canAdministerAttendance(initialProfile.role);
 
   // Auto-calculate weekday-only total days and check 2-week notice
   useEffect(() => {
@@ -74,7 +76,7 @@ export default function PTORequests({ initialProfile }: PTORequestsProps) {
     setLoading(true); setError(null);
     try {
       const [reqRes, balRes] = await Promise.all([
-        fetch(`/api/pto${!isManager ? `?profile_id=${initialProfile.id}` : ''}`),
+        fetch(`/api/pto${!canAdminister ? `?profile_id=${initialProfile.id}` : ''}`),
         fetch(`/api/pto/balance?profile_id=${initialProfile.id}`),
       ]);
       if (!reqRes.ok) throw new Error('Failed to load PTO requests.');
@@ -83,7 +85,7 @@ export default function PTORequests({ initialProfile }: PTORequestsProps) {
       if (balRes.ok) { const balBody = await balRes.json(); setBalance(balBody.balance); }
     } catch (err) { setError(err instanceof Error ? err.message : 'Load failed.'); }
     finally { setLoading(false); }
-  }, [isManager, initialProfile.id]);
+  }, [canAdminister, initialProfile.id]);
 
   useEffect(() => { void fetchData(); }, [fetchData]);
 
@@ -147,7 +149,7 @@ export default function PTORequests({ initialProfile }: PTORequestsProps) {
 
       {/* Action Bar */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-black text-slate-800"><Calendar className="inline h-4 w-4 mr-1.5" />{isManager ? 'All Time Off Requests' : 'My Time Off Requests'}</h3>
+        <h3 className="text-sm font-black text-slate-800"><Calendar className="inline h-4 w-4 mr-1.5" />{canAdminister ? 'All Time Off Requests' : 'My Time Off Requests'}</h3>
         <div className="flex gap-2">
           <button type="button" onClick={() => void fetchData()} className={ui.btnSecondary + ' text-xs'}><RefreshCw className="h-3.5 w-3.5" /></button>
           <button type="button" onClick={() => setShowForm(true)} className={ui.btnPrimary + ' text-xs'}><Plus className="h-3.5 w-3.5" /> Request Time Off</button>
@@ -175,11 +177,11 @@ export default function PTORequests({ initialProfile }: PTORequestsProps) {
                     {req.start_date} — {req.end_date}{' '}
                     <span className="font-bold text-slate-500">({req.total_days} weekday{req.total_days !== 1 ? 's' : ''})</span>
                   </p>
-                  {isManager && req.profiles && <p className="mt-0.5 text-[10px] font-bold text-slate-400">By {req.profiles.display_name}</p>}
+                  {canAdminister && req.profiles && <p className="mt-0.5 text-[10px] font-bold text-slate-400">By {req.profiles.display_name}</p>}
                   <p className="mt-1 text-xs text-slate-500">{req.reason}</p>
                   {req.denial_reason && <p className="mt-1 text-xs font-bold text-rose-600">Denied: {req.denial_reason}</p>}
                 </div>
-                {isManager && req.status === 'pending' && (
+                {canAdminister && req.status === 'pending' && (
                   <div className="flex gap-2">
                     <button type="button" onClick={() => void handleDecision(req.id, 'approved')} className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100"><CheckCircle2 className="h-4 w-4" /></button>
                     <button type="button" onClick={() => setReviewingId(req.id)} className="grid h-8 w-8 place-items-center rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"><XCircle className="h-4 w-4" /></button>

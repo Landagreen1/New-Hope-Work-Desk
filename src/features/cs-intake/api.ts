@@ -570,8 +570,11 @@ export interface LinkedQuoteEvent {
 export async function getLinkedQuoteEvents(workItemId: string): Promise<LinkedQuoteEvent[]> {
   const supabase = getSupabase();
 
-  // Fetch both events and notes in parallel
-  const [eventsResult, notesResult] = await Promise.all([
+  // Work Desk quotes use work_item_events/quote_notes. The older operational
+  // quote flow stores its timeline in quote_history_events under the quote ID.
+  // Query both so QuoteActivityModal is the single timeline UI for either
+  // quote model.
+  const [eventsResult, notesResult, operationalHistoryResult] = await Promise.all([
     supabase
       .from('work_item_events')
       .select('id, event_type, details, created_at, actor_profile_id')
@@ -582,54 +585,76 @@ export async function getLinkedQuoteEvents(workItemId: string): Promise<LinkedQu
       .select('id, author_profile_id, note, created_at')
       .eq('source_work_item_id', workItemId)
       .order('created_at', { ascending: true }),
+    supabase
+      .from('quote_history_events')
+      .select('id, event_type, details, reason, note_log_content, changed_fields, created_at, actor_display_name')
+      .eq('quote_id', workItemId)
+      .order('created_at', { ascending: true }),
   ]);
   throwIfError(eventsResult.error);
   throwIfError(notesResult.error);
+  throwIfError(operationalHistoryResult.error);
 
   const events = eventsResult.data ?? [];
   const notes = notesResult.data ?? [];
+  const operationalHistory = operationalHistoryResult.data ?? [];
 
-  if (!events.length && !notes.length) return [];
+  if (!events.length && !notes.length && !operationalHistory.length) return [];
 
-  // Resolve actor display names for both events and notes
+  // Resolve actor display names for Work Desk events and notes. Operational
+  // history already snapshots actor_display_name on each event.
   const allActorIds = [
     ...events.map(e => e.actor_profile_id),
     ...notes.map(n => n.author_profile_id),
   ].filter(Boolean);
   const uniqueActorIds = [...new Set(allActorIds)] as string[];
 
-  let actorMap = new Map<string, string>();
+  const actorMap = new Map<string, string>();
   if (uniqueActorIds.length) {
     const { data: profiles, error: profileError } = await supabase
       .from('profiles')
       .select('id, display_name')
       .in('id', uniqueActorIds);
     throwIfError(profileError);
-    for (const p of (profiles ?? [])) {
-      actorMap.set(p.id, p.display_name);
+    for (const profile of (profiles ?? [])) {
+      actorMap.set(profile.id, profile.display_name);
     }
   }
 
-  // Build combined timeline
-  const eventItems: LinkedQuoteEvent[] = events.map(e => ({
-    id: e.id,
-    event_type: e.event_type,
-    details: e.details,
-    created_at: e.created_at,
-    actor_name: actorMap.get(e.actor_profile_id) ?? 'System',
+  const eventItems: LinkedQuoteEvent[] = events.map(event => ({
+    id: `work-${event.id}`,
+    event_type: event.event_type,
+    details: event.details,
+    created_at: event.created_at,
+    actor_name: actorMap.get(event.actor_profile_id) ?? 'System',
   }));
 
-  const noteItems: LinkedQuoteEvent[] = notes.map(n => ({
-    id: n.id,
+  const noteItems: LinkedQuoteEvent[] = notes.map(note => ({
+    id: `note-${note.id}`,
     event_type: 'note',
-    details: { note: n.note },
-    created_at: n.created_at,
-    actor_name: actorMap.get(n.author_profile_id) ?? 'Unknown',
+    details: { note: note.note },
+    created_at: note.created_at,
+    actor_name: actorMap.get(note.author_profile_id) ?? 'Unknown',
   }));
 
-  // Merge and sort chronologically
-  return [...eventItems, ...noteItems].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  const operationalItems: LinkedQuoteEvent[] = operationalHistory.map(event => {
+    const details: Record<string, unknown> = {};
+    if (event.details) details.details = event.details;
+    if (event.reason) details.reason = event.reason;
+    if (event.note_log_content) details.intake_note_log = event.note_log_content;
+    if (event.changed_fields) details.changed_fields = event.changed_fields;
+
+    return {
+      id: `operational-${event.id}`,
+      event_type: event.event_type,
+      details: Object.keys(details).length ? details : null,
+      created_at: event.created_at,
+      actor_name: event.actor_display_name || 'System',
+    };
+  });
+
+  return [...eventItems, ...noteItems, ...operationalItems].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
 }
 

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
+import { canManageCommercial } from '@/lib/permissions';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 import CommercialActivityLog from './CommercialActivityLog';
@@ -38,7 +39,7 @@ export default function CommercialCommissionReview({ initialProfile, embedded = 
   const [submitting, setSubmitting] = useState(false);
   const [activityLogQuoteId, setActivityLogQuoteId] = useState<string | null>(null);
 
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const isManager = canManageCommercial(initialProfile.role);
 
   // ─── Fetch cards in 'sold' column (pending commission review) ────────────────
   const fetchPendingQuotes = useCallback(async () => {

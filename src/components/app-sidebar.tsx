@@ -22,9 +22,10 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import type { AppRole } from "@/features/nhwd-shared/types";
+import { getRolePermissions } from "@/lib/permissions";
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -96,16 +97,14 @@ interface ModuleDefinition {
 // ---------- Module Definitions ----------
 
 function getModulesForRole(role: AppRole, badges?: Record<string, number>): ModuleDefinition[] {
-  const isManager = role === "manager" || role === "super_admin";
-  const isAgent = role === "agent";
+  const permissions = getRolePermissions(role);
   const isCS = role === "customer_service";
-  const isCommercial = role === "commercial";
 
   const modules: ModuleDefinition[] = [];
 
   // Sales module
-  if (!isCommercial) {
-    const salesSubs: SubNavItem[] = isManager
+  if (permissions.sales) {
+    const salesSubs: SubNavItem[] = permissions.manageSales
       ? [
           { id: "sales_overview", label: "Overview", icon: ShieldCheck },
           { id: "sales_work", label: "Work & Pricing", icon: ClipboardList, badge: badges?.sales_work },
@@ -134,7 +133,7 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
   }
 
   // Customer Service
-  if (isManager || isCS) {
+  if (permissions.customerService) {
     modules.push({
       id: "customer_service",
       label: "Customer Service",
@@ -147,12 +146,12 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
   }
 
   // Commercial
-  if (isManager || isCommercial) {
+  if (permissions.commercial) {
     const commercialSubs: SubNavItem[] = [
       { id: "commercial_board", label: "Better Trello", icon: Building2 },
       { id: "commercial_database", label: "Database", icon: Table2 },
     ];
-    if (isManager) {
+    if (permissions.manageCommercial) {
       commercialSubs.push(
         { id: "commercial_commissions", label: "Commission Review", icon: ShieldCheck },
         { id: "commercial_timing", label: "Timing Report", icon: Clock },
@@ -169,7 +168,7 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
   }
 
   // Renewals
-  if (!isCommercial) {
+  if (permissions.renewals) {
     modules.push({
       id: "renewals",
       label: "Renewals",
@@ -187,7 +186,7 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
       { id: "ta_schedule", label: "Schedule", icon: Calendar },
       { id: "ta_pto", label: "Time Off", icon: Calendar },
     ];
-    if (role === "super_admin") {
+    if (permissions.attendanceAdministration) {
       taSubItems.push(
         { id: "ta_payroll", label: "Payroll", icon: LayoutDashboard },
         { id: "ta_staffing", label: "Coverage", icon: UsersRound },
@@ -202,8 +201,8 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
     });
   }
 
-  // User Admin (manager/super_admin only)
-  if (isManager) {
+  // User Admin (broad manager/super_admin only)
+  if (permissions.userAdministration) {
     modules.push({
       id: "user_admin",
       label: "User Administration",
@@ -215,6 +214,37 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
   }
 
   return modules;
+}
+
+export function getDefaultNavigation(role: AppRole): NavigationState {
+  switch (role) {
+    case "commercial":
+    case "commercial_supervisor":
+      return { module: "commercial", subNav: "commercial_board" };
+    case "customer_service_supervisor":
+      return { module: "customer_service", subNav: "cs_intakes" };
+    case "manager":
+    case "sales_supervisor":
+    case "super_admin":
+      return { module: "sales", subNav: "sales_overview" };
+    case "agent":
+    case "customer_service":
+      return { module: "sales", subNav: "sales_desk" };
+  }
+}
+
+export function resolveNavigationForRole(
+  role: AppRole,
+  navigation: NavigationState,
+): NavigationState {
+  const accessibleModule = getModulesForRole(role).find(
+    (candidate) => candidate.id === navigation.module,
+  );
+  if (accessibleModule?.subItems.some((subItem) => subItem.id === navigation.subNav)) {
+    return navigation;
+  }
+
+  return getDefaultNavigation(role);
 }
 
 // ---------- Sidebar Component ----------
@@ -242,16 +272,7 @@ export function AppSidebar({
   );
 
   const modules = getModulesForRole(role, badges);
-
-  // Keep active module expanded
-  useEffect(() => {
-    setExpandedModules((prev) => {
-      if (prev.has(navigation.module)) return prev;
-      const next = new Set(prev);
-      next.add(navigation.module);
-      return next;
-    });
-  }, [navigation.module]);
+  const safeNavigation = resolveNavigationForRole(role, navigation);
 
   const toggleModule = useCallback((moduleId: ModuleId) => {
     setExpandedModules((prev) => {
@@ -279,8 +300,8 @@ export function AppSidebar({
       <div className="flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-1">
           {modules.map((mod) => {
-            const isExpanded = expandedModules.has(mod.id);
-            const isActiveModule = navigation.module === mod.id;
+            const isExpanded = expandedModules.has(mod.id) || safeNavigation.module === mod.id;
+            const isActiveModule = safeNavigation.module === mod.id;
             const ModIcon = mod.icon;
 
             return (
@@ -329,7 +350,7 @@ export function AppSidebar({
                 {isExpanded && mod.subItems.length > 1 && (
                   <ul className="ml-5 mt-1 space-y-0.5 border-l-2 border-slate-100 pl-4">
                     {mod.subItems.map((sub) => {
-                      const isActive = navigation.subNav === sub.id;
+                      const isActive = safeNavigation.subNav === sub.id;
                       const SubIcon = sub.icon;
 
                       return (

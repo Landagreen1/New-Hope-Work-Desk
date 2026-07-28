@@ -1,10 +1,11 @@
+import { canAdministerAttendance } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/payroll
- * Get payroll summaries for the current user or all (managers).
+ * Get payroll summaries for the current user or all (super admins).
  * Query: ?period_id=...&profile_id=...
  */
 export async function GET(request: Request) {
@@ -14,9 +15,13 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const canAdminister = canAdministerAttendance(profile?.role);
+
   const { searchParams } = new URL(request.url);
   const periodId = searchParams.get("period_id");
-  const profileId = searchParams.get("profile_id");
+  const requestedProfileId = searchParams.get("profile_id");
+  const profileId = canAdminister ? requestedProfileId : user.id;
 
   let query = supabase
     .from("payroll_summaries")

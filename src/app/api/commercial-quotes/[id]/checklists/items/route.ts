@@ -1,3 +1,4 @@
+import { canAccessCommercial } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -28,6 +29,19 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json(
       { error: "Authentication required." },
       { status: 401 },
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
     );
   }
 
@@ -131,6 +145,19 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -223,6 +250,19 @@ export async function DELETE(request: Request, context: RouteContext) {
     return Response.json(
       { error: "Authentication required." },
       { status: 401 },
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
     );
   }
 

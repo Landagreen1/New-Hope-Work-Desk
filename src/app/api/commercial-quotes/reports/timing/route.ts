@@ -1,3 +1,4 @@
+import { canManageCommercial } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -22,15 +23,15 @@ export async function GET() {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  // Only managers/super_admin can view reports
+  // Commercial managers and supervisors can view reports.
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "manager" && profile?.role !== "super_admin") {
-    return Response.json({ error: "Manager access required." }, { status: 403 });
+  if (!profile || !canManageCommercial(profile.role)) {
+    return Response.json({ error: "Commercial management access required." }, { status: 403 });
   }
 
   // Fetch all quotes that have reached sold or not_sold (completed quotes)

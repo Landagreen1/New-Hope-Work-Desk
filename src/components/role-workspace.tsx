@@ -3,9 +3,13 @@
 import {
   RefreshCw,
 } from "lucide-react";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import {
+  getDefaultNavigation,
+  resolveNavigationForRole,
+} from "@/components/app-sidebar";
 import { SidebarLayout, type NavigationState, type SubNavId } from "@/components/sidebar-layout";
 import { WorkDeskApp } from "@/components/work-desk-app";
 import CommercialBoard from "@/features/commercial/CommercialBoard";
@@ -20,6 +24,7 @@ import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type { ProfileLite } from "@/features/nhwd-shared/types";
 import RenewalsPage from "@/features/renewals/RenewalsPage";
 import WorkloadLog from "@/features/workload/WorkloadLog";
+import { getRolePermissions, isBroadManagerRole } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import type { DashboardData, SessionProfile } from "@/lib/types";
 
@@ -41,12 +46,7 @@ function ManagerCustomerServiceWorkspace({
   profile: ProfileLite;
   initialSubNav?: "intakes" | "queue";
 }) {
-  const [tab, setTab] = useState<"intakes" | "queue">(initialSubNav ?? "intakes");
-
-  // Sync with sidebar navigation changes
-  useEffect(() => {
-    if (initialSubNav) setTab(initialSubNav);
-  }, [initialSubNav]);
+  const tab = initialSubNav ?? "intakes";
 
   return (
     <div className="space-y-5">
@@ -108,20 +108,6 @@ function subNavToAgentTab(
   }
 }
 
-function getDefaultNav(role: string): NavigationState {
-  if (role === "commercial") {
-    return { module: "commercial", subNav: "commercial_board" };
-  }
-  if (role === "manager" || role === "super_admin") {
-    return { module: "sales", subNav: "sales_overview" };
-  }
-  if (role === "customer_service") {
-    return { module: "sales", subNav: "sales_desk" };
-  }
-  // agent
-  return { module: "sales", subNav: "sales_desk" };
-}
-
 export function RoleWorkspace({
   sessionProfile,
   initialData,
@@ -131,7 +117,7 @@ export function RoleWorkspace({
 }) {
   const router = useRouter();
   const [navigation, setNavigation] = useState<NavigationState>(
-    () => getDefaultNav(sessionProfile.role),
+    () => getDefaultNavigation(sessionProfile.role),
   );
 
   const handleSignOut = useCallback(async () => {
@@ -152,20 +138,22 @@ export function RoleWorkspace({
     [sessionProfile],
   );
 
-  const handleNavigate = useCallback((nav: NavigationState) => {
-    setNavigation(nav);
-  }, []);
+  const permissions = getRolePermissions(sessionProfile.role);
+  const activeNavigation = resolveNavigationForRole(sessionProfile.role, navigation);
+  const isBroadManager = isBroadManagerRole(sessionProfile.role);
 
-  const isManager = sessionProfile.role === "manager" || sessionProfile.role === "super_admin";
+  const handleNavigate = useCallback((nav: NavigationState) => {
+    setNavigation(resolveNavigationForRole(sessionProfile.role, nav));
+  }, [sessionProfile.role]);
 
   // Determine what content to render based on sidebar navigation state
   const renderContent = () => {
-    const { module, subNav } = navigation;
+    const { module, subNav } = activeNavigation;
 
     // --- Sales module: delegate to WorkDeskApp ---
-    if (module === "sales") {
-      const forceManagerTab = isManager ? subNavToManagerTab(subNav) : undefined;
-      const forceAgentTab = !isManager ? subNavToAgentTab(subNav) : undefined;
+    if (module === "sales" && permissions.sales) {
+      const forceManagerTab = permissions.manageSales ? subNavToManagerTab(subNav) : undefined;
+      const forceAgentTab = permissions.manageSales ? undefined : subNavToAgentTab(subNav);
 
       return (
         <WorkDeskApp
@@ -182,7 +170,7 @@ export function RoleWorkspace({
     }
 
     // --- Customer Service ---
-    if (module === "customer_service") {
+    if (module === "customer_service" && permissions.customerService) {
       const csSubTab = subNav === "cs_queue" ? "queue" : "intakes";
       return (
         <ManagerCustomerServiceWorkspace
@@ -193,22 +181,22 @@ export function RoleWorkspace({
     }
 
     // --- Commercial ---
-    if (module === "commercial") {
+    if (module === "commercial" && permissions.commercial) {
       return (
         <Suspense fallback={<LoadingWorkspace label="Commercial" />}>
           {subNav === "commercial_database" && (
             <CommercialDatabase initialProfile={profile} embedded />
           )}
-          {subNav === "commercial_commissions" && isManager && (
+          {subNav === "commercial_commissions" && permissions.manageCommercial && (
             <CommercialCommissionReview initialProfile={profile} embedded />
           )}
-          {subNav === "commercial_timing" && isManager && (
+          {subNav === "commercial_timing" && permissions.manageCommercial && (
             <CommercialTimingReport initialProfile={profile} embedded />
           )}
-          {subNav === "commercial_commission_report" && isManager && (
+          {subNav === "commercial_commission_report" && permissions.manageCommercial && (
             <CommercialCommissionReport initialProfile={profile} embedded />
           )}
-          {subNav === "commercial_reports" && isManager && (
+          {subNav === "commercial_reports" && permissions.manageCommercial && (
             <CommercialReports initialProfile={profile} embedded />
           )}
           {(subNav === "commercial_board" || (!["commercial_database", "commercial_commissions", "commercial_timing", "commercial_commission_report", "commercial_reports"].includes(subNav))) && (
@@ -219,24 +207,24 @@ export function RoleWorkspace({
     }
 
     // --- Renewals ---
-    if (module === "renewals") {
+    if (module === "renewals" && permissions.renewals) {
       return (
         <RenewalsPage
           initialProfile={profile}
           embedded
-          initialTab={isManager ? "pipeline" : "overview"}
-          showImportTab={isManager}
+          initialTab={isBroadManager ? "pipeline" : "overview"}
+          showImportTab={isBroadManager}
         />
       );
     }
 
     // --- Time & Attendance ---
-    if (module === "time_attendance") {
+    if (module === "time_attendance" && permissions.timeAttendance) {
       const taSection = subNav === "ta_schedule" ? "schedule"
         : subNav === "ta_pto" ? "pto"
-        : subNav === "ta_payroll" ? "payroll"
-        : subNav === "ta_staffing" ? "staffing"
-        : subNav === "ta_workforce" ? "workforce"
+        : subNav === "ta_payroll" && permissions.attendanceAdministration ? "payroll"
+        : subNav === "ta_staffing" && permissions.attendanceAdministration ? "staffing"
+        : subNav === "ta_workforce" && permissions.attendanceAdministration ? "workforce"
         : "clock";
       return (
         <Suspense fallback={<LoadingWorkspace label="Time & Attendance" />}>
@@ -246,7 +234,7 @@ export function RoleWorkspace({
     }
 
     // --- User Administration ---
-    if (module === "user_admin") {
+    if (module === "user_admin" && permissions.userAdministration) {
       return (
         <WorkDeskApp
           sessionProfile={sessionProfile}
@@ -267,7 +255,7 @@ export function RoleWorkspace({
     <SidebarLayout
       role={sessionProfile.role}
       displayName={sessionProfile.displayName}
-      navigation={navigation}
+      navigation={activeNavigation}
       onNavigate={handleNavigate}
       onSignOut={() => void handleSignOut()}
     >

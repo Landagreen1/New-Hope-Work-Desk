@@ -3,6 +3,7 @@
 import { CheckCircle2, Edit3, ExternalLink, Eye, FileText, RefreshCw, RotateCcw, Search, Trash2, UserCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { canManageCustomerService } from '@/lib/permissions';
 import { getSupabase, listActiveAgents } from '../nhwd-shared/client';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
@@ -177,7 +178,11 @@ export default function IntakeQueue({
     void loadRotation();
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    // Initial client-side queue synchronization.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh();
+  }, [refresh]);
 
   // Real-time: queue updates
   // Task 6.4: The refresh() function atomically fetches both intake data and quote statuses
@@ -218,9 +223,9 @@ export default function IntakeQueue({
     };
   }, []);
 
-  // Determine if current user is the RC turn holder or a Manager
+  // Determine if current user is the RC turn holder or can manage Customer Service
   const isCurrentRcAgent = profile.id === rcTurnHolderId;
-  const isManager = profile.role === 'manager' || profile.role === 'super_admin';
+  const canManageCs = canManageCustomerService(profile.role);
   const canClaimRc = isCurrentRcAgent;
 
   // Resolve RC turn holder display name
@@ -456,12 +461,12 @@ export default function IntakeQueue({
               {visible.map((row) => {
                 const customer = row.business_name || `${row.insured_first_name} ${row.insured_last_name}`.trim();
                 const isMine = row.claimed_by === profile.id;
-                const canConvert = isMine || isManager;
+                const canConvert = isMine || canManageCs;
                 const isRc = isRingcentralSource(row);
                 const isDeleted = row.status === 'deleted';
                 const hasLinkedQuote = Boolean(row.converted_at);
                 // Req 24.6: If intake already has a linked quote, don't allow duplicate assignment
-                const canAssign = isManager && row.status === 'submitted' && !hasLinkedQuote;
+                const canAssign = canManageCs && row.status === 'submitted' && !hasLinkedQuote;
 
                 return (
                   <tr key={row.id} className={`hover:bg-[#f8faff] ${isDeleted ? 'opacity-60' : ''}`}>
@@ -489,7 +494,7 @@ export default function IntakeQueue({
                       {row.submitted_at && (
                         <p className="mt-0.5 text-xs text-slate-400">
                           {new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
-                            -Math.max(0, Math.round((Date.now() - new Date(row.submitted_at).getTime()) / 3_600_000)),
+                            -Math.max(0, Math.round(((lastUpdated?.getTime() ?? new Date(row.submitted_at).getTime()) - new Date(row.submitted_at).getTime()) / 3_600_000)),
                             'hour',
                           )}
                         </p>
@@ -551,7 +556,7 @@ export default function IntakeQueue({
                         ) : null}
 
                         {/* Delete Quote: Manager only */}
-                        {isManager && hasLinkedQuote && row.work_item_id ? (
+                        {canManageCs && hasLinkedQuote && row.work_item_id ? (
                           <button
                             type="button"
                             className={ui.btnDanger}
@@ -564,7 +569,7 @@ export default function IntakeQueue({
 
                         {/* Edit: Manager can always edit; agent who created can edit if not yet assigned to another agent */}
                         {!isDeleted && (
-                          isManager
+                          canManageCs
                           || (profile.role === 'agent' && row.created_by === profile.id && (!row.claimed_by || row.claimed_by === profile.id))
                         ) ? (
                           <button type="button" className={ui.btnSecondary} disabled={busyId === row.id} onClick={() => void handleEdit(row)}>
@@ -585,7 +590,7 @@ export default function IntakeQueue({
                         ) : null}
 
                         {/* RingCentral-sourced unclaimed but NOT current agent: show disabled with tooltip */}
-                        {isRc && row.status === 'submitted' && !canClaimRc && !isManager ? (
+                        {isRc && row.status === 'submitted' && !canClaimRc && !canManageCs ? (
                           <button
                             type="button"
                             className={ui.btnPrimary}
@@ -633,14 +638,14 @@ export default function IntakeQueue({
                         ) : null}
 
                         {/* Manager: Delete intake */}
-                        {isManager && !isDeleted ? (
+                        {canManageCs && !isDeleted ? (
                           <button type="button" className={ui.btnDanger} disabled={busyId === row.id} onClick={() => void handleDelete(row)}>
                             <Trash2 className="h-4 w-4" />Delete
                           </button>
                         ) : null}
 
                         {/* Manager: Restore (only for deleted intakes) */}
-                        {isManager && isDeleted ? (
+                        {canManageCs && isDeleted ? (
                           <button type="button" className={ui.btnSecondary} disabled={busyId === row.id} onClick={() => void handleRestore(row)}>
                             <RotateCcw className="h-4 w-4" />Restore
                           </button>
@@ -672,11 +677,11 @@ export default function IntakeQueue({
                   {!isRingcentralSource(selected.submission) && selected.submission.status === 'submitted' && profile.role === 'agent' ? (
                     <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void handleClaimGeneral(selected.submission)}><UserCheck className="h-4 w-4" />Claim Intake</button>
                   ) : null}
-                  {(selected.submission.claimed_by === profile.id || isManager) && selected.submission.status === 'claimed' ? (
+                  {(selected.submission.claimed_by === profile.id || canManageCs) && selected.submission.status === 'claimed' ? (
                     <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void handleCreateQuote(selected.submission)}><CheckCircle2 className="h-4 w-4" />Create Quote</button>
                   ) : null}
                   {/* Manager: Open Linked Quote from modal */}
-                  {isManager && selected.submission.converted_at ? (
+                  {canManageCs && selected.submission.converted_at ? (
                     <button className={ui.btnSecondary} onClick={() => handleOpenLinkedQuote(selected.submission)}>
                       <ExternalLink className="h-4 w-4" />Open Linked Quote
                     </button>

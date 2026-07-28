@@ -1,10 +1,11 @@
+import { canAdministerAttendance } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/pto/balance
- * Get PTO balance for the current user (or specified profile for managers).
+ * Get PTO balance for the current user (or specified profile for super admins).
  * Query: ?profile_id=...&year=2026
  */
 export async function GET(request: Request) {
@@ -14,8 +15,12 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const canAdminister = canAdministerAttendance(profile?.role);
+
   const { searchParams } = new URL(request.url);
-  const profileId = searchParams.get("profile_id") || user.id;
+  const requestedProfileId = searchParams.get("profile_id");
+  const profileId = canAdminister ? requestedProfileId || user.id : user.id;
   const year = Number(searchParams.get("year") || new Date().getFullYear());
 
   const { data, error } = await supabase
@@ -57,7 +62,7 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") {
+  if (!canAdministerAttendance(profile?.role)) {
     return Response.json({ error: "Only super admins can update PTO balances." }, { status: 403 });
   }
 

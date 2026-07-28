@@ -3,7 +3,9 @@ import { redirect } from 'next/navigation';
 import type { AppRole, ProfileLite } from '@/features/nhwd-shared/types';
 import { createClient } from '@/lib/supabase/server';
 
-export async function requireToolProfile(allowedRoles: readonly AppRole[]): Promise<ProfileLite> {
+type ToolRoleGuard = readonly AppRole[] | ((role: AppRole) => boolean);
+
+export async function requireToolProfile(roleGuard: ToolRoleGuard): Promise<ProfileLite> {
   const supabase = await createClient();
   if (!supabase) redirect('/setup');
 
@@ -21,7 +23,10 @@ export async function requireToolProfile(allowedRoles: readonly AppRole[]): Prom
   if (profile.must_change_password) redirect('/change-password');
 
   const role = profile.role as AppRole;
-  if (!allowedRoles.includes(role)) redirect('/');
+  const isAllowed = typeof roleGuard === 'function'
+    ? roleGuard(role)
+    : roleGuard.includes(role);
+  if (!isAllowed) redirect('/');
 
   return {
     id: profile.id,

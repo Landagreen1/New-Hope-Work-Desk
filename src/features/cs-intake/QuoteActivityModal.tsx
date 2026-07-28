@@ -26,6 +26,8 @@ function eventLabel(eventType: string): string {
   const labels: Record<string, string> = {
     created_from_cs_intake: 'Created from CS Intake',
     created: 'Quote Created',
+    quote_created: 'Quote Created',
+    intake_note_log: 'Intake Note Log',
     assigned: 'Assigned',
     accepted: 'Accepted',
     reassigned: 'Reassigned',
@@ -76,6 +78,7 @@ function eventColor(eventType: string): { dot: string; text: string } {
 function eventIcon(eventType: string) {
   switch (eventType) {
     case 'created_from_cs_intake':
+    case 'intake_note_log':
       return <FileText className="h-4 w-4" />;
     case 'price_sent':
       return <Send className="h-4 w-4" />;

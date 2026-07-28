@@ -3,6 +3,7 @@
 import { Save, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
+import { canManageCustomerService } from '@/lib/permissions';
 import type { ProfileLite } from '../nhwd-shared/client';
 import { ui } from '../nhwd-shared/ui';
 import type { CsIntakeDriver, CsIntakeSubmission, CsIntakeVehicle } from './api';
@@ -69,7 +70,7 @@ interface FieldError {
 
 function validateFields(
   values: Record<EditableField, string>,
-  isManager: boolean,
+  canManageCs: boolean,
   reason: string,
 ): FieldError[] {
   const errors: FieldError[] = [];
@@ -96,7 +97,7 @@ function validateFields(
   }
 
   // Manager must provide reason
-  if (isManager && reason.trim().length < 5) {
+  if (canManageCs && reason.trim().length < 5) {
     errors.push({ field: 'reason', message: 'Reason is required (minimum 5 characters).' });
   }
 
@@ -113,7 +114,7 @@ export default function IntakeEditForm({
   onSave,
   onCancel,
 }: IntakeEditFormProps) {
-  const isManager = profile.role === 'manager' || profile.role === 'super_admin';
+  const canManageCs = canManageCustomerService(profile.role);
 
   // Initialize form values from intake
   const initialValues = useMemo(() => {
@@ -159,7 +160,7 @@ export default function IntakeEditForm({
 
   const handleSave = useCallback(async () => {
     setServerError(null);
-    const validationErrors = validateFields(values, isManager, reason);
+    const validationErrors = validateFields(values, canManageCs, reason);
     setErrors(validationErrors);
     if (validationErrors.length > 0) return;
     if (!hasChanges) return;
@@ -173,7 +174,7 @@ export default function IntakeEditForm({
       const result = await updateCustomerIntake(
         intake.id,
         changes,
-        isManager ? reason.trim() : undefined,
+        canManageCs ? reason.trim() : undefined,
       );
       if (!result.success) {
         setServerError(result.error ?? 'The edit could not be saved.');
@@ -185,10 +186,10 @@ export default function IntakeEditForm({
     } finally {
       setBusy(false);
     }
-  }, [values, isManager, reason, hasChanges, changedFields, intake.id, onSave]);
+  }, [values, canManageCs, reason, hasChanges, changedFields, intake.id, onSave]);
 
   // Determine if save should be disabled
-  const saveDisabled = busy || !hasChanges || (isManager && reason.trim().length < 5);
+  const saveDisabled = busy || !hasChanges || (canManageCs && reason.trim().length < 5);
 
   return (
     <div className="space-y-5">
@@ -361,7 +362,7 @@ export default function IntakeEditForm({
           </label>
 
           {/* Manager reason field */}
-          {isManager && (
+          {canManageCs && (
             <>
               <p className={`${ui.sectionTitle} mb-4 mt-6`}>Manager Edit Reason</p>
               <label className="block">

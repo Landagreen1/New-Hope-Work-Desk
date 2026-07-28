@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { canAdministerAttendance } from '@/lib/permissions';
+
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 import type { ClockStatus, EmployeeSchedule, TimeClockEntry } from './types';
@@ -103,7 +105,7 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const breakTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const canAdminister = canAdministerAttendance(initialProfile.role);
 
   // ─── Fetch ──────────────────────────────────────────────────────────────────
   const fetchActive = useCallback(async () => {
@@ -130,7 +132,7 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
   }, [weekStart]);
 
   const fetchTodaySchedules = useCallback(async () => {
-    if (!isManager) return;
+    if (!canAdminister) return;
     try {
       const today = formatDateKey(new Date());
       const res = await fetch(`/api/schedules?week=${today}`);
@@ -139,7 +141,7 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
       // Filter to just today
       setTodaySchedules((body.schedules as EmployeeSchedule[]).filter(s => s.schedule_date === today));
     } catch { /* silent */ }
-  }, [isManager]);
+  }, [canAdminister]);
 
   useEffect(() => {
     void Promise.all([fetchActive(), fetchWeek(), fetchTodaySchedules()]).finally(() => setLoading(false));
@@ -339,8 +341,8 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
         <div className={ui.stat}><p className={ui.statLabel}>Entries</p><p className={ui.statValue + ' text-2xl'}>{weekEntries.length}</p></div>
       </div>
 
-      {/* ─── Manager: Today grouped by employee, late tag on first clock-in only ─── */}
-      {isManager && (
+      {/* ─── Super admin: Today grouped by employee, late tag on first clock-in only ─── */}
+      {canAdminister && (
         <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div className="flex items-center gap-2">
@@ -436,16 +438,16 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
         </div>
       )}
 
-      {/* ─── Employee Detail Modal (manager clicks an employee) ─── */}
-      {isManager && detailProfileId && (
+      {/* ─── Employee Detail Modal (super admin selects an employee) ─── */}
+      {canAdminister && detailProfileId && (
         <EmployeeDetailModal
           profileId={detailProfileId}
           onClose={() => setDetailProfileId(null)}
         />
       )}
 
-      {/* ─── Agent: Weekly day-by-day view ─── */}
-      {!isManager && (
+      {/* ─── Employee: Weekly day-by-day view ─── */}
+      {!canAdminister && (
         <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div className="flex items-center gap-2">

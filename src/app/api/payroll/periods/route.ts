@@ -1,3 +1,4 @@
+import { canAdministerAttendance } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -13,6 +14,11 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (!canAdministerAttendance(profile?.role)) {
+    return Response.json({ error: "Only super admins can view payroll periods." }, { status: 403 });
+  }
+
   const { data, error } = await supabase
     .from("payroll_periods")
     .select("*")
@@ -25,7 +31,7 @@ export async function GET() {
 
 /**
  * POST /api/payroll/periods
- * Create a payroll period (manager only).
+ * Create a payroll period (super admin only).
  * Body: { period_start, period_end, pay_date, payment_template }
  */
 export async function POST(request: Request) {
@@ -36,8 +42,8 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "manager" && profile?.role !== "super_admin") {
-    return Response.json({ error: "Only managers can create payroll periods." }, { status: 403 });
+  if (!canAdministerAttendance(profile?.role)) {
+    return Response.json({ error: "Only super admins can create payroll periods." }, { status: 403 });
   }
 
   let body: Record<string, unknown>;

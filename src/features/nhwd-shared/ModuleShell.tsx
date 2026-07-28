@@ -3,6 +3,13 @@
 import Link from 'next/link';
 import { ArrowLeft, BriefcaseBusiness, ClipboardList, Home, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
+import {
+  canAccessCustomerService,
+  canAccessRenewals,
+  canAccessSales,
+  canAccessSalesIntakeQueue,
+  roleLabel,
+} from '@/lib/permissions';
 import type { AppRole } from './types';
 import { ui } from './ui';
 
@@ -25,13 +32,18 @@ export function ModuleShell({
   embedded = false,
   children,
 }: ModuleShellProps) {
+  const roleName = role ? roleLabel(role) : 'Operations';
+  const showOperationsTools = role
+    ? canAccessSales(role) || canAccessCustomerService(role) || canAccessRenewals(role)
+    : false;
+
   if (embedded) {
     return (
       <section className="text-slate-950">
         <div className="mb-6 flex flex-col gap-3 rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[#526b9a]">
-              {(role === 'manager' || role === 'super_admin') ? 'Management workspace' : role === 'customer_service' ? 'Customer Service workspace' : 'Sales workspace'}
+              {roleName} workspace
             </p>
             <h1 className={ui.pageTitle}>{title}</h1>
             <p className={ui.pageSubtitle}>{subtitle}</p>
@@ -68,14 +80,16 @@ export function ModuleShell({
             </div>
           </div>
           <nav className="flex flex-wrap items-center gap-2">
-            <Link href="/tools" className={ui.btnGhost}><BriefcaseBusiness className="h-4 w-4" />Tools</Link>
-            {(role === 'customer_service' || role === 'manager' || role === 'super_admin') && (
+            {showOperationsTools && (
+              <Link href="/tools" className={ui.btnGhost}><BriefcaseBusiness className="h-4 w-4" />Tools</Link>
+            )}
+            {role && canAccessCustomerService(role) && (
               <Link href="/tools/cs-intake" className={ui.btnGhost}><ClipboardList className="h-4 w-4" />Quote Intake</Link>
             )}
-            {(role === 'agent' || role === 'manager' || role === 'super_admin') && (
+            {role && canAccessSalesIntakeQueue(role) && (
               <Link href="/tools/cs-intake/queue" className={ui.btnGhost}>Sales Intake Queue</Link>
             )}
-            {(role === 'agent' || role === 'manager' || role === 'super_admin' || role === 'customer_service') && (
+            {role && canAccessRenewals(role) && (
               <Link href="/tools/renewals" className={ui.btnGhost}>Renewals</Link>
             )}
             {onRefresh && (

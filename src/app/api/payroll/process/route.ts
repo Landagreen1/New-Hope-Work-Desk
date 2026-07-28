@@ -1,3 +1,4 @@
+import { canAdministerAttendance } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") {
+  if (!canAdministerAttendance(profile?.role)) {
     return Response.json({ error: "Only super admins can process payroll." }, { status: 403 });
   }
 

@@ -1,4 +1,6 @@
+import { canAdministerAttendance, roleToDepartment } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
+import type { AppRole } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -13,6 +15,11 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (!canAdministerAttendance(profile?.role)) {
+    return Response.json({ error: "Only super admins can view staffing coverage." }, { status: 403 });
+  }
+
   // Get all currently clocked-in users
   const { data: activeClocks, error: clockError } = await supabase
     .from("time_clock_entries")
@@ -21,14 +28,8 @@ export async function GET() {
 
   if (clockError) return Response.json({ error: clockError.message }, { status: 400 });
 
-  // Count by department (role maps to department)
-  const roleToDept: Record<string, string> = {
-    agent: "sales",
-    customer_service: "customer_service",
-    commercial: "commercial",
-    manager: "management",
-  };
-
+  // Count by the same canonical department mapping used by navigation and
+  // authorization, including scoped supervisors.
   const counts: Record<string, { total: number; available: number; names: string[] }> = {
     sales: { total: 0, available: 0, names: [] },
     customer_service: { total: 0, available: 0, names: [] },
@@ -38,9 +39,9 @@ export async function GET() {
 
   for (const entry of activeClocks ?? []) {
     const profileData = entry.profiles as unknown as { role: string; display_name: string } | null;
-    const role = profileData?.role ?? "agent";
+    const role = (profileData?.role ?? "agent") as AppRole;
     const name = profileData?.display_name ?? "Unknown";
-    const dept = roleToDept[role] ?? "sales";
+    const dept = roleToDepartment(role);
     counts[dept].total++;
     counts[dept].names.push(name);
     if (entry.clock_status === "available") counts[dept].available++;

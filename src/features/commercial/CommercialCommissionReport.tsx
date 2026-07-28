@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { canManageCommercial } from '@/lib/permissions';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 import type { CommercialQuote } from './types';
@@ -46,7 +47,7 @@ export default function CommercialCommissionReport({ initialProfile, embedded = 
   const [filterAgent, setFilterAgent] = useState('');
   const [filterStatus, setFilterStatus] = useState<'' | 'approved' | 'denied' | 'pending'>('');
 
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const isManager = canManageCommercial(initialProfile.role);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

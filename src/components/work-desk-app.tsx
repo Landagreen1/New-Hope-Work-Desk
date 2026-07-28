@@ -51,6 +51,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { loadDashboardData } from "@/lib/dashboard-data";
+import {
+  APP_ROLES,
+  canAdministerUsers,
+  canManageSales,
+  roleLabel,
+} from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
@@ -58,6 +64,7 @@ import DatePicker from "@/features/nhwd-shared/DatePicker";
 import DateTimePicker from "@/features/nhwd-shared/DateTimePicker";
 import type {
   Agent,
+  AppRole,
   CustomerServiceUser,
   AlertNotification,
   DashboardData,
@@ -490,7 +497,7 @@ type AdminUserAccount = {
   username: string;
   display_name: string;
   initials: string;
-  role: "agent" | "manager" | "customer_service" | "commercial" | "super_admin";
+  role: AppRole;
   rotation_position: number;
   availability: AvailabilityStatus;
   is_active: boolean;
@@ -2937,7 +2944,7 @@ export function WorkDeskApp({
   );
 
   const currentUserId = sessionProfile.id;
-  const isManager = sessionProfile.role === "manager" || sessionProfile.role === "super_admin";
+  const hasSalesManagement = canManageSales(sessionProfile.role);
   const isCustomerService = sessionProfile.role === "customer_service";
   const currentUser = agentList.find((agent) => agent.id === currentUserId);
   const currentCustomerServiceUser = customerServiceUsers.find(
@@ -3462,7 +3469,7 @@ export function WorkDeskApp({
   }, [notifications, notificationsEnabled]);
 
   useEffect(() => {
-    if (isManager) return;
+    if (hasSalesManagement) return;
 
     const checkWarnings = async () => {
       const now = Date.now();
@@ -3494,7 +3501,7 @@ export function WorkDeskApp({
       void checkWarnings();
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [currentUserId, isManager, quoteTakeTimers, supabase]);
+  }, [currentUserId, hasSalesManagement, quoteTakeTimers, supabase]);
 
   async function markNotificationsRead() {
     const success = await runRpc(
@@ -4293,11 +4300,7 @@ export function WorkDeskApp({
                 {sessionProfile.displayName}
               </p>
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                {sessionProfile.role === "manager" || sessionProfile.role === "super_admin"
-                  ? "Management"
-                  : sessionProfile.role === "customer_service"
-                    ? "Customer Service"
-                    : `@${sessionProfile.username}`}
+                {roleLabel(sessionProfile.role)}
               </p>
             </div>
             <button
@@ -4340,7 +4343,7 @@ export function WorkDeskApp({
             onOpenLog={openQuoteLog}
             onAddNote={addQuoteNote}
           />
-        ) : !isManager && currentUser ? (
+        ) : !hasSalesManagement && currentUser ? (
           <div className="space-y-5">
             <section className="flex flex-col gap-4 rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-4">
@@ -6143,9 +6146,10 @@ function ManagerView({
   ) => Promise<void>;
   workloadDatabaseContent?: React.ReactNode;
   forceManagerTab?: ManagerTab;
-  actorRole?: string;
+  actorRole: AppRole;
   embedded?: boolean;
 }) {
+  const canAccessUserAdministration = canAdministerUsers(actorRole);
   const [reportView, setReportView] = useState<ReportView>("executive");
   const [reportDrillDown, setReportDrillDown] = useState<DrillDownFilter | null>(null);
   const [workView, setWorkView] = useState<"tasks" | "pricing" | "workload">("tasks");
@@ -7456,7 +7460,7 @@ function ManagerView({
         </section>
       ) : null}
 
-      {managerTab === "administration" ? (
+      {managerTab === "administration" && canAccessUserAdministration ? (
         <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
@@ -8504,11 +8508,11 @@ function ManagerView({
         </section>
       ) : null}
 
-      {managerTab === "administration" && administrationView === "sources" ? <SourceAdminPanel /> : null}
+      {managerTab === "administration" && canAccessUserAdministration && administrationView === "sources" ? <SourceAdminPanel /> : null}
 
-      {managerTab === "administration" && administrationView === "users" ? <UserAdminPanel actorRole={actorRole} /> : null}
+      {managerTab === "administration" && canAccessUserAdministration && administrationView === "users" ? <UserAdminPanel actorRole={actorRole} /> : null}
 
-      {managerTab === "administration" && administrationView === "controls" ? (
+      {managerTab === "administration" && canAccessUserAdministration && administrationView === "controls" ? (
         <div className="space-y-5">
           <QueueOrderPanel agentList={agentList} onSave={onSetQueueOrder} />
           <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
@@ -9322,7 +9326,7 @@ function QueueOrderPanel({
   );
 }
 
-function UserAdminPanel({ actorRole }: { actorRole?: string }) {
+function UserAdminPanel({ actorRole }: { actorRole: AppRole }) {
   const [users, setUsers] = useState<AdminUserAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -9677,13 +9681,13 @@ function UserAdminPanel({ actorRole }: { actorRole?: string }) {
             </div>
             <Field label="Role">
               <select name="role" className="field">
-                <option value="agent">Sales</option>
-                <option value="customer_service">Customer Service</option>
-                <option value="commercial">Commercial</option>
-                <option value="manager">Manager / Admin</option>
-                {actorRole === "super_admin" && (
-                  <option value="super_admin">Super Admin</option>
-                )}
+                {APP_ROLES.filter(
+                  (role) => role !== "super_admin" || actorRole === "super_admin",
+                ).map((role) => (
+                  <option key={role} value={role}>
+                    {roleLabel(role)}
+                  </option>
+                ))}
               </select>
             </Field>
             <button
@@ -9784,13 +9788,7 @@ function UserAdminPanel({ actorRole }: { actorRole?: string }) {
                                   : "bg-slate-100 text-slate-600",
                           )}
                         >
-                          {user.role === "manager" || user.role === "super_admin"
-                            ? "Manager / Admin"
-                            : user.role === "customer_service"
-                              ? "Customer Service"
-                              : user.role === "commercial"
-                                ? "Commercial"
-                                : "Sales"}
+                          {roleLabel(user.role)}
                         </span>
                       </td>
                       <td className="px-5 py-4">
@@ -9833,16 +9831,18 @@ function UserAdminPanel({ actorRole }: { actorRole?: string }) {
                                   ? "Resetting..."
                                   : "Reset Password"}
                               </button>
-                              <button
-                                disabled={deletingId === user.id}
-                                onClick={() => void deleteUser(user)}
-                                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                {deletingId === user.id
-                                  ? "Deleting..."
-                                  : "Delete User"}
-                              </button>
+                              {user.role !== "super_admin" ? (
+                                <button
+                                  disabled={deletingId === user.id}
+                                  onClick={() => void deleteUser(user)}
+                                  className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  {deletingId === user.id
+                                    ? "Deleting..."
+                                    : "Delete User"}
+                                </button>
+                              ) : null}
                             </>
                           ) : (
                             <span className="text-xs font-semibold text-slate-400">

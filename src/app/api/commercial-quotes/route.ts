@@ -1,3 +1,4 @@
+import { canAccessCommercial, canManageCommercial } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -23,6 +24,19 @@ export async function GET(request: Request) {
     return Response.json(
       { error: "Authentication required." },
       { status: 401 },
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
     );
   }
 
@@ -68,16 +82,10 @@ export async function GET(request: Request) {
     return Response.json({ error: error.message }, { status: 400 });
   }
 
-  // Strip sensitive fields from commercial agents
-  // Commission info is only visible to the card owner or managers/super_admin
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
+  // Strip sensitive fields from commercial employees without management access.
+  // Commission info is only visible to the card owner or commercial managers.
   let quotes = data ?? [];
-  if (profile?.role === "commercial") {
+  if (!canManageCommercial(profile.role)) {
     quotes = quotes
       // Hide cards in commission columns that don't belong to this agent
       .filter((q: Record<string, unknown>) => {
@@ -124,6 +132,19 @@ export async function POST(request: Request) {
     return Response.json(
       { error: "Authentication required." },
       { status: 401 },
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
     );
   }
 

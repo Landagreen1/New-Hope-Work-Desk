@@ -1,3 +1,4 @@
+import { canAdministerAttendance } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -13,8 +14,12 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const canAdminister = canAdministerAttendance(profile?.role);
+
   const { searchParams } = new URL(request.url);
-  const profileId = searchParams.get("profile_id");
+  const requestedProfileId = searchParams.get("profile_id");
+  const profileId = canAdminister ? requestedProfileId : user.id;
   const week = searchParams.get("week"); // Monday of the week
   const monthStart = searchParams.get("month_start");
   const monthEnd = searchParams.get("month_end");
@@ -49,7 +54,7 @@ export async function GET(request: Request) {
 
 /**
  * POST /api/schedules
- * Create a schedule entry (manager only).
+ * Create a schedule entry (super admin only).
  * Body: { profile_id, schedule_date, shift_start, shift_end, shift_type?, notes? }
  */
 export async function POST(request: Request) {
@@ -60,8 +65,8 @@ export async function POST(request: Request) {
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "manager" && profile?.role !== "super_admin") {
-    return Response.json({ error: "Only managers and super admins can create schedules." }, { status: 403 });
+  if (!canAdministerAttendance(profile?.role)) {
+    return Response.json({ error: "Only super admins can create schedules." }, { status: 403 });
   }
 
   let body: Record<string, unknown>;
@@ -95,4 +100,38 @@ export async function POST(request: Request) {
 
   if (error) return Response.json({ error: error.message }, { status: 400 });
   return Response.json({ id: data.id }, { status: 201 });
+}
+
+/**
+ * DELETE /api/schedules
+ * Delete a schedule entry (super admin only).
+ * Body: { schedule_id }
+ */
+export async function DELETE(request: Request) {
+  const supabase = await createClient();
+  if (!supabase) return Response.json({ error: "Supabase is not configured." }, { status: 503 });
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
+
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (!canAdministerAttendance(profile?.role)) {
+    return Response.json({ error: "Only super admins can delete schedules." }, { status: 403 });
+  }
+
+  let body: Record<string, unknown>;
+  try { body = (await request.json()) as Record<string, unknown>; } catch {
+    return Response.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const scheduleId = String(body.schedule_id ?? "");
+  if (!scheduleId) return Response.json({ error: "schedule_id is required." }, { status: 400 });
+
+  const { error } = await supabase
+    .from("employee_schedules")
+    .delete()
+    .eq("id", scheduleId);
+
+  if (error) return Response.json({ error: error.message }, { status: 400 });
+  return Response.json({ success: true });
 }

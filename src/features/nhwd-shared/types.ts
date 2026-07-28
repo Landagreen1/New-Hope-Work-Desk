@@ -1,28 +1,16 @@
-export type AppRole = 'agent' | 'customer_service' | 'manager' | 'commercial' | 'super_admin';
+import { roleToDepartment, type Department } from '@/lib/permissions';
+import type { AppRole } from '@/lib/types';
+
+export type { AppRole, Department };
+export { roleToDepartment };
 
 /**
- * Department mapping (maps to AppRole values in the database):
- *   Sales        → 'agent'
- *   Management   → 'manager'
- *   Customer Service → 'customer_service'
- *   Commercial   → 'commercial'
- *
- * Renewals is a cross-cutting concern available to ALL departments.
- * Intake forms and the sales intake queue are also shared across all departments.
- * The Commercial Board is accessible to commercial and manager roles only.
+ * Department mapping:
+ *   Sales supervisors manage Sales only.
+ *   Customer Service supervisors manage Customer Service only.
+ *   Commercial supervisors manage Commercial only.
+ *   Managers and Super Admins retain broad management access.
  */
-export type Department = 'sales' | 'management' | 'customer_service' | 'commercial';
-
-/** Maps the DB role value to a logical department. */
-export function roleToDepartment(role: AppRole): Department {
-  switch (role) {
-    case 'agent': return 'sales';
-    case 'manager': return 'management';
-    case 'super_admin': return 'management';
-    case 'customer_service': return 'customer_service';
-    case 'commercial': return 'commercial';
-  }
-}
 
 /**
  * Insurance lines — currently only auto/personal lines are active.

@@ -3,10 +3,29 @@
 import Link from 'next/link';
 import { ArrowRight, ClipboardCheck, FileSpreadsheet, Headphones, ShieldCheck } from 'lucide-react';
 
+import {
+  canAccessCustomerService,
+  canAccessRenewals,
+  canAccessSalesIntakeQueue,
+} from '@/lib/permissions';
+import type { AppRole } from '@/lib/types';
 import { appModules } from '@/platform/module-registry';
 
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
+
+function canAccessModule(moduleId: string, role: AppRole): boolean {
+  switch (moduleId) {
+    case 'cs-intake':
+      return canAccessCustomerService(role);
+    case 'cs-intake-queue':
+      return canAccessSalesIntakeQueue(role);
+    case 'renewals':
+      return canAccessRenewals(role);
+    default:
+      return false;
+  }
+}
 
 const modulePresentation = {
   'cs-intake': { icon: Headphones, tone: 'bg-cyan-50 text-cyan-700 ring-cyan-200' },
@@ -19,7 +38,7 @@ export default function ToolsHub({ initialProfile: profile }: { initialProfile: 
     (module) =>
       module.status === 'active'
       && module.id in modulePresentation
-      && (module.roles as readonly string[]).includes(profile.role),
+      && canAccessModule(module.id, profile.role),
   );
 
   return (

@@ -62,6 +62,7 @@ export type UrgencyLevel = 'normal' | 'elevated' | 'high';
 
 export interface OperationalQuote {
   id: string;
+  source_work_item_id?: string | null;
   customer_intake_id: string;
   customer_name: string;
   source_type: SourceType;

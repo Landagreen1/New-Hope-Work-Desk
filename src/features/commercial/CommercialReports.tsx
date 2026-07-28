@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { canManageCommercial } from '@/lib/permissions';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 import type { BoardColumn, CommercialQuote } from './types';
@@ -61,7 +62,7 @@ export default function CommercialReports({ initialProfile, embedded = false }: 
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const isManager = canManageCommercial(initialProfile.role);
 
   // ─── Fetch all quotes for reporting ──────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -190,6 +191,10 @@ export default function CommercialReports({ initialProfile, embedded = false }: 
 
     return { summaryCards, columnDist, agentMetrics, coverageCounts, riskCounts };
   }, [quotes]);
+
+  if (!isManager) {
+    return <div className={ui.empty}>This report is only available to commercial managers.</div>;
+  }
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (

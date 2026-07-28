@@ -3,11 +3,16 @@ import { randomBytes } from "node:crypto";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 
 import { createClient as createSessionClient } from "@/lib/supabase/server";
+import {
+  APP_ROLES,
+  canAdministerUsers,
+  roleLabel,
+} from "@/lib/permissions";
+import type { AppRole } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
-type AppRole = "agent" | "manager" | "customer_service" | "commercial" | "super_admin";
 
 type RequestBody = Record<string, unknown>;
 
@@ -43,7 +48,7 @@ async function getAuthorizedClients() {
     .eq("id", userId)
     .single();
 
-  if (!profile?.is_active || (profile.role !== "manager" && profile.role !== "super_admin")) {
+  if (!profile?.is_active || !canAdministerUsers(profile.role as AppRole)) {
     return {
       error: Response.json(
         { error: "Manager or Super Admin permission required." },
@@ -113,7 +118,7 @@ export async function POST(request: Request) {
   const requestedInitials = String(parsed.initials ?? "")
     .trim()
     .toUpperCase();
-  const role = String(parsed.role ?? "agent") as AppRole;
+  const requestedRole = String(parsed.role ?? "agent");
 
   if (!USERNAME_PATTERN.test(username)) {
     return Response.json(
@@ -130,12 +135,13 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (!(["agent", "manager", "customer_service", "commercial", "super_admin"] as AppRole[]).includes(role)) {
+  if (!APP_ROLES.some((role) => role === requestedRole)) {
     return Response.json(
-      { error: "Role must be Agent, Customer Service, Commercial, Manager, or Super Admin." },
+      { error: `Role must be one of: ${APP_ROLES.map(roleLabel).join(", ")}.` },
       { status: 400 },
     );
   }
+  const role = requestedRole as AppRole;
 
   // Only a super_admin can create or assign the super_admin role
   if (role === "super_admin" && authorization.actorRole !== "super_admin") {
@@ -204,7 +210,6 @@ export async function POST(request: Request) {
 
   const rotationPosition = Number(lastPosition?.rotation_position ?? 0) + 1;
   const isAgent = role === "agent";
-  const isCommercial = role === "commercial";
   const { data: queuePositions, error: queuePositionError } =
     await authorization.admin
       .from("profiles")

@@ -1,3 +1,4 @@
+import { canAccessCommercial, canManageCommercial } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -69,7 +70,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     .eq("id", user.id)
     .single();
 
-  const isManager = profile?.role === "manager" || profile?.role === "super_admin";
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
+    );
+  }
+
+  const isManager = canManageCommercial(profile.role);
 
   let body: Record<string, unknown>;
   try {

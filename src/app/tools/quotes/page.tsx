@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { Suspense } from 'react';
 
 import QuotesListPage from '@/features/quotes/QuotesListPage';
+import { canAccessSales } from '@/lib/permissions';
 import { requireToolProfile } from '@/lib/tool-session';
 
 function QuotesLoading() {
@@ -14,7 +15,7 @@ function QuotesLoading() {
 }
 
 export default async function Page() {
-  const profile = await requireToolProfile(['agent', 'manager']);
+  const profile = await requireToolProfile(canAccessSales);
   return (
     <Suspense fallback={<QuotesLoading />}>
       <QuotesListPage initialProfile={profile} />

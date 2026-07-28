@@ -1,17 +1,19 @@
 'use client';
 
-import { AlertCircle, Filter, Link2, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, Filter, Link2, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import { canManageSales } from '@/lib/permissions';
 import type { ProfileLite } from '../nhwd-shared/client';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { ui } from '../nhwd-shared/ui';
-import { changeQuoteStatus, flagQuoteDuplicate, getMyQuotes, getQuoteHistory } from './api';
+import QuoteActivityModal from '../cs-intake/QuoteActivityModal';
+import { changeQuoteStatus, flagQuoteDuplicate, getMyQuotes } from './api';
 import DuplicateFlagForm from './DuplicateFlagForm';
 import QuoteCard from './QuoteCard';
-import QuoteHistory from './QuoteHistory';
-import type { OperationalQuote, QuoteHistoryEvent, QuoteStatus } from './types';
+import type { OperationalQuote, QuoteStatus } from './types';
 
 interface QuotesListPageProps {
   initialProfile: ProfileLite;
@@ -31,7 +33,7 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 
 export default function QuotesListPage({ initialProfile }: QuotesListPageProps) {
   const router = useRouter();
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const canManageQuotes = canManageSales(initialProfile.role);
 
   const [quotes, setQuotes] = useState<OperationalQuote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,7 @@ export default function QuotesListPage({ initialProfile }: QuotesListPageProps) 
     setLoading(true);
     setError(null);
     try {
-      if (isManager) {
+      if (canManageQuotes) {
         // Manager: fetch all quotes from API route with optional status filter
         const params = new URLSearchParams();
         if (statusFilter) params.set('status', statusFilter);
@@ -70,9 +72,11 @@ export default function QuotesListPage({ initialProfile }: QuotesListPageProps) 
     } finally {
       setLoading(false);
     }
-  }, [isManager, statusFilter]);
+  }, [canManageQuotes, statusFilter]);
 
   useEffect(() => {
+    // Initial client-side quote synchronization.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchQuotes();
   }, [fetchQuotes]);
 
@@ -102,31 +106,22 @@ export default function QuotesListPage({ initialProfile }: QuotesListPageProps) 
     router.push(`/tools/quotes/${quoteId}`);
   };
 
-  // Quote Log modal state
-  const [logQuoteId, setLogQuoteId] = useState<string | null>(null);
-  const [logEvents, setLogEvents] = useState<QuoteHistoryEvent[]>([]);
-  const [logLoading, setLogLoading] = useState(false);
+  // Quote Log modal state. Operational quote IDs are the linked work-item
+  // equivalent for legacy CS conversions; newer quote records may expose the
+  // canonical source_work_item_id directly.
+  const [logWorkItemId, setLogWorkItemId] = useState<string | null>(null);
 
-  const handleViewLog = async (quoteId: string) => {
-    setLogQuoteId(quoteId);
-    setLogLoading(true);
-    try {
-      const events = await getQuoteHistory(quoteId);
-      setLogEvents(events as QuoteHistoryEvent[]);
-    } catch {
-      setLogEvents([]);
-    } finally {
-      setLogLoading(false);
-    }
+  const handleViewLog = (quote: OperationalQuote) => {
+    setLogWorkItemId(quote.source_work_item_id ?? quote.id);
   };
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <ModuleShell
-      title={isManager ? 'All Quotes' : 'My Desk'}
+      title={canManageQuotes ? 'All Quotes' : 'My Desk'}
       subtitle={
-        isManager
+        canManageQuotes
           ? 'All operational quotes across the team'
           : 'Your assigned quotes and active work'
       }
@@ -135,7 +130,7 @@ export default function QuotesListPage({ initialProfile }: QuotesListPageProps) 
       onRefresh={() => void fetchQuotes()}
     >
       {/* Manager toolbar: status filter + duplicate review link */}
-      {isManager && (
+      {canManageQuotes && (
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-slate-400" />
@@ -152,13 +147,13 @@ export default function QuotesListPage({ initialProfile }: QuotesListPageProps) 
             </select>
           </div>
 
-          <a
+          <Link
             href="/tools/quotes/duplicate-review"
             className={ui.btnSecondary}
           >
             <Link2 className="h-4 w-4" />
             Duplicate Review Queue
-          </a>
+          </Link>
         </div>
       )}
 
@@ -181,7 +176,7 @@ export default function QuotesListPage({ initialProfile }: QuotesListPageProps) 
       {/* Empty state */}
       {!loading && quotes.length === 0 && (
         <div className={ui.empty}>
-          {isManager
+          {canManageQuotes
             ? 'No quotes match the selected filter.'
             : 'No quotes assigned to you yet.'}
         </div>
@@ -197,7 +192,7 @@ export default function QuotesListPage({ initialProfile }: QuotesListPageProps) 
               onStatusChange={handleStatusChange}
               onFlagDuplicate={handleFlagDuplicate}
               onOpen={handleOpen}
-              onViewLog={(id) => void handleViewLog(id)}
+              onViewLog={() => handleViewLog(quote)}
             />
           ))}
         </div>
@@ -212,28 +207,11 @@ export default function QuotesListPage({ initialProfile }: QuotesListPageProps) 
         />
       )}
 
-      {/* Quote Log modal */}
-      {logQuoteId && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6" onMouseDown={() => { setLogQuoteId(null); setLogEvents([]); }}>
-          <div className="mx-auto max-w-6xl rounded-[30px] bg-[#f3f5f9] p-3 shadow-2xl sm:p-5" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-900">Quote Activity</h2>
-                <p className="mt-1 text-sm font-semibold text-slate-500">Read-only timeline of all events for this quote.</p>
-              </div>
-              <button className={ui.btnGhost} onClick={() => { setLogQuoteId(null); setLogEvents([]); }}><X className="h-4 w-4" />Close</button>
-            </div>
-            {logLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <RefreshCw className="h-5 w-5 animate-spin text-slate-400" />
-                <span className="ml-2 text-sm font-semibold text-slate-500">Loading history...</span>
-              </div>
-            ) : (
-              <QuoteHistory quoteId={logQuoteId} events={logEvents} />
-            )}
-          </div>
-        </div>
-      )}
+      <QuoteActivityModal
+        workItemId={logWorkItemId}
+        isOpen={Boolean(logWorkItemId)}
+        onClose={() => setLogWorkItemId(null)}
+      />
     </ModuleShell>
   );
 }

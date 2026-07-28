@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { Suspense } from 'react';
 
 import CsIntakeLanding from '@/features/cs-intake/CsIntakeLanding';
+import { canAccessCustomerService } from '@/lib/permissions';
 import { requireToolProfile } from '@/lib/tool-session';
 
 function QuoteIntakeLoading() {
@@ -10,7 +11,7 @@ function QuoteIntakeLoading() {
 }
 
 export default async function Page() {
-  const profile = await requireToolProfile(['customer_service', 'manager']);
+  const profile = await requireToolProfile(canAccessCustomerService);
   return (
     <Suspense fallback={<QuoteIntakeLoading />}>
       <CsIntakeLanding initialProfile={profile} />

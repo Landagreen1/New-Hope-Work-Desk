@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { canManageCommercial } from '@/lib/permissions';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 
@@ -71,7 +72,7 @@ export default function CommercialTimingReport({ initialProfile, embedded = fals
   const [filterAgent, setFilterAgent] = useState('');
   const [filterOutcome, setFilterOutcome] = useState<'' | 'sold' | 'not_sold'>('');
 
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const isManager = canManageCommercial(initialProfile.role);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

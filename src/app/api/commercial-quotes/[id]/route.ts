@@ -1,3 +1,4 @@
+import { canAccessCommercial, canManageCommercial } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -31,6 +32,19 @@ export async function GET(request: Request, context: RouteContext) {
     );
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
+    );
+  }
+
   const { data, error } = await supabase
     .from("commercial_quotes")
     .select(
@@ -60,16 +74,10 @@ export async function GET(request: Request, context: RouteContext) {
     return Response.json({ error: error.message }, { status: 404 });
   }
 
-  // Strip sensitive fields from commercial agents
-  // Commission info only visible to card owner or managers/super_admin
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
+  // Strip sensitive fields from commercial employees without management access.
+  // Commission info is only visible to the card owner or commercial managers.
   let quote = data;
-  if (profile?.role === "commercial") {
+  if (!canManageCommercial(profile.role)) {
     const isOwner = data.assigned_to === user.id;
     quote = {
       ...quote,
@@ -110,6 +118,19 @@ export async function PATCH(request: Request, context: RouteContext) {
     return Response.json(
       { error: "Authentication required." },
       { status: 401 },
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
     );
   }
 
@@ -200,6 +221,19 @@ export async function DELETE(request: Request, context: RouteContext) {
     );
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const hardDelete = searchParams.get("hard") === "true";
 
@@ -212,17 +246,11 @@ export async function DELETE(request: Request, context: RouteContext) {
 
   const reason = String(body.reason ?? "").trim();
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  // Hard delete: managers only
+  // Hard delete: commercial managers only
   if (hardDelete) {
-    if (profile?.role !== "manager" && profile?.role !== "super_admin") {
+    if (!canManageCommercial(profile.role)) {
       return Response.json(
-        { error: "Only managers can permanently delete cards." },
+        { error: "Only commercial managers can permanently delete cards." },
         { status: 403 },
       );
     }

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { canManageCommercial } from '@/lib/permissions';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 import CommercialActivityLog from './CommercialActivityLog';
@@ -64,7 +65,7 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
 
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const isManager = canManageCommercial(initialProfile.role);
 
   // ─── Data fetching ───────────────────────────────────────────────────────────
   const fetchQuotes = useCallback(async () => {

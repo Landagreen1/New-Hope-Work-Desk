@@ -1,3 +1,4 @@
+import { canAdministerAttendance } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -14,8 +15,12 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const canAdminister = canAdministerAttendance(profile?.role);
+
   const { searchParams } = new URL(request.url);
-  const profileId = searchParams.get("profile_id");
+  const requestedProfileId = searchParams.get("profile_id");
+  const profileId = canAdminister ? requestedProfileId : user.id;
   const date = searchParams.get("date");
   const range = searchParams.get("range") || "week";
 
@@ -138,8 +143,8 @@ export async function PATCH(request: Request) {
   // Admin edit: adjust any clock entry by ID — handle before active entry check
   if (action === "edit") {
     const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-    if (profile?.role !== "manager" && profile?.role !== "super_admin") {
-      return Response.json({ error: "Only managers can edit clock entries." }, { status: 403 });
+    if (!canAdministerAttendance(profile?.role)) {
+      return Response.json({ error: "Only super admins can edit clock entries." }, { status: 403 });
     }
 
     const entryId = String(body.entry_id ?? "");

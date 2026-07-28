@@ -1,3 +1,4 @@
+import { canAdministerAttendance } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") {
+  if (!canAdministerAttendance(profile?.role)) {
     return Response.json({ error: "Only super admins can calculate payroll." }, { status: 403 });
   }
 
@@ -113,7 +114,7 @@ export async function GET(request: Request) {
     // Calculate hours from entries
     let totalWorkedHours = 0;
     let totalBreakHours = 0;
-    let daysWorked = new Set<string>();
+    const daysWorked = new Set<string>();
 
     for (const entry of entries) {
       const hours = Number(entry.total_hours ?? 0);

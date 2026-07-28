@@ -5,6 +5,7 @@ import { type ReactNode } from "react";
 
 import { AppSidebar, type ModuleId, type NavigationState, type SubNavId } from "@/components/app-sidebar";
 import type { AppRole } from "@/features/nhwd-shared/types";
+import { roleLabel } from "@/lib/permissions";
 
 export type { ModuleId, NavigationState, SubNavId };
 
@@ -40,16 +41,7 @@ export function SidebarLayout({
   headerRight?: ReactNode;
   children: ReactNode;
 }) {
-  const roleLabel =
-    role === "super_admin"
-      ? "Super Admin"
-      : role === "manager"
-        ? "Manager"
-        : role === "customer_service"
-          ? "Customer Service"
-          : role === "commercial"
-            ? "Commercial"
-            : "Agent";
+  const displayRoleLabel = roleLabel(role);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#f3f5f9] text-slate-950">
@@ -88,7 +80,7 @@ export function SidebarLayout({
           onNavigate={onNavigate}
           badges={badges}
           displayName={displayName}
-          roleLabel={roleLabel}
+          roleLabel={displayRoleLabel}
           onSignOut={onSignOut}
         />
 

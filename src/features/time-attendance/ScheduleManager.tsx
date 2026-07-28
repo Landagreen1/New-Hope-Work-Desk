@@ -3,6 +3,8 @@
 import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, Copy, Plus, RefreshCw, Trash2, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { canAdministerAttendance } from '@/lib/permissions';
+
 import DatePicker from '../nhwd-shared/DatePicker';
 import TimePicker from '../nhwd-shared/TimePicker';
 import type { ProfileLite } from '../nhwd-shared/types';
@@ -136,7 +138,7 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
   const [templateProfiles, setTemplateProfiles] = useState<string[]>([]);
   const [applyingTemplate, setApplyingTemplate] = useState(false);
 
-  const isManager = initialProfile.role === 'manager' || initialProfile.role === 'super_admin';
+  const canAdminister = canAdministerAttendance(initialProfile.role);
 
   const weekDates = useMemo(() =>
     Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]
@@ -148,24 +150,24 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
     setLoading(true); setError(null);
     try {
       const params = new URLSearchParams({ week: formatDate(weekStart) });
-      if (!isManager) params.set('profile_id', initialProfile.id);
+      if (!canAdminister) params.set('profile_id', initialProfile.id);
       const res = await fetch(`/api/schedules?${params}`);
       if (!res.ok) throw new Error('Failed to load schedules.');
       const body = await res.json();
       setSchedules(body.schedules as EmployeeSchedule[]);
     } catch (err) { setError(err instanceof Error ? err.message : 'Load failed.'); }
     finally { setLoading(false); }
-  }, [weekStart, isManager, initialProfile.id]);
+  }, [weekStart, canAdminister, initialProfile.id]);
 
   useEffect(() => { void fetchSchedules(); }, [fetchSchedules]);
 
   useEffect(() => {
-    if (!isManager) return;
+    if (!canAdminister) return;
     fetch('/api/admin/users').then(r => r.json()).then((body) => {
       const users = (body.users ?? []) as Array<{ id: string; display_name: string; initials: string; is_active: boolean }>;
       setProfiles(users.filter(u => u.is_active).map(u => ({ id: u.id, display_name: u.display_name, initials: u.initials || u.display_name.slice(0, 2).toUpperCase() })));
     }).catch(() => {});
-  }, [isManager]);
+  }, [canAdminister]);
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -266,8 +268,8 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
   const scheduledEmployees = useMemo(() => {
     const idSet = new Set<string>();
     for (const s of schedules) idSet.add(s.profile_id);
-    // If manager, also show all active employees
-    if (isManager) {
+    // If attendance admin, also show all active employees
+    if (canAdminister) {
       for (const p of profiles) idSet.add(p.id);
     }
     const list = Array.from(idSet).map(id => {
@@ -280,7 +282,7 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
       };
     });
     return list.sort((a, b) => a.display_name.localeCompare(b.display_name));
-  }, [schedules, profiles, isManager]);
+  }, [schedules, profiles, canAdminister]);
 
   // Count per day
   const dailyCounts = useMemo(() => {
@@ -318,7 +320,7 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
           <button type="button" onClick={prevWeek} className={ui.btnSecondary + ' !px-2.5 !py-2'}><ChevronLeft className="h-4 w-4" /></button>
           <button type="button" onClick={goToday} className={ui.btnSecondary + ' !text-xs'}>This Week</button>
           <button type="button" onClick={nextWeek} className={ui.btnSecondary + ' !px-2.5 !py-2'}><ChevronRight className="h-4 w-4" /></button>
-          {isManager && (
+          {canAdminister && (
             <>
               <button type="button" onClick={() => setShowTemplate(true)} className={ui.btnSecondary + ' !text-xs'}>
                 <Copy className="h-3.5 w-3.5" /> Apply Template
@@ -399,7 +401,7 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
                                 {s.shift_start?.slice(0, 5)} – {s.shift_end?.slice(0, 5)}
                               </p>
                               <p className="text-[9px] font-bold text-slate-500">{SHIFT_TYPE_LABELS[s.shift_type]}</p>
-                              {isManager && (
+                              {canAdminister && (
                                 <button
                                   onClick={() => void handleDeleteShift(s.id)}
                                   className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white group-hover:flex"
@@ -413,7 +415,7 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
                         </div>
                       ) : (
                         <div className="flex h-full items-center justify-center">
-                          {isManager ? (
+                          {canAdminister ? (
                             <button
                               onClick={() => {
                                 setFormProfileId(emp.id);

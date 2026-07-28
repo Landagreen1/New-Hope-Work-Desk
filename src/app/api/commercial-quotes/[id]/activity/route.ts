@@ -1,3 +1,4 @@
+import { canAccessCommercial, canManageCommercial } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -31,6 +32,19 @@ export async function GET(request: Request, context: RouteContext) {
     );
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
+    );
+  }
+
   const { data, error } = await supabase
     .from("commercial_quote_activity_log")
     .select(
@@ -47,14 +61,9 @@ export async function GET(request: Request, context: RouteContext) {
 
   let activity = data ?? [];
 
-  // For commercial agents who don't own this card, filter out commission-related events
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role === "commercial") {
+  // For commercial employees without management access who don't own this card,
+  // filter out commission-related events.
+  if (!canManageCommercial(profile.role)) {
     // Check if this agent owns the card
     const { data: card } = await supabase
       .from("commercial_quotes")
@@ -95,6 +104,19 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json(
       { error: "Authentication required." },
       { status: 401 },
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !canAccessCommercial(profile.role)) {
+    return Response.json(
+      { error: "Commercial access required." },
+      { status: 403 },
     );
   }
 
