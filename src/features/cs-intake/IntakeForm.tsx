@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   FileText,
   Plus,
+  RotateCcw,
   Save,
   Send,
   ShieldCheck,
@@ -31,8 +32,14 @@ import {
   listSalespeople,
   saveDraft,
   submitIntake,
+  submitCommercialIntake,
 } from './api';
 import DatePicker from '../nhwd-shared/DatePicker';
+import LobPicker, { type ExtendedLob, isCommercialRoute } from './LobPicker';
+import NonOwnersSection, { type NonOwnersData } from './NonOwnersSection';
+import TruckingSection, { type TruckingData } from './TruckingSection';
+import CommercialGlSection, { type CommercialGlData } from './CommercialGlSection';
+import HomeownersSection, { type HomeownersData } from './HomeownersSection';
 
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
@@ -76,6 +83,10 @@ type DraftSubmission = Partial<CsIntakeSubmission> & {
   dot_not_applicable: boolean;
 };
 
+/** LOBs that need drivers/vehicles sections */
+const LOBS_WITH_DRIVERS: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking'];
+const LOBS_WITH_VEHICLES: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking'];
+
 interface Props {
   profileId: string;
   initial?: {
@@ -115,6 +126,7 @@ function Section({ icon, title, subtitle, children }: { icon: React.ReactNode; t
 }
 
 export default function IntakeForm({ profileId, initial, readOnly = false, onDone }: Props) {
+  const [lobPicked, setLobPicked] = useState<boolean>(!!initial);
   const [submission, setSubmission] = useState<DraftSubmission>(() => {
     const row = initial?.submission;
     return row
@@ -144,6 +156,10 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   const [notice, setNotice] = useState<string | null>(null);
 
   const isCommercial = submission.line_of_business === 'commercial_auto';
+  const currentLob = submission.line_of_business as ExtendedLob;
+  const showDrivers = LOBS_WITH_DRIVERS.includes(currentLob);
+  const showVehicles = LOBS_WITH_VEHICLES.includes(currentLob);
+  const isCommercialRouted = isCommercialRoute(currentLob);
   const disabled = readOnly || busy;
 
   useEffect(() => {
@@ -191,23 +207,46 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   const selectedSalesperson = salespeople.find((person) => person.id === submission.salesperson_id);
 
   const completeness = useMemo(() => {
-    const required = [
+    const required: unknown[] = [
       submission.insured_first_name,
       submission.insured_last_name,
-      submission.insured_dob,
       submission.insured_phone_primary,
-      submission.addr_street,
-      submission.addr_city,
-      submission.addr_state,
-      submission.addr_zip,
-      submission.desired_coverage,
-      ...drivers.flatMap((driver) => [driver.first_name, driver.last_name, driver.dob, driver.license_number, driver.license_state]),
-      ...vehicles.flatMap((vehicle) => [vehicle.year, vehicle.make, vehicle.model, vehicle.vin || (vehicle.vin_pending ? 'pending' : '')]),
-      ...(isCommercial ? [submission.business_name, submission.business_type, submission.dot_number || (submission.dot_not_applicable ? 'n/a' : '')] : []),
     ];
+
+    // LOB-specific required fields
+    if (currentLob === 'non_owners') {
+      required.push(submission.sr22_filing_state);
+    } else if (currentLob === 'trucking') {
+      required.push(submission.business_name, submission.dot_number);
+    } else if (currentLob === 'commercial_gl') {
+      required.push(submission.business_name);
+    } else if (currentLob === 'homeowners') {
+      required.push(submission.property_address_street);
+    } else {
+      // personal_auto / commercial_auto
+      required.push(
+        submission.insured_dob,
+        submission.addr_street,
+        submission.addr_city,
+        submission.addr_state,
+        submission.addr_zip,
+        submission.desired_coverage,
+      );
+      if (isCommercial) {
+        required.push(submission.business_name, submission.business_type, submission.dot_number || (submission.dot_not_applicable ? 'n/a' : ''));
+      }
+    }
+
+    if (showDrivers) {
+      required.push(...drivers.flatMap((driver) => [driver.first_name, driver.last_name, driver.dob, driver.license_number, driver.license_state]));
+    }
+    if (showVehicles) {
+      required.push(...vehicles.flatMap((vehicle) => [vehicle.year, vehicle.make, vehicle.model, vehicle.vin || (vehicle.vin_pending ? 'pending' : '')]));
+    }
+
     const completed = required.filter((value) => value !== null && value !== undefined && String(value).trim() !== '').length;
     return Math.round((completed / Math.max(1, required.length)) * 100);
-  }, [drivers, isCommercial, submission, vehicles]);
+  }, [currentLob, drivers, isCommercial, showDrivers, showVehicles, submission, vehicles]);
 
   function patch(values: Partial<DraftSubmission>) {
     setSubmission((current) => ({ ...current, ...values }));
@@ -222,36 +261,68 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   }
 
   function validate(): string | null {
-    const basics = [
-      ['Full name', submission.insured_first_name && submission.insured_last_name],
-      ['Date of birth', submission.insured_dob],
-      ['Primary phone', submission.insured_phone_primary],
-      ['Street address', submission.addr_street],
-      ['City', submission.addr_city],
-      ['State', submission.addr_state],
-      ['ZIP', submission.addr_zip],
-      ['Coverage needed', submission.desired_coverage],
-    ] as Array<[string, unknown]>;
-    const missingBasic = basics.find(([, value]) => !value);
-    if (missingBasic) return `${missingBasic[0]} is required.`;
-    if (salespeople.length > 0 && !submission.salesperson_id) return `Choose the salesperson for ${selectedDealer?.name || 'this source'}.`;
-    if (isCommercial) {
-      if (!submission.business_name?.trim()) return 'Business name is required for Commercial Auto.';
-      if (!submission.business_type?.trim()) return 'Type of work is required for Commercial Auto.';
-      if (!submission.dot_not_applicable && !submission.dot_number?.trim()) return 'Enter the DOT number or mark DOT not applicable.';
+    // Common: name + phone always required
+    if (!submission.insured_first_name || !submission.insured_last_name) return 'Full name is required.';
+    if (!submission.insured_phone_primary) return 'Primary phone is required.';
+
+    // Non-owners: minimal validation
+    if (currentLob === 'non_owners') {
+      if (!submission.sr22_filing_state) return 'SR-22 filing state is required for Non-Owners.';
+      return null;
     }
-    if (!drivers.length) return 'Add at least one person or driver.';
-    for (const [index, driver] of drivers.entries()) {
-      if (!driver.first_name || !driver.last_name || !driver.dob || !driver.license_number || !driver.license_state) {
-        return `Complete the name, DOB, ${driver.document_type === 'state_id' ? 'ID' : driver.document_type === 'passport' ? 'passport' : 'license'} number and state for person ${index + 1}.`;
+
+    // Trucking validation
+    if (currentLob === 'trucking') {
+      if (!submission.business_name?.trim()) return 'Business name is required for Trucking.';
+      if (!submission.dot_number?.trim()) return 'DOT number is required for Trucking.';
+    }
+
+    // Commercial GL validation
+    if (currentLob === 'commercial_gl') {
+      if (!submission.business_name?.trim()) return 'Business name is required for Commercial GL.';
+    }
+
+    // Homeowners validation
+    if (currentLob === 'homeowners') {
+      if (!submission.property_address_street?.trim()) return 'Property address is required for Homeowners.';
+    }
+
+    // Personal auto / commercial auto standard validation
+    if (currentLob === 'personal_auto' || currentLob === 'commercial_auto') {
+      if (!submission.insured_dob) return 'Date of birth is required.';
+      if (!submission.addr_street) return 'Street address is required.';
+      if (!submission.addr_city) return 'City is required.';
+      if (!submission.addr_state) return 'State is required.';
+      if (!submission.addr_zip) return 'ZIP is required.';
+      if (!submission.desired_coverage) return 'Coverage needed is required.';
+      if (salespeople.length > 0 && !submission.salesperson_id) return `Choose the salesperson for ${selectedDealer?.name || 'this source'}.`;
+      if (isCommercial) {
+        if (!submission.business_name?.trim()) return 'Business name is required for Commercial Auto.';
+        if (!submission.business_type?.trim()) return 'Type of work is required for Commercial Auto.';
+        if (!submission.dot_not_applicable && !submission.dot_number?.trim()) return 'Enter the DOT number or mark DOT not applicable.';
       }
     }
-    if (!vehicles.length) return 'Add at least one vehicle.';
-    for (const [index, vehicle] of vehicles.entries()) {
-      if (!vehicle.year || !vehicle.make || !vehicle.model || (!vehicle.vin && !vehicle.vin_pending)) {
-        return `Complete year, make, model and VIN (or VIN pending) for vehicle ${index + 1}.`;
+
+    // Drivers validation (for LOBs that need them)
+    if (showDrivers) {
+      if (!drivers.length) return 'Add at least one person or driver.';
+      for (const [index, driver] of drivers.entries()) {
+        if (!driver.first_name || !driver.last_name || !driver.dob || !driver.license_number || !driver.license_state) {
+          return `Complete the name, DOB, ${driver.document_type === 'state_id' ? 'ID' : driver.document_type === 'passport' ? 'passport' : 'license'} number and state for person ${index + 1}.`;
+        }
       }
     }
+
+    // Vehicles validation (for LOBs that need them)
+    if (showVehicles) {
+      if (!vehicles.length) return 'Add at least one vehicle.';
+      for (const [index, vehicle] of vehicles.entries()) {
+        if (!vehicle.year || !vehicle.make || !vehicle.model || (!vehicle.vin && !vehicle.vin_pending)) {
+          return `Complete year, make, model and VIN (or VIN pending) for vehicle ${index + 1}.`;
+        }
+      }
+    }
+
     return null;
   }
 
@@ -283,8 +354,13 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       );
       patch({ id });
       if (alsoSubmit) {
-        await submitIntake(id);
-        setNotice('Intake submitted to the Sales Intake Queue. Agents were notified.');
+        if (isCommercialRouted) {
+          const cardId = await submitCommercialIntake(id);
+          setNotice(`Intake submitted to the Commercial Board. Card created (${cardId.slice(0, 8)}…).`);
+        } else {
+          await submitIntake(id);
+          setNotice('Intake submitted to the Sales Intake Queue. Agents were notified.');
+        }
         window.setTimeout(onDone, 900);
       } else {
         setNotice('Draft saved.');
@@ -294,6 +370,75 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
     } finally {
       setBusy(false);
     }
+  }
+
+  // LOB picker handler
+  function handleLobSelect(lob: ExtendedLob) {
+    patch({ line_of_business: lob as CsIntakeLob });
+    setLobPicked(true);
+  }
+
+  // Helper data objects for LOB-specific sections
+  const truckingData: TruckingData = {
+    business_name: submission.business_name || '',
+    business_type: submission.business_type || '',
+    years_in_business: submission.years_in_business ?? null,
+    dot_number: submission.dot_number || '',
+    mc_number: submission.mc_number || '',
+    mcs150_date: submission.mcs150_date || '',
+    cargo_type: submission.cargo_type || '',
+    power_unit_count: submission.power_unit_count ?? null,
+    operating_radius_miles: submission.operating_radius_miles ?? null,
+  };
+
+  const commercialGlData: CommercialGlData = {
+    business_name: submission.business_name || '',
+    business_type: submission.business_type || '',
+    ein: submission.ein || '',
+    states_of_operation: submission.states_of_operation || '',
+    employee_count: submission.employee_count ?? null,
+    annual_payroll: submission.annual_payroll ?? null,
+    years_in_business: submission.years_in_business ?? null,
+    coverage_types_needed: submission.coverage_types_needed || [],
+    owner_name: '',
+    owner_dob: '',
+    owner_phone: '',
+    owner_email: '',
+  };
+
+  const homeownersData: HomeownersData = {
+    property_address_street: submission.property_address_street || '',
+    property_address_city: submission.property_address_city || '',
+    property_address_state: submission.property_address_state || '',
+    property_address_zip: submission.property_address_zip || '',
+    dwelling_type: submission.dwelling_type || '',
+    year_built: submission.year_built ?? null,
+    square_footage: submission.square_footage ?? null,
+    roof_type: submission.roof_type || '',
+    roof_age: submission.roof_age ?? null,
+    coverage_amount: submission.coverage_amount ?? null,
+    prior_claims: submission.prior_claims || false,
+    prior_claims_detail: submission.prior_claims_detail || '',
+  };
+
+  const nonOwnersData: NonOwnersData = {
+    sr22_filing_state: submission.sr22_filing_state || '',
+    court_order_date: submission.court_order_date || '',
+    desired_coverage: submission.desired_coverage || '',
+  };
+
+  // If LOB hasn't been picked yet, show the picker
+  if (!lobPicked) {
+    return (
+      <div className="space-y-5">
+        {error ? <div className={ui.error}>{error}</div> : null}
+        <LobPicker
+          selected={currentLob}
+          onSelect={handleLobSelect}
+          disabled={readOnly}
+        />
+      </div>
+    );
   }
 
   return (
@@ -306,12 +451,34 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       {error ? <div className={ui.error}>{error}</div> : null}
       {notice ? <div className={ui.success}>{notice}</div> : null}
 
+      {/* Header with LOB change option */}
       <section className="rounded-[26px] border border-[#c9d5e9] bg-gradient-to-br from-white to-[#eef3fb] p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]">Quote Intake</p>
-            <h2 className="mt-1 text-2xl font-black text-slate-950">Collect only what Sales needs to start quoting</h2>
-            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">Choose Personal or Commercial Auto. The form adjusts automatically and keeps each driver and vehicle as a separate field-level record.</p>
+            <h2 className="mt-1 text-2xl font-black text-slate-950">
+              {currentLob === 'personal_auto' && 'Personal Auto'}
+              {currentLob === 'commercial_auto' && 'Commercial Auto'}
+              {currentLob === 'trucking' && 'Trucking'}
+              {currentLob === 'commercial_gl' && 'Commercial (GL, WC)'}
+              {currentLob === 'homeowners' && 'Homeowners'}
+              {currentLob === 'non_owners' && 'Non-Owners / SR-22'}
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
+              {isCommercialRouted
+                ? 'This intake will create a card on the Commercial Board.'
+                : 'This intake will be sent to the Personal Sales Queue.'}
+            </p>
+            {!readOnly && !initial && (
+              <button
+                type="button"
+                className="mt-2 text-xs font-black text-[#223f7a] hover:underline"
+                onClick={() => setLobPicked(false)}
+              >
+                <RotateCcw className="mr-1 inline h-3 w-3" />
+                Change coverage type
+              </button>
+            )}
           </div>
           <div className="min-w-36 rounded-2xl bg-white p-4 text-center ring-1 ring-[#c9d5e9]">
             <p className="text-3xl font-black text-[#223f7a]">{completeness}%</p>
@@ -320,19 +487,10 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         </div>
       </section>
 
+      {/* Coverage and routing section — shown for personal_auto and commercial_auto */}
+      {(currentLob === 'personal_auto' || currentLob === 'commercial_auto') && (
       <Section icon={<ShieldCheck className="h-5 w-5" />} title="Coverage and routing" subtitle="Tell Sales what kind of quote is needed and where the lead came from.">
         <div className={ui.fieldRow}>
-          <Field label="Coverage type" required>
-            <select
-              className={ui.select}
-              disabled={disabled}
-              value={submission.line_of_business}
-              onChange={(event) => patch({ line_of_business: event.target.value as CsIntakeLob })}
-            >
-              <option value="personal_auto">Personal Auto</option>
-              <option value="commercial_auto">Commercial Auto</option>
-            </select>
-          </Field>
           <Field label="Quote type" required>
             <select className={ui.select} disabled={disabled} value={submission.quote_kind || 'new_quote'} onChange={(event) => patch({ quote_kind: event.target.value as 'new_quote' | 'requote' })}>
               <option value="new_quote">New Quote</option>
@@ -381,7 +539,30 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         </div>
         {(selectedDealer || selectedSalesperson) ? <p className="mt-4 text-xs font-bold text-slate-500">Routing: {selectedDealer?.name || 'Direct'}{selectedSalesperson ? ` · ${selectedSalesperson.name}` : ''}</p> : null}
       </Section>
+      )}
 
+      {/* Priority and quote type for commercial-routed LOBs */}
+      {isCommercialRouted && (
+      <Section icon={<ShieldCheck className="h-5 w-5" />} title="Quote details" subtitle="Priority and quote type for this intake.">
+        <div className={ui.fieldRow}>
+          <Field label="Quote type" required>
+            <select className={ui.select} disabled={disabled} value={submission.quote_kind || 'new_quote'} onChange={(event) => patch({ quote_kind: event.target.value as 'new_quote' | 'requote' })}>
+              <option value="new_quote">New Quote</option>
+              <option value="requote">Requote</option>
+            </select>
+          </Field>
+          <Field label="Priority">
+            <select className={ui.select} disabled={disabled} value={submission.priority} onChange={(event) => patch({ priority: event.target.value as CsIntakePriority })}>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </Field>
+        </div>
+      </Section>
+      )}
+
+      {/* Commercial Auto section (existing) */}
       {isCommercial ? (
         <Section icon={<Building2 className="h-5 w-5" />} title="Commercial operation" subtitle="Basic business information needed for a Commercial Auto submission.">
           <div className={ui.fieldRow}>
@@ -397,6 +578,90 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
           </label>
         </Section>
       ) : null}
+
+      {/* Trucking section */}
+      {currentLob === 'trucking' && (
+        <TruckingSection
+          data={truckingData}
+          onChange={(truckPatch) => {
+            const mapped: Partial<DraftSubmission> = {};
+            if ('business_name' in truckPatch) mapped.business_name = truckPatch.business_name || null;
+            if ('business_type' in truckPatch) mapped.business_type = truckPatch.business_type || null;
+            if ('years_in_business' in truckPatch) mapped.years_in_business = truckPatch.years_in_business;
+            if ('dot_number' in truckPatch) mapped.dot_number = truckPatch.dot_number || null;
+            if ('mc_number' in truckPatch) (mapped as Record<string, unknown>).mc_number = truckPatch.mc_number || null;
+            if ('mcs150_date' in truckPatch) (mapped as Record<string, unknown>).mcs150_date = truckPatch.mcs150_date || null;
+            if ('cargo_type' in truckPatch) (mapped as Record<string, unknown>).cargo_type = truckPatch.cargo_type || null;
+            if ('power_unit_count' in truckPatch) (mapped as Record<string, unknown>).power_unit_count = truckPatch.power_unit_count;
+            if ('operating_radius_miles' in truckPatch) mapped.operating_radius_miles = truckPatch.operating_radius_miles;
+            patch(mapped);
+          }}
+          disabled={disabled}
+        />
+      )}
+
+      {/* Commercial GL section */}
+      {currentLob === 'commercial_gl' && (
+        <CommercialGlSection
+          data={commercialGlData}
+          onChange={(glPatch) => {
+            const mapped: Partial<DraftSubmission> = {};
+            if ('business_name' in glPatch) mapped.business_name = glPatch.business_name || null;
+            if ('business_type' in glPatch) mapped.business_type = glPatch.business_type || null;
+            if ('ein' in glPatch) (mapped as Record<string, unknown>).ein = glPatch.ein || null;
+            if ('states_of_operation' in glPatch) (mapped as Record<string, unknown>).states_of_operation = glPatch.states_of_operation || null;
+            if ('employee_count' in glPatch) (mapped as Record<string, unknown>).employee_count = glPatch.employee_count;
+            if ('annual_payroll' in glPatch) (mapped as Record<string, unknown>).annual_payroll = glPatch.annual_payroll;
+            if ('years_in_business' in glPatch) mapped.years_in_business = glPatch.years_in_business;
+            if ('coverage_types_needed' in glPatch) (mapped as Record<string, unknown>).coverage_types_needed = glPatch.coverage_types_needed;
+            // Owner info goes into csr_notes as structured text (or we can use the insured fields)
+            if ('owner_name' in glPatch) (mapped as Record<string, unknown>).insured_first_name = glPatch.owner_name?.split(' ')[0] || '';
+            if ('owner_phone' in glPatch) (mapped as Record<string, unknown>).insured_phone_primary = glPatch.owner_phone || null;
+            if ('owner_email' in glPatch) (mapped as Record<string, unknown>).insured_email = glPatch.owner_email || null;
+            patch(mapped);
+          }}
+          disabled={disabled}
+        />
+      )}
+
+      {/* Homeowners section */}
+      {currentLob === 'homeowners' && (
+        <HomeownersSection
+          data={homeownersData}
+          onChange={(hoPatch) => {
+            const mapped: Record<string, unknown> = {};
+            if ('property_address_street' in hoPatch) mapped.property_address_street = hoPatch.property_address_street || null;
+            if ('property_address_city' in hoPatch) mapped.property_address_city = hoPatch.property_address_city || null;
+            if ('property_address_state' in hoPatch) mapped.property_address_state = hoPatch.property_address_state || null;
+            if ('property_address_zip' in hoPatch) mapped.property_address_zip = hoPatch.property_address_zip || null;
+            if ('dwelling_type' in hoPatch) mapped.dwelling_type = hoPatch.dwelling_type || null;
+            if ('year_built' in hoPatch) mapped.year_built = hoPatch.year_built;
+            if ('square_footage' in hoPatch) mapped.square_footage = hoPatch.square_footage;
+            if ('roof_type' in hoPatch) mapped.roof_type = hoPatch.roof_type || null;
+            if ('roof_age' in hoPatch) mapped.roof_age = hoPatch.roof_age;
+            if ('coverage_amount' in hoPatch) mapped.coverage_amount = hoPatch.coverage_amount;
+            if ('prior_claims' in hoPatch) mapped.prior_claims = hoPatch.prior_claims;
+            if ('prior_claims_detail' in hoPatch) mapped.prior_claims_detail = hoPatch.prior_claims_detail || null;
+            patch(mapped as Partial<DraftSubmission>);
+          }}
+          disabled={disabled}
+        />
+      )}
+
+      {/* Non-Owners section */}
+      {currentLob === 'non_owners' && (
+        <NonOwnersSection
+          data={nonOwnersData}
+          onChange={(noPatch) => {
+            const mapped: Record<string, unknown> = {};
+            if ('sr22_filing_state' in noPatch) mapped.sr22_filing_state = noPatch.sr22_filing_state || null;
+            if ('court_order_date' in noPatch) mapped.court_order_date = noPatch.court_order_date || null;
+            if ('desired_coverage' in noPatch) mapped.desired_coverage = noPatch.desired_coverage || null;
+            patch(mapped as Partial<DraftSubmission>);
+          }}
+          disabled={disabled}
+        />
+      )}
 
       <Section icon={<UserRound className="h-5 w-5" />} title={isCommercial ? 'Primary contact' : 'Named insured'} subtitle="The person Customer Service is speaking with and the garaging/mailing address.">
         <div className={ui.fieldRow}>
@@ -439,6 +704,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         </div>
       </Section>
 
+      {showDrivers && (
       <Section icon={<UsersRound className="h-5 w-5" />} title={`People / drivers (${drivers.length})`} subtitle="Add the primary insured and every additional person who may drive or needs to be listed.">
         <div className="space-y-4">
           {drivers.map((driver, index) => (
@@ -474,7 +740,9 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         </div>
         {!readOnly ? <button type="button" className={`${ui.btnSecondary} mt-4`} onClick={() => setDrivers((current) => [...current, emptyDriver(current.length + 1)])}><Plus className="h-4 w-4" /> Add another person</button> : null}
       </Section>
+      )}
 
+      {showVehicles && (
       <Section icon={<Car className="h-5 w-5" />} title={`Vehicles (${vehicles.length})`} subtitle="Add every vehicle the customer wants quoted. Enter the VIN to auto-fill year, make, and model.">
         <div className="space-y-4">
           {vehicles.map((vehicle, index) => (
@@ -509,6 +777,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         </div>
         {!readOnly ? <button type="button" className={`${ui.btnSecondary} mt-4`} onClick={() => setVehicles((current) => [...current, emptyVehicle(current.length + 1)])}><Plus className="h-4 w-4" /> Add another vehicle</button> : null}
       </Section>
+      )}
 
       <Section icon={<FileText className="h-5 w-5" />} title="Current policy and notes" subtitle="Optional information that helps Sales compare or prepare a requote.">
         <div className={ui.fieldRow}>
@@ -527,11 +796,11 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
 
       {!readOnly ? (
         <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3 text-sm font-semibold text-slate-500"><CheckCircle2 className="h-5 w-5 text-emerald-500" /> Drafts can be reopened. Submission sends the intake to Sales.</div>
+          <div className="flex items-center gap-3 text-sm font-semibold text-slate-500"><CheckCircle2 className="h-5 w-5 text-emerald-500" /> Drafts can be reopened. Submission sends the intake to {isCommercialRouted ? 'the Commercial Board' : 'Sales'}.</div>
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className={ui.btnGhost} disabled={busy} onClick={onDone}>Close</button>
             <button type="button" className={ui.btnSecondary} disabled={busy} onClick={() => void persist(false)}><Save className="h-4 w-4" /> Save Draft</button>
-            <button type="button" className={ui.btnPrimary} disabled={busy} onClick={() => void persist(true)}><Send className="h-4 w-4" /> Submit to Sales</button>
+            <button type="button" className={ui.btnPrimary} disabled={busy} onClick={() => void persist(true)}><Send className="h-4 w-4" /> {isCommercialRouted ? 'Submit to Commercial' : 'Submit to Sales'}</button>
           </div>
         </div>
       ) : null}

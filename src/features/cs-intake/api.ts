@@ -12,7 +12,7 @@ export type CsIntakeStatus =
   | 'rejected'
   | 'deleted';
 export type CsIntakePriority = 'normal' | 'high' | 'urgent';
-export type CsIntakeLob = 'personal_auto' | 'commercial_auto' | 'auto';
+export type CsIntakeLob = 'personal_auto' | 'commercial_auto' | 'auto' | 'trucking' | 'commercial_gl' | 'homeowners' | 'non_owners';
 export type DesiredCoverage = 'liability_only' | 'full_coverage' | 'unsure';
 export type QuoteKind = 'new_quote' | 'requote';
 
@@ -67,6 +67,35 @@ export interface CsIntakeSubmission {
   return_reason: string | null;
   reject_reason: string | null;
   csr_notes: string | null;
+  // Trucking fields
+  mc_number: string | null;
+  mcs150_date: string | null;
+  cargo_type: string | null;
+  power_unit_count: number | null;
+  // Commercial GL fields
+  ein: string | null;
+  states_of_operation: string | null;
+  employee_count: number | null;
+  annual_payroll: number | null;
+  coverage_types_needed: string[] | null;
+  // Homeowners fields
+  property_address_street: string | null;
+  property_address_city: string | null;
+  property_address_state: string | null;
+  property_address_zip: string | null;
+  dwelling_type: string | null;
+  year_built: number | null;
+  square_footage: number | null;
+  roof_type: string | null;
+  roof_age: number | null;
+  coverage_amount: number | null;
+  prior_claims: boolean;
+  prior_claims_detail: string | null;
+  // Non-owners fields
+  sr22_filing_state: string | null;
+  court_order_date: string | null;
+  // Commercial card link
+  source_commercial_quote_id: string | null;
   created_at: string;
   updated_at: string;
   submitted_at: string | null;
@@ -226,7 +255,7 @@ export async function saveDraft(
   let id = submission.id;
   const row = { ...submission } as Record<string, unknown>;
   if (row.line_of_business === 'personal_auto') row.line_of_business = 'auto';
-  for (const key of ['id', 'created_at', 'updated_at', 'submitted_at', 'claimed_at', 'converted_at', 'work_item_id']) {
+  for (const key of ['id', 'created_at', 'updated_at', 'submitted_at', 'claimed_at', 'converted_at', 'work_item_id', 'source_commercial_quote_id']) {
     delete row[key];
   }
 
@@ -283,6 +312,17 @@ export async function saveDraft(
 export async function submitIntake(id: string): Promise<void> {
   const { error } = await getSupabase().rpc('cs_intake_submit', { p_submission_id: id });
   throwIfError(error);
+}
+
+/**
+ * Submit an intake for commercial-routed LOBs (homeowners, trucking, commercial_gl).
+ * Creates a commercial_quotes card on the Better Trello board and marks the intake as converted.
+ * Returns the new commercial quote card ID.
+ */
+export async function submitCommercialIntake(id: string): Promise<string> {
+  const { data, error } = await getSupabase().rpc('cs_intake_submit_commercial', { p_submission_id: id });
+  throwIfError(error);
+  return data as string;
 }
 
 export async function claimIntake(id: string): Promise<void> {
