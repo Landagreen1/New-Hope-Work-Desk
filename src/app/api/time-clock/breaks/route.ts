@@ -81,7 +81,7 @@ export async function PATCH(request: Request) {
   // Get active break
   const { data: activeBreak } = await supabase
     .from("time_clock_breaks")
-    .select("id, break_start")
+    .select("id, break_start, break_type")
     .eq("clock_entry_id", activeEntry.id)
     .is("break_end", null)
     .maybeSingle();
@@ -100,12 +100,20 @@ export async function PATCH(request: Request) {
 
   if (error) return Response.json({ error: error.message }, { status: 400 });
 
-  // Update total break minutes on the clock entry
-  const newBreakMinutes = (activeEntry.break_minutes || 0) + durationMinutes;
-  await supabase
-    .from("time_clock_entries")
-    .update({ break_minutes: newBreakMinutes, clock_status: "available" })
-    .eq("id", activeEntry.id);
+  // Only deduct lunch breaks from paid time — short breaks are paid
+  if (activeBreak.break_type === "lunch") {
+    const newBreakMinutes = (activeEntry.break_minutes || 0) + durationMinutes;
+    await supabase
+      .from("time_clock_entries")
+      .update({ break_minutes: newBreakMinutes, clock_status: "available" })
+      .eq("id", activeEntry.id);
+  } else {
+    // Short/personal breaks: just reset status, don't deduct time
+    await supabase
+      .from("time_clock_entries")
+      .update({ clock_status: "available" })
+      .eq("id", activeEntry.id);
+  }
 
   // Set back to available
   await supabase.from("profiles").update({ availability: "available" }).eq("id", user.id);

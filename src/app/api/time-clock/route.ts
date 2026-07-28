@@ -251,7 +251,7 @@ export async function PATCH(request: Request) {
     if (newStatus !== "lunch") {
       const { data: activeBreakRow } = await supabase
         .from("time_clock_breaks")
-        .select("id, break_start")
+        .select("id, break_start, break_type")
         .eq("clock_entry_id", activeEntry.id)
         .is("break_end", null)
         .maybeSingle();
@@ -266,12 +266,14 @@ export async function PATCH(request: Request) {
           .update({ break_end: now.toISOString(), duration_minutes: durationMinutes })
           .eq("id", activeBreakRow.id);
 
-        // Update total break minutes
-        const newBreakMinutes = (activeEntry.break_minutes || 0) + durationMinutes;
-        await supabase
-          .from("time_clock_entries")
-          .update({ break_minutes: newBreakMinutes })
-          .eq("id", activeEntry.id);
+        // Only deduct lunch breaks from paid time — short breaks are paid
+        if (activeBreakRow.break_type === "lunch") {
+          const newBreakMinutes = (activeEntry.break_minutes || 0) + durationMinutes;
+          await supabase
+            .from("time_clock_entries")
+            .update({ break_minutes: newBreakMinutes })
+            .eq("id", activeEntry.id);
+        }
       }
     }
 
