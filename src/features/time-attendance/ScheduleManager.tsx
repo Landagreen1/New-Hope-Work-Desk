@@ -43,6 +43,39 @@ function formatShortDate(d: Date): string {
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+// ─── Timezone Conversion ──────────────────────────────────────────────────────
+
+// Schedules are stored in US Eastern time. Convert for display based on employee timezone.
+// US Eastern (EDT summer): UTC-4
+// Ecuador (America/Guayaquil): UTC-5 → 1 hour behind EDT
+// Honduras (America/Tegucigalpa): UTC-6 → 2 hours behind EDT
+
+function getTimezoneOffset(timezone?: string): number {
+  // Returns hours to subtract from stored time for display
+  if (!timezone) return 0;
+  if (timezone === 'America/Guayaquil') return -1; // Ecuador is 1h behind US EDT
+  if (timezone === 'America/Tegucigalpa') return -2; // Honduras is 2h behind US EDT
+  return 0; // America/New_York — no conversion needed
+}
+
+function convertTimeForDisplay(timeStr: string, timezone?: string): string {
+  const offset = getTimezoneOffset(timezone);
+  if (offset === 0) return timeStr.slice(0, 5);
+  
+  const [hours, minutes] = timeStr.slice(0, 5).split(':').map(Number);
+  let newHours = hours + offset;
+  if (newHours < 0) newHours += 24;
+  if (newHours >= 24) newHours -= 24;
+  return `${String(newHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function getTimezoneLabel(timezone?: string): string {
+  if (!timezone) return '';
+  if (timezone === 'America/Guayaquil') return 'ECT';
+  if (timezone === 'America/Tegucigalpa') return 'CST';
+  return 'ET';
+}
+
 // ─── Schedule Templates ───────────────────────────────────────────────────────
 
 interface ScheduleTemplate {
@@ -279,6 +312,7 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
         id,
         display_name: profile?.display_name ?? fromSchedule?.profiles?.display_name ?? 'Unknown',
         initials: profile?.initials ?? fromSchedule?.profiles?.initials ?? '??',
+        timezone: (fromSchedule?.profiles as { timezone?: string } | undefined)?.timezone ?? 'America/New_York',
       };
     });
     return list.sort((a, b) => a.display_name.localeCompare(b.display_name));
@@ -377,7 +411,10 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#223f7a] text-[10px] font-black text-white">
                     {emp.initials}
                   </div>
-                  <p className="text-xs font-black text-slate-800 truncate">{emp.display_name}</p>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-800 truncate">{emp.display_name}</p>
+                    <p className="text-[9px] font-bold text-slate-400">{getTimezoneLabel(emp.timezone)}</p>
+                  </div>
                 </div>
 
                 {/* Day cells */}
@@ -398,7 +435,7 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
                               className="group relative rounded-lg bg-gradient-to-r from-[#223f7a]/10 to-[#223f7a]/5 border border-[#223f7a]/15 px-2 py-1.5"
                             >
                               <p className="text-[11px] font-black text-[#223f7a]">
-                                {s.shift_start?.slice(0, 5)} – {s.shift_end?.slice(0, 5)}
+                                {convertTimeForDisplay(s.shift_start, emp.timezone)} – {convertTimeForDisplay(s.shift_end, emp.timezone)}
                               </p>
                               <p className="text-[9px] font-bold text-slate-500">{SHIFT_TYPE_LABELS[s.shift_type]}</p>
                               {canAdminister && (

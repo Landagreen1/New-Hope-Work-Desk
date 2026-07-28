@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("employee_schedules")
-    .select("*, profiles!employee_schedules_profile_id_fkey(display_name, initials, role)")
+    .select("*, profiles!employee_schedules_profile_id_fkey(display_name, initials, role, timezone)")
     .order("schedule_date", { ascending: true })
     .order("shift_start", { ascending: true });
 

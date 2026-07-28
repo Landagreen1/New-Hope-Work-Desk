@@ -57,7 +57,7 @@ export interface EmployeeSchedule {
   created_at: string;
   updated_at: string;
   // Joined
-  profiles?: { display_name: string; initials: string; role: string };
+  profiles?: { display_name: string; initials: string; role: string; timezone?: string };
 }
 
 // ─── PTO ──────────────────────────────────────────────────────────────────────
