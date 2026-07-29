@@ -400,10 +400,10 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
     annual_payroll: submission.annual_payroll ?? null,
     years_in_business: submission.years_in_business ?? null,
     coverage_types_needed: submission.coverage_types_needed || [],
-    owner_name: '',
-    owner_dob: '',
-    owner_phone: '',
-    owner_email: '',
+    owner_name: [submission.insured_first_name, submission.insured_last_name].filter(Boolean).join(' '),
+    owner_dob: submission.insured_dob || '',
+    owner_phone: submission.insured_phone_primary || '',
+    owner_email: submission.insured_email || '',
   };
 
   const homeownersData: HomeownersData = {
@@ -614,8 +614,15 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
             if ('annual_payroll' in glPatch) (mapped as Record<string, unknown>).annual_payroll = glPatch.annual_payroll;
             if ('years_in_business' in glPatch) mapped.years_in_business = glPatch.years_in_business;
             if ('coverage_types_needed' in glPatch) (mapped as Record<string, unknown>).coverage_types_needed = glPatch.coverage_types_needed;
-            // Owner info goes into csr_notes as structured text (or we can use the insured fields)
-            if ('owner_name' in glPatch) (mapped as Record<string, unknown>).insured_first_name = glPatch.owner_name?.split(' ')[0] || '';
+            // Owner info maps to insured fields
+            if ('owner_name' in glPatch) {
+              const parts = (glPatch.owner_name || '').trim().split(/\s+/);
+              const firstName = parts[0] || '';
+              const lastName = parts.slice(1).join(' ') || '';
+              mapped.insured_first_name = firstName;
+              (mapped as Record<string, unknown>).insured_last_name = lastName;
+            }
+            if ('owner_dob' in glPatch) (mapped as Record<string, unknown>).insured_dob = glPatch.owner_dob || null;
             if ('owner_phone' in glPatch) (mapped as Record<string, unknown>).insured_phone_primary = glPatch.owner_phone || null;
             if ('owner_email' in glPatch) (mapped as Record<string, unknown>).insured_email = glPatch.owner_email || null;
             patch(mapped);
