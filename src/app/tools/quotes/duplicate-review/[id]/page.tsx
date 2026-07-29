@@ -83,12 +83,12 @@ export default function DuplicateReviewPage({ params }: PageProps) {
       }
       setResolved(true);
 
-      // After resolution, navigate to next pending review or back to quotes list
+      // After resolution, navigate to next pending review or back to intake
       const pending = await getPendingDuplicateReviews();
       if (pending.length > 0) {
         router.push(`/tools/quotes/duplicate-review/${pending[0].id}`);
       } else {
-        router.push('/tools/quotes');
+        router.push('/tools/cs-intake');
       }
     },
     [review, router],
@@ -168,11 +168,11 @@ export default function DuplicateReviewPage({ params }: PageProps) {
       <div className="mb-6 flex items-center gap-4">
         <button
           type="button"
-          onClick={() => router.push('/tools/quotes')}
+          onClick={() => router.push('/tools/cs-intake')}
           className={ui.btnGhost}
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Quotes
+          Back to Intake
         </button>
         <h1 className={ui.pageTitle}>Duplicate Review</h1>
       </div>

@@ -1,24 +1,6 @@
-export const dynamic = 'force-dynamic';
+import { redirect } from 'next/navigation';
 
-import { Suspense } from 'react';
-
-import QuotesListPage from '@/features/quotes/QuotesListPage';
-import { canAccessSales } from '@/lib/permissions';
-import { requireToolProfile } from '@/lib/tool-session';
-
-function QuotesLoading() {
-  return (
-    <main className="grid min-h-screen place-items-center bg-[#f3f5f9] font-black text-slate-500">
-      Loading Quotes...
-    </main>
-  );
-}
-
-export default async function Page() {
-  const profile = await requireToolProfile(canAccessSales);
-  return (
-    <Suspense fallback={<QuotesLoading />}>
-      <QuotesListPage initialProfile={profile} />
-    </Suspense>
-  );
+// The "All Quotes" list page has been removed — redirect to Quote Intake.
+export default function Page() {
+  redirect('/tools/cs-intake');
 }
