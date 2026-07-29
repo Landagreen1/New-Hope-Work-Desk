@@ -24,7 +24,9 @@ export interface CommercialGlData {
   years_in_business: number | null;
   coverage_types_needed: string[];
   // Owner info
-  owner_name: string;
+  owner_first_name: string;
+  owner_middle_name: string;
+  owner_last_name: string;
   owner_dob: string;
   owner_phone: string;
   owner_email: string;
@@ -177,13 +179,35 @@ export default function CommercialGlSection({ data, onChange, disabled }: Commer
         </div>
         <div className={ui.cardPad}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Owner Full Name">
+            <Field label="Owner First Name">
               <input
                 type="text"
                 className={ui.input}
-                value={data.owner_name}
-                onChange={(e) => onChange({ owner_name: e.target.value })}
-                placeholder="Full name"
+                value={data.owner_first_name}
+                onChange={(e) => onChange({ owner_first_name: e.target.value })}
+                placeholder="First name"
+                disabled={disabled}
+              />
+            </Field>
+
+            <Field label="Owner Middle Name">
+              <input
+                type="text"
+                className={ui.input}
+                value={data.owner_middle_name}
+                onChange={(e) => onChange({ owner_middle_name: e.target.value })}
+                placeholder="Middle name (optional)"
+                disabled={disabled}
+              />
+            </Field>
+
+            <Field label="Owner Last Name">
+              <input
+                type="text"
+                className={ui.input}
+                value={data.owner_last_name}
+                onChange={(e) => onChange({ owner_last_name: e.target.value })}
+                placeholder="Last name"
                 disabled={disabled}
               />
             </Field>

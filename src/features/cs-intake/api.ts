@@ -33,6 +33,7 @@ export interface CsIntakeSubmission {
   work_item_id: string | null;
   converted_at: string | null;
   insured_first_name: string;
+  insured_middle_name: string | null;
   insured_last_name: string;
   insured_dob: string | null;
   insured_email: string | null;
