@@ -68,7 +68,7 @@ export function canAccessSalesIntakeQueue(role: AppRole): boolean {
 }
 
 export function canAccessCustomerService(role: AppRole): boolean {
-  return role === "customer_service" || canManageCustomerService(role);
+  return role === "customer_service" || canManageCustomerService(role) || role === "sales_supervisor";
 }
 
 export function canAccessCommercial(role: AppRole): boolean {
@@ -79,6 +79,7 @@ export function canAccessRenewals(role: AppRole): boolean {
   return (
     role === "agent" ||
     role === "customer_service" ||
+    role === "sales_supervisor" ||
     isBroadManagerRole(role)
   );
 }
