@@ -4,9 +4,12 @@ import {
   CheckSquare,
   Clock,
   Download,
+  Eye,
   FileText,
   MessageSquare,
   Paperclip,
+  Pause,
+  Play,
   Plus,
   Send,
   Square,
@@ -428,29 +431,26 @@ export default function CommercialCardDetail({
                 <Paperclip className="h-3.5 w-3.5" /> Attachments ({attachments.length})
               </h4>
               <div className="mt-2 space-y-2">
-                {attachments.map((att) => (
-                  <div
-                    key={att.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold text-slate-700">{att.file_name}</p>
-                      <p className="text-[10px] font-semibold text-slate-400">
-                        {formatFileSize(att.file_size)} · {formatDate(att.created_at)}
-                        {att.profiles && ` · ${att.profiles.display_name}`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => void deleteAttachment(att.id)}
-                        className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:text-rose-500"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                {attachments.map((att) => {
+                  const ext = att.file_name.split('.').pop()?.toLowerCase() ?? '';
+                  const isAudio = ['mp3', 'wav', 'ogg', 'm4a'].includes(ext);
+                  const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
+                  const isPdf = ext === 'pdf';
+
+                  return (
+                    <AttachmentItem
+                      key={att.id}
+                      attachment={att}
+                      quoteId={quoteId}
+                      isAudio={isAudio}
+                      isImage={isImage}
+                      isPdf={isPdf}
+                      onDelete={() => void deleteAttachment(att.id)}
+                      formatFileSize={formatFileSize}
+                      formatDate={formatDate}
+                    />
+                  );
+                })}
                 {attachments.length === 0 && (
                   <p className="text-xs font-semibold text-slate-400">No attachments yet.</p>
                 )}
@@ -706,6 +706,175 @@ export default function CommercialCardDetail({
           </aside>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── AttachmentItem with inline preview/playback ─────────────────────────────
+
+interface AttachmentItemProps {
+  attachment: CommercialAttachment;
+  quoteId: string;
+  isAudio: boolean;
+  isImage: boolean;
+  isPdf: boolean;
+  onDelete: () => void;
+  formatFileSize: (bytes: number) => string;
+  formatDate: (iso: string) => string;
+}
+
+function AttachmentItem({ attachment: att, quoteId, isAudio, isImage, isPdf, onDelete, formatFileSize, formatDate }: AttachmentItemProps) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const fetchSignedUrl = async () => {
+    if (signedUrl) return signedUrl;
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/commercial-quotes/${quoteId}/attachments/download?path=${encodeURIComponent(att.storage_path)}`
+      );
+      if (!res.ok) return null;
+      const body = await res.json();
+      setSignedUrl(body.url);
+      return body.url as string;
+    } catch {
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleView = async () => {
+    const url = await fetchSignedUrl();
+    if (!url) return;
+
+    if (isImage || isPdf) {
+      setExpanded(!expanded);
+    } else {
+      // Download other files
+      window.open(url, '_blank');
+    }
+  };
+
+  const handlePlayPause = async () => {
+    const url = await fetchSignedUrl();
+    if (!url) return;
+
+    if (!audioRef.current) {
+      audioRef.current = new Audio(url);
+      audioRef.current.onended = () => setPlaying(false);
+    }
+
+    if (playing) {
+      audioRef.current.pause();
+      setPlaying(false);
+    } else {
+      await audioRef.current.play();
+      setPlaying(true);
+    }
+  };
+
+  const handleDownload = async () => {
+    const url = await fetchSignedUrl();
+    if (url) window.open(url, '_blank');
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50 overflow-hidden">
+      <div className="flex items-center justify-between px-3.5 py-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-slate-700">{att.file_name}</p>
+          <p className="text-[10px] font-semibold text-slate-400">
+            {formatFileSize(att.file_size)} · {formatDate(att.created_at)}
+            {att.profiles && ` · ${att.profiles.display_name}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          {/* Play button for audio */}
+          {isAudio && (
+            <button
+              type="button"
+              onClick={() => void handlePlayPause()}
+              disabled={loading}
+              className="grid h-7 w-7 place-items-center rounded-lg text-[#223f7a] hover:bg-[#eef3fb]"
+              title={playing ? 'Pause' : 'Play'}
+            >
+              {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          {/* View button for images/PDFs */}
+          {(isImage || isPdf) && (
+            <button
+              type="button"
+              onClick={() => void handleView()}
+              disabled={loading}
+              className="grid h-7 w-7 place-items-center rounded-lg text-[#223f7a] hover:bg-[#eef3fb]"
+              title="Preview"
+            >
+              <Eye className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {/* Download button */}
+          <button
+            type="button"
+            onClick={() => void handleDownload()}
+            disabled={loading}
+            className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-slate-200"
+            title="Download"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </button>
+          {/* Delete button */}
+          <button
+            type="button"
+            onClick={onDelete}
+            className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:text-rose-500"
+            title="Delete"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Inline audio player */}
+      {isAudio && signedUrl && (
+        <div className="border-t border-slate-100 px-3.5 py-2">
+          <audio
+            src={signedUrl}
+            controls
+            className="w-full h-8"
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={() => setPlaying(false)}
+          />
+        </div>
+      )}
+
+      {/* Inline image preview */}
+      {isImage && expanded && signedUrl && (
+        <div className="border-t border-slate-100 p-3">
+          <img
+            src={signedUrl}
+            alt={att.file_name}
+            className="max-h-64 w-full rounded-lg object-contain bg-white"
+          />
+        </div>
+      )}
+
+      {/* Inline PDF (iframe) */}
+      {isPdf && expanded && signedUrl && (
+        <div className="border-t border-slate-100 p-2">
+          <iframe
+            src={signedUrl}
+            title={att.file_name}
+            className="h-72 w-full rounded-lg border border-slate-200"
+          />
+        </div>
+      )}
     </div>
   );
 }
