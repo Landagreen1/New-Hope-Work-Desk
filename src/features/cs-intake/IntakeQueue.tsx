@@ -3,7 +3,7 @@
 import { CheckCircle2, Edit3, ExternalLink, Eye, FileText, RefreshCw, RotateCcw, Search, Trash2, UserCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { canManageCustomerService } from '@/lib/permissions';
+import { canManageCustomerService, canManageSales } from '@/lib/permissions';
 import { getSupabase, listActiveAgents } from '../nhwd-shared/client';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
@@ -223,9 +223,9 @@ export default function IntakeQueue({
     };
   }, []);
 
-  // Determine if current user is the RC turn holder or can manage Customer Service
+  // Determine if current user is the RC turn holder or can manage the queue
   const isCurrentRcAgent = profile.id === rcTurnHolderId;
-  const canManageCs = canManageCustomerService(profile.role);
+  const canManageCs = canManageCustomerService(profile.role) || canManageSales(profile.role);
   const canClaimRc = isCurrentRcAgent;
 
   // Resolve RC turn holder display name

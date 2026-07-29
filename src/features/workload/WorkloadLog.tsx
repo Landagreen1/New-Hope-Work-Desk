@@ -272,8 +272,8 @@ export default function WorkloadLog({
     URL.revokeObjectURL(url);
   }
 
-  const canManage = initialProfile.role === "manager" || initialProfile.role === "super_admin";
-  const canView = initialProfile.role === "manager" || initialProfile.role === "super_admin" || initialProfile.role === "agent";
+  const canManage = initialProfile.role === "manager" || initialProfile.role === "super_admin" || initialProfile.role === "sales_supervisor";
+  const canView = initialProfile.role === "manager" || initialProfile.role === "super_admin" || initialProfile.role === "agent" || initialProfile.role === "sales_supervisor";
 
   if (!canView) {
     return (
