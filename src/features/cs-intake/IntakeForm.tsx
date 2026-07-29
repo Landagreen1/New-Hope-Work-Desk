@@ -400,7 +400,8 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
     annual_payroll: submission.annual_payroll ?? null,
     years_in_business: submission.years_in_business ?? null,
     coverage_types_needed: submission.coverage_types_needed || [],
-    owner_name: [submission.insured_first_name, submission.insured_last_name].filter(Boolean).join(' '),
+    owner_name: (submission as Record<string, unknown>)._owner_name_raw as string
+      || [submission.insured_first_name, submission.insured_last_name].filter(Boolean).join(' '),
     owner_dob: submission.insured_dob || '',
     owner_phone: submission.insured_phone_primary || '',
     owner_email: submission.insured_email || '',
@@ -614,13 +615,21 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
             if ('annual_payroll' in glPatch) (mapped as Record<string, unknown>).annual_payroll = glPatch.annual_payroll;
             if ('years_in_business' in glPatch) mapped.years_in_business = glPatch.years_in_business;
             if ('coverage_types_needed' in glPatch) (mapped as Record<string, unknown>).coverage_types_needed = glPatch.coverage_types_needed;
-            // Owner info maps to insured fields
+            // Owner info maps to insured fields (split only on blur, not every keystroke)
             if ('owner_name' in glPatch) {
-              const parts = (glPatch.owner_name || '').trim().split(/\s+/);
-              const firstName = parts[0] || '';
-              const lastName = parts.slice(1).join(' ') || '';
-              mapped.insured_first_name = firstName;
-              (mapped as Record<string, unknown>).insured_last_name = lastName;
+              // Store the full name directly — split happens in commercialGlData
+              const fullName = glPatch.owner_name || '';
+              const parts = fullName.trim().split(/\s+/);
+              // Only update first/last if there's actually content after trimming
+              if (fullName.trim()) {
+                mapped.insured_first_name = parts[0] || '';
+                (mapped as Record<string, unknown>).insured_last_name = parts.length > 1 ? parts.slice(1).join(' ') : '';
+              } else {
+                mapped.insured_first_name = '';
+                (mapped as Record<string, unknown>).insured_last_name = '';
+              }
+              // Also store raw name so the field doesn't lose trailing spaces while typing
+              (mapped as Record<string, unknown>)._owner_name_raw = fullName;
             }
             if ('owner_dob' in glPatch) (mapped as Record<string, unknown>).insured_dob = glPatch.owner_dob || null;
             if ('owner_phone' in glPatch) (mapped as Record<string, unknown>).insured_phone_primary = glPatch.owner_phone || null;

@@ -14,7 +14,6 @@ interface DatePickerProps {
   className?: string;
 }
 
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAY_HEADERS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
@@ -22,81 +21,79 @@ function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function parseDate(s: string): Date | null {
+function parseIso(s: string): Date | null {
   if (!s) return null;
   const [y, m, d] = s.split('-').map(Number);
   if (!y || !m || !d) return null;
   return new Date(y, m - 1, d);
 }
 
-function formatDisplay(value: string): string {
+function toDisplay(value: string): string {
   if (!value) return '';
-  const d = parseDate(value);
+  const d = parseIso(value);
   if (!d) return value;
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
-function parseTypedDate(input: string): string | null {
-  // Accept: MM/DD/YYYY, M/D/YYYY, MM-DD-YYYY, MMDDYYYY
+function parseTyped(input: string): string | null {
+  // Strip all non-numeric
   const cleaned = input.replace(/[^0-9]/g, '');
+  let m: number, d: number, y: number;
+
   if (cleaned.length === 8) {
-    const m = parseInt(cleaned.slice(0, 2), 10);
-    const d = parseInt(cleaned.slice(2, 4), 10);
-    const y = parseInt(cleaned.slice(4, 8), 10);
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1900 && y <= 2100) {
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    }
+    m = parseInt(cleaned.slice(0, 2), 10);
+    d = parseInt(cleaned.slice(2, 4), 10);
+    y = parseInt(cleaned.slice(4, 8), 10);
+  } else {
+    // Try splitting by / - .
+    const parts = input.split(/[/\-\.]/);
+    if (parts.length !== 3) return null;
+    m = parseInt(parts[0], 10);
+    d = parseInt(parts[1], 10);
+    y = parseInt(parts[2], 10);
+    if (y < 100) y = y > 50 ? 1900 + y : 2000 + y;
   }
-  // Try with separators
-  const parts = input.split(/[/\-\.]/);
-  if (parts.length === 3) {
-    const m = parseInt(parts[0], 10);
-    const d = parseInt(parts[1], 10);
-    const y = parseInt(parts[2], 10);
-    const fullYear = y < 100 ? (y > 50 ? 1900 + y : 2000 + y) : y;
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && fullYear >= 1900 && fullYear <= 2100) {
-      return `${fullYear}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    }
+
+  if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1900 && y <= 2100) {
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   }
   return null;
 }
 
-export default function DatePicker({ value, onChange, min, max, label, placeholder = 'MM/DD/YYYY', disabled = false, className = '' }: DatePickerProps) {
+export default function DatePicker({ value, onChange, min, max, placeholder = 'MM/DD/YYYY', disabled = false, className = '' }: DatePickerProps) {
   const [open, setOpen] = useState(false);
-  const [typing, setTyping] = useState(false);
-  const [textValue, setTextValue] = useState('');
+  const [textValue, setTextValue] = useState(() => toDisplay(value));
   const [viewMonth, setViewMonth] = useState(() => {
-    const d = parseDate(value);
+    const d = parseIso(value);
     return d ? new Date(d.getFullYear(), d.getMonth(), 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   });
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Close on click outside
+  // Sync text when value changes externally
   useEffect(() => {
-    if (!open && !typing) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setTyping(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open, typing]);
+    setTextValue(toDisplay(value));
+  }, [value]);
 
-  // Sync view month when value changes externally
+  // Sync calendar view when value changes
   useEffect(() => {
-    const d = parseDate(value);
+    const d = parseIso(value);
     if (d) setViewMonth(new Date(d.getFullYear(), d.getMonth(), 1));
   }, [value]);
 
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
   const prevMonth = useCallback(() => setViewMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)), []);
   const nextMonth = useCallback(() => setViewMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)), []);
-
   const today = useMemo(() => toDateKey(new Date()), []);
 
-  // Generate year options (100 years back, 10 years forward)
   const yearOptions = useMemo(() => {
     const current = new Date().getFullYear();
     const years: number[] = [];
@@ -109,19 +106,13 @@ export default function DatePicker({ value, onChange, min, max, label, placehold
     const lastDay = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0);
     const startDay = new Date(firstDay);
     const dow = startDay.getDay();
-    const diff = dow === 0 ? 6 : dow - 1;
-    startDay.setDate(startDay.getDate() - diff);
+    startDay.setDate(startDay.getDate() - (dow === 0 ? 6 : dow - 1));
     const endDay = new Date(lastDay);
     const endDow = endDay.getDay();
-    const endDiff = endDow === 0 ? 0 : 7 - endDow;
-    endDay.setDate(endDay.getDate() + endDiff);
-
+    endDay.setDate(endDay.getDate() + (endDow === 0 ? 0 : 7 - endDow));
     const days: Date[] = [];
     const current = new Date(startDay);
-    while (current <= endDay) {
-      days.push(new Date(current));
-      current.setDate(current.getDate() + 1);
-    }
+    while (current <= endDay) { days.push(new Date(current)); current.setDate(current.getDate() + 1); }
     return days;
   }, [viewMonth]);
 
@@ -135,85 +126,55 @@ export default function DatePicker({ value, onChange, min, max, label, placehold
     if (isDisabled(dateStr)) return;
     onChange(dateStr);
     setOpen(false);
-    setTyping(false);
   };
 
-  const handleTextCommit = () => {
-    const parsed = parseTypedDate(textValue);
+  const commitText = () => {
+    if (!textValue.trim()) { onChange(''); return; }
+    const parsed = parseTyped(textValue);
     if (parsed && !isDisabled(parsed)) {
       onChange(parsed);
+    } else {
+      // Reset to current value on invalid input
+      setTextValue(toDisplay(value));
     }
-    setTyping(false);
   };
-
-  const startTyping = () => {
-    setTyping(true);
-    setTextValue(value ? formatDisplay(value) : '');
-    setOpen(false);
-    setTimeout(() => inputRef.current?.focus(), 10);
-  };
-
-  const displayValue = formatDisplay(value);
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
-      {/* Input mode (typing) */}
-      {typing ? (
+      {/* Combined input: type date or click calendar icon */}
+      <div className={`flex items-center rounded-xl border transition ${
+        open ? 'border-[#223f7a] ring-4 ring-[#eef3fb]' : 'border-slate-200 hover:border-slate-300'
+      } ${disabled ? 'cursor-not-allowed bg-slate-50 opacity-60' : 'bg-white'}`}>
         <input
-          ref={inputRef}
           type="text"
           value={textValue}
           onChange={(e) => setTextValue(e.target.value)}
-          onBlur={handleTextCommit}
+          onBlur={commitText}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') { handleTextCommit(); e.preventDefault(); }
-            if (e.key === 'Escape') { setTyping(false); }
+            if (e.key === 'Enter') { commitText(); e.preventDefault(); }
           }}
-          placeholder="MM/DD/YYYY"
-          className="w-full rounded-xl border border-[#223f7a] ring-4 ring-[#eef3fb] px-3.5 py-2.5 text-sm font-semibold text-slate-900 outline-none"
-          autoFocus
+          onFocus={() => setOpen(false)}
+          placeholder={placeholder}
+          disabled={disabled}
+          className="flex-1 rounded-l-xl border-0 bg-transparent px-3.5 py-2.5 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400"
         />
-      ) : (
-        /* Display / trigger mode */
-        <div className="flex items-center gap-0">
-          <button
-            type="button"
-            onClick={() => !disabled && setOpen(!open)}
-            disabled={disabled}
-            className={`flex flex-1 items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left text-sm font-semibold transition outline-none ${
-              open
-                ? 'border-[#223f7a] ring-4 ring-[#eef3fb]'
-                : 'border-slate-200 hover:border-slate-300'
-            } ${disabled ? 'cursor-not-allowed bg-slate-50 opacity-60' : 'bg-white'}`}
-          >
-            <Calendar className="h-4 w-4 shrink-0 text-[#223f7a]" />
-            <span
-              className={`flex-1 ${displayValue ? 'text-slate-900' : 'text-slate-400'}`}
-              onDoubleClick={(e) => { e.stopPropagation(); if (!disabled) startTyping(); }}
-            >
-              {displayValue || placeholder}
-            </span>
-          </button>
-          {/* Small type icon */}
-          {!disabled && (
-            <button
-              type="button"
-              onClick={startTyping}
-              className="ml-1 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-[#223f7a]"
-              title="Type date manually"
-            >
-              <span className="text-[10px] font-black">123</span>
-            </button>
-          )}
-        </div>
-      )}
+        <button
+          type="button"
+          onClick={() => !disabled && setOpen(!open)}
+          disabled={disabled}
+          className="grid h-full w-10 shrink-0 place-items-center rounded-r-xl text-[#223f7a] hover:bg-[#eef3fb] transition"
+          title="Open calendar"
+        >
+          <Calendar className="h-4 w-4" />
+        </button>
+      </div>
 
       {/* Calendar Dropdown */}
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-[300px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl animate-in fade-in-0 zoom-in-95">
+        <div className="absolute left-0 top-full z-50 mt-2 w-[300px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
           {/* Month + Year selectors */}
           <div className="flex items-center justify-between mb-3 gap-1">
-            <button type="button" onClick={prevMonth} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800">
+            <button type="button" onClick={prevMonth} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
               <ChevronLeft className="h-4 w-4" />
             </button>
             <div className="flex items-center gap-1">
@@ -222,21 +183,17 @@ export default function DatePicker({ value, onChange, min, max, label, placehold
                 onChange={(e) => setViewMonth(new Date(viewMonth.getFullYear(), parseInt(e.target.value), 1))}
                 className="rounded-lg border-0 bg-transparent px-1 py-0.5 text-sm font-black text-slate-900 cursor-pointer hover:bg-slate-100 focus:outline-none"
               >
-                {MONTH_SHORT.map((m, i) => (
-                  <option key={i} value={i}>{m}</option>
-                ))}
+                {MONTH_SHORT.map((m, i) => <option key={i} value={i}>{m}</option>)}
               </select>
               <select
                 value={viewMonth.getFullYear()}
                 onChange={(e) => setViewMonth(new Date(parseInt(e.target.value), viewMonth.getMonth(), 1))}
                 className="rounded-lg border-0 bg-transparent px-1 py-0.5 text-sm font-black text-slate-900 cursor-pointer hover:bg-slate-100 focus:outline-none"
               >
-                {yearOptions.map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
+                {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
-            <button type="button" onClick={nextMonth} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800">
+            <button type="button" onClick={nextMonth} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
@@ -244,9 +201,7 @@ export default function DatePicker({ value, onChange, min, max, label, placehold
           {/* Weekday headers */}
           <div className="grid grid-cols-7 mb-1">
             {WEEKDAY_HEADERS.map(day => (
-              <div key={day} className="py-1 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
-                {day}
-              </div>
+              <div key={day} className="py-1 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">{day}</div>
             ))}
           </div>
 
@@ -258,7 +213,6 @@ export default function DatePicker({ value, onChange, min, max, label, placehold
               const isToday = dateStr === today;
               const isSelected = dateStr === value;
               const dayDisabled = isDisabled(dateStr);
-
               return (
                 <button
                   key={dateStr}
@@ -266,17 +220,11 @@ export default function DatePicker({ value, onChange, min, max, label, placehold
                   onClick={() => handleSelect(dateStr)}
                   disabled={dayDisabled}
                   className={`grid h-9 w-full place-items-center rounded-lg text-sm font-bold transition ${
-                    isSelected
-                      ? 'bg-[#223f7a] text-white shadow-sm'
-                      : isToday
-                        ? 'bg-[#eef3fb] text-[#223f7a] font-black'
-                        : isCurrentMonth
-                          ? dayDisabled
-                            ? 'text-slate-200 cursor-not-allowed'
-                            : 'text-slate-700 hover:bg-slate-100'
-                          : dayDisabled
-                            ? 'text-slate-200 cursor-not-allowed'
-                            : 'text-slate-300 hover:bg-slate-50'
+                    isSelected ? 'bg-[#223f7a] text-white shadow-sm'
+                    : isToday ? 'bg-[#eef3fb] text-[#223f7a] font-black'
+                    : isCurrentMonth
+                      ? dayDisabled ? 'text-slate-200 cursor-not-allowed' : 'text-slate-700 hover:bg-slate-100'
+                      : dayDisabled ? 'text-slate-200 cursor-not-allowed' : 'text-slate-300 hover:bg-slate-50'
                   }`}
                 >
                   {date.getDate()}
@@ -291,7 +239,7 @@ export default function DatePicker({ value, onChange, min, max, label, placehold
               type="button"
               onClick={() => { onChange(today); setOpen(false); }}
               disabled={isDisabled(today)}
-              className="text-xs font-black text-[#223f7a] hover:underline disabled:text-slate-300 disabled:no-underline"
+              className="text-xs font-black text-[#223f7a] hover:underline disabled:text-slate-300"
             >
               Today
             </button>
