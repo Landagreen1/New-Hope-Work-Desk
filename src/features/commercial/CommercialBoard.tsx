@@ -202,6 +202,7 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
     ? BOARD_COLUMNS.filter((c) => c.id === 'archive')
     : BOARD_COLUMNS.filter((c) => {
         if (c.id === 'archive') return false;
+        if (c.id === 'quote_intake') return false; // Timing starts at quoting
         // Commercial agents only see commission columns if they own cards there
         if (!isManager && MANAGER_ONLY_COLUMNS.includes(c.id)) {
           // Show commission column if the agent has their own cards in it
@@ -220,7 +221,7 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#526b9a]">
             {isManager ? 'Management Overview' : 'Commercial Department'}
           </p>
-          <h2 className={ui.pageTitle}>Better Trello</h2>
+          <h2 className={ui.pageTitle}>Commercial Board</h2>
           <p className={ui.pageSubtitle}>
             {isManager
               ? 'All commercial policy quotes across the team'

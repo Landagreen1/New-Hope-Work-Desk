@@ -149,7 +149,7 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
   // Commercial
   if (permissions.commercial) {
     const commercialSubs: SubNavItem[] = [
-      { id: "commercial_board", label: "Better Trello", icon: Building2 },
+      { id: "commercial_board", label: "Commercial Board", icon: Building2 },
       { id: "commercial_database", label: "Database", icon: Table2 },
     ];
     if (permissions.manageCommercial) {
