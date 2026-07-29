@@ -441,6 +441,10 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
     sr22_filing_state: submission.sr22_filing_state || '',
     court_order_date: submission.court_order_date || '',
     desired_coverage: submission.desired_coverage || '',
+    document_type: ((submission as Record<string, unknown>).no_document_type as string) || '',
+    document_number: ((submission as Record<string, unknown>).no_document_number as string) || '',
+    document_state: ((submission as Record<string, unknown>).no_document_state as string) || '',
+    document_expiration: ((submission as Record<string, unknown>).no_document_expiration as string) || '',
   };
 
   // If LOB hasn't been picked yet, show the picker
@@ -684,6 +688,10 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
             if ('sr22_filing_state' in noPatch) mapped.sr22_filing_state = noPatch.sr22_filing_state || null;
             if ('court_order_date' in noPatch) mapped.court_order_date = noPatch.court_order_date || null;
             if ('desired_coverage' in noPatch) mapped.desired_coverage = noPatch.desired_coverage || null;
+            if ('document_type' in noPatch) mapped.no_document_type = noPatch.document_type || null;
+            if ('document_number' in noPatch) mapped.no_document_number = noPatch.document_number || null;
+            if ('document_state' in noPatch) mapped.no_document_state = noPatch.document_state || null;
+            if ('document_expiration' in noPatch) mapped.no_document_expiration = noPatch.document_expiration || null;
             patch(mapped as Partial<DraftSubmission>);
           }}
           disabled={disabled}
@@ -806,6 +814,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       </Section>
       )}
 
+      {currentLob !== 'non_owners' && (
       <Section icon={<FileText className="h-5 w-5" />} title="Current policy and notes" subtitle="Optional information that helps Sales compare or prepare a requote.">
         <div className={ui.fieldRow}>
           <Field label="Current carrier"><input className={ui.input} disabled={disabled} value={submission.current_carrier || ''} onChange={(event) => patch({ current_carrier: event.target.value || null })} /></Field>
@@ -820,6 +829,13 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         </div>
         <div className="mt-4"><Field label="Notes for Sales"><textarea rows={4} className={ui.textarea} disabled={disabled} value={submission.csr_notes || ''} onChange={(event) => patch({ csr_notes: event.target.value || null })} placeholder="Anything important that is not already captured above." /></Field></div>
       </Section>
+      )}
+
+      {currentLob === 'non_owners' && (
+      <Section icon={<FileText className="h-5 w-5" />} title="Notes" subtitle="Any additional information for the quote.">
+        <Field label="Notes for Sales"><textarea rows={4} className={ui.textarea} disabled={disabled} value={submission.csr_notes || ''} onChange={(event) => patch({ csr_notes: event.target.value || null })} placeholder="Anything important that is not already captured above." /></Field>
+      </Section>
+      )}
 
       {!readOnly ? (
         <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-between">
