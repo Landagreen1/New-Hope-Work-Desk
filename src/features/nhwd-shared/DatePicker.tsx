@@ -171,7 +171,7 @@ export default function DatePicker({ value, onChange, min, max, placeholder = 'M
 
       {/* Calendar Dropdown */}
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-[300px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+        <div className="absolute right-0 top-full z-50 mt-2 w-[300px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
           {/* Month + Year selectors */}
           <div className="flex items-center justify-between mb-3 gap-1">
             <button type="button" onClick={prevMonth} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">

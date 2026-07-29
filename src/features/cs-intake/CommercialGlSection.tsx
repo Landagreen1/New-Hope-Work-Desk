@@ -4,6 +4,8 @@ import { Building2 } from 'lucide-react';
 import { ui } from '../nhwd-shared/ui';
 import DatePicker from '../nhwd-shared/DatePicker';
 import DollarInput from '../nhwd-shared/DollarInput';
+import StatesMultiSelect from '../nhwd-shared/StatesMultiSelect';
+import EinInput from '../nhwd-shared/EinInput';
 
 const COVERAGE_OPTIONS = [
   { value: 'gl', label: 'General Liability (GL)' },
@@ -99,13 +101,10 @@ export default function CommercialGlSection({ data, onChange, disabled }: Commer
                 />
               </Field>
 
-              <Field label="EIN">
-                <input
-                  type="text"
-                  className={ui.input}
+              <Field label="EIN" hint="9 digits: XX-XXXXXXX">
+                <EinInput
                   value={data.ein}
-                  onChange={(e) => onChange({ ein: e.target.value })}
-                  placeholder="XX-XXXXXXX"
+                  onChange={(v) => onChange({ ein: v })}
                   disabled={disabled}
                 />
               </Field>
@@ -113,12 +112,9 @@ export default function CommercialGlSection({ data, onChange, disabled }: Commer
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="States of Operation">
-                <input
-                  type="text"
-                  className={ui.input}
+                <StatesMultiSelect
                   value={data.states_of_operation}
-                  onChange={(e) => onChange({ states_of_operation: e.target.value })}
-                  placeholder="e.g. TX, FL, GA"
+                  onChange={(v) => onChange({ states_of_operation: v })}
                   disabled={disabled}
                 />
               </Field>

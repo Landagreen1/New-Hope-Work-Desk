@@ -324,10 +324,27 @@ export async function submitIntake(id: string): Promise<void> {
  * Creates a commercial_quotes card on the Better Trello board and marks the intake as converted.
  * Returns the new commercial quote card ID.
  */
-export async function submitCommercialIntake(id: string): Promise<string> {
-  const { data, error } = await getSupabase().rpc('cs_intake_submit_commercial', { p_submission_id: id });
+export async function submitCommercialIntake(id: string, assignTo?: string): Promise<string> {
+  const { data, error } = await getSupabase().rpc('cs_intake_submit_commercial', {
+    p_submission_id: id,
+    ...(assignTo ? { p_assigned_to: assignTo } : {}),
+  });
   throwIfError(error);
   return data as string;
+}
+
+/**
+ * List users who can be assigned commercial quotes (commercial role, agent, manager, super_admin).
+ */
+export async function listCommercialAssignees(): Promise<{ id: string; display_name: string; role: string }[]> {
+  const { data, error } = await getSupabase()
+    .from('profiles')
+    .select('id,display_name,role')
+    .eq('is_active', true)
+    .in('role', ['commercial', 'agent', 'manager', 'super_admin'])
+    .order('display_name');
+  throwIfError(error);
+  return (data ?? []) as { id: string; display_name: string; role: string }[];
 }
 
 export async function claimIntake(id: string): Promise<void> {

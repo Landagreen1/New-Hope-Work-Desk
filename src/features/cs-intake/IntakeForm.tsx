@@ -30,6 +30,7 @@ import {
   type DesiredCoverage,
   listDealers,
   listSalespeople,
+  listCommercialAssignees,
   saveDraft,
   submitIntake,
   submitCommercialIntake,
@@ -151,6 +152,8 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [salespeople, setSalespeople] = useState<DealerSalesperson[]>([]);
   const [loadingSalespeople, setLoadingSalespeople] = useState(false);
+  const [commercialAssignees, setCommercialAssignees] = useState<{ id: string; display_name: string; role: string }[]>([]);
+  const [selectedAssignee, setSelectedAssignee] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -165,6 +168,12 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   useEffect(() => {
     listDealers().then(setDealers).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load sources.'));
   }, []);
+
+  useEffect(() => {
+    if (isCommercialRouted) {
+      listCommercialAssignees().then(setCommercialAssignees).catch(() => {});
+    }
+  }, [isCommercialRouted]);
 
   useEffect(() => {
     let active = true;
@@ -355,7 +364,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       patch({ id });
       if (alsoSubmit) {
         if (isCommercialRouted) {
-          const cardId = await submitCommercialIntake(id);
+          const cardId = await submitCommercialIntake(id, selectedAssignee || undefined);
           setNotice(`Intake submitted to the Commercial Board. Card created (${cardId.slice(0, 8)}…).`);
         } else {
           await submitIntake(id);
@@ -558,6 +567,14 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
               <option value="normal">Normal</option>
               <option value="high">High</option>
               <option value="urgent">Urgent</option>
+            </select>
+          </Field>
+          <Field label="Assign to">
+            <select className={ui.select} disabled={disabled} value={selectedAssignee} onChange={(e) => setSelectedAssignee(e.target.value)}>
+              <option value="">Auto-assign (Manager)</option>
+              {commercialAssignees.map((u) => (
+                <option key={u.id} value={u.id}>{u.display_name}{u.role === 'manager' || u.role === 'super_admin' ? ' (Manager)' : ''}</option>
+              ))}
             </select>
           </Field>
         </div>
