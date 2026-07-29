@@ -198,6 +198,7 @@ export async function listQueue(): Promise<CsIntakeSubmission[]> {
     .from('cs_intake_submissions')
     .select(SUBMISSION_COLS)
     .in('status', ['submitted', 'claimed'])
+    .not('line_of_business', 'in', '("commercial_gl","homeowners","trucking")')
     .order('priority', { ascending: false })
     .order('submitted_at', { ascending: true })
     .limit(500);
@@ -209,6 +210,7 @@ export async function listAllIntakes(): Promise<CsIntakeSubmission[]> {
   const { data, error } = await getSupabase()
     .from('cs_intake_submissions')
     .select(SUBMISSION_COLS)
+    .not('line_of_business', 'in', '("commercial_gl","homeowners","trucking")')
     .order('updated_at', { ascending: false })
     .limit(2000);
   throwIfError(error);
