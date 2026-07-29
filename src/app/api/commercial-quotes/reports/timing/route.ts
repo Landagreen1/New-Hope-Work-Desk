@@ -94,7 +94,7 @@ export async function GET() {
 
   for (const quote of quotes) {
     const moves = historyByQuote.get(quote.id) ?? [];
-    const outcome = ["sold", "commission_approved"].includes(quote.board_column) ? "sold" : "not_sold";
+    const outcome = ["sold", "commission_approved", "commission_not_approved"].includes(quote.board_column) ? "sold" : "not_sold";
 
     // Find when card entered 'quoting'
     const enteredQuoting = moves.find((m) => m.to_column === "quoting");
@@ -102,9 +102,9 @@ export async function GET() {
     const leftQuoting = moves.find(
       (m) => m.from_column === "quoting" && m.to_column !== "quoting"
     );
-    // Find when card reached sold or not_sold
+    // Find when card reached sold or not_sold (commission columns count as sold)
     const reachedOutcome = moves.find(
-      (m) => ["sold", "not_sold"].includes(m.to_column)
+      (m) => ["sold", "not_sold", "commission_approved", "commission_not_approved"].includes(m.to_column)
     );
 
     const enteredQuotingAt = enteredQuoting?.moved_at ?? null;
