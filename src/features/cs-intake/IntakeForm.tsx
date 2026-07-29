@@ -291,6 +291,11 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       if (!submission.business_name?.trim()) return 'Business name is required for Commercial GL.';
     }
 
+    // Commercial-routed LOBs require an assignee
+    if (isCommercialRouted && !selectedAssignee) {
+      return 'Select a commercial team member to assign this quote to.';
+    }
+
     // Homeowners validation
     if (currentLob === 'homeowners') {
       if (!submission.property_address_street?.trim()) return 'Property address is required for Homeowners.';
@@ -569,11 +574,11 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
               <option value="urgent">Urgent</option>
             </select>
           </Field>
-          <Field label="Assign to">
+          <Field label="Assign to" required>
             <select className={ui.select} disabled={disabled} value={selectedAssignee} onChange={(e) => setSelectedAssignee(e.target.value)}>
-              <option value="">Auto-assign (Manager)</option>
+              <option value="">— Select assignee —</option>
               {commercialAssignees.map((u) => (
-                <option key={u.id} value={u.id}>{u.display_name}{u.role === 'manager' || u.role === 'super_admin' ? ' (Manager)' : ''}</option>
+                <option key={u.id} value={u.id}>{u.display_name}{u.role === 'super_admin' || u.role === 'commercial_supervisor' ? ' (Supervisor)' : ''}</option>
               ))}
             </select>
           </Field>

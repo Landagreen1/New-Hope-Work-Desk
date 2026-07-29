@@ -336,17 +336,35 @@ export async function submitCommercialIntake(id: string, assignTo?: string): Pro
 }
 
 /**
- * List users who can be assigned commercial quotes (commercial role, agent, manager, super_admin).
+ * List users who can be assigned commercial quotes.
+ * Shows: commercial role users, commercial_supervisor, and super_admins.
+ * Also includes specific non-commercial users who handle commercial work (e.g. Brenda Morales).
  */
 export async function listCommercialAssignees(): Promise<{ id: string; display_name: string; role: string }[]> {
-  const { data, error } = await getSupabase()
+  const supabase = getSupabase();
+  // Fetch by role
+  const { data: byRole, error: err1 } = await supabase
     .from('profiles')
     .select('id,display_name,role')
     .eq('is_active', true)
-    .in('role', ['commercial', 'agent', 'manager', 'super_admin'])
+    .in('role', ['commercial', 'commercial_supervisor', 'super_admin'])
     .order('display_name');
-  throwIfError(error);
-  return (data ?? []) as { id: string; display_name: string; role: string }[];
+  throwIfError(err1);
+
+  // Also fetch specific users who handle commercial but have other roles
+  const { data: byName, error: err2 } = await supabase
+    .from('profiles')
+    .select('id,display_name,role')
+    .eq('is_active', true)
+    .ilike('display_name', '%Brenda Morales%');
+  throwIfError(err2);
+
+  // Merge without duplicates
+  const map = new Map<string, { id: string; display_name: string; role: string }>();
+  for (const u of [...(byRole ?? []), ...(byName ?? [])]) {
+    map.set(u.id, u as { id: string; display_name: string; role: string });
+  }
+  return Array.from(map.values()).sort((a, b) => a.display_name.localeCompare(b.display_name));
 }
 
 export async function claimIntake(id: string): Promise<void> {
