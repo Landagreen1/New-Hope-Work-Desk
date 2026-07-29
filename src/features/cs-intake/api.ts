@@ -258,6 +258,10 @@ export async function saveDraft(
   for (const key of ['id', 'created_at', 'updated_at', 'submitted_at', 'claimed_at', 'converted_at', 'work_item_id', 'source_commercial_quote_id']) {
     delete row[key];
   }
+  // Strip internal-only keys that don't exist as DB columns
+  for (const key of Object.keys(row)) {
+    if (key.startsWith('_')) delete row[key];
+  }
 
   if (id) {
     const { error } = await supabase.from('cs_intake_submissions').update(row).eq('id', id);

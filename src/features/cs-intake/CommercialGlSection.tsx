@@ -3,6 +3,7 @@
 import { Building2 } from 'lucide-react';
 import { ui } from '../nhwd-shared/ui';
 import DatePicker from '../nhwd-shared/DatePicker';
+import DollarInput from '../nhwd-shared/DollarInput';
 
 const COVERAGE_OPTIONS = [
   { value: 'gl', label: 'General Liability (GL)' },
@@ -133,13 +134,10 @@ export default function CommercialGlSection({ data, onChange, disabled }: Commer
               </Field>
 
               <Field label="Annual Payroll">
-                <input
-                  type="number"
-                  className={ui.input}
-                  value={data.annual_payroll ?? ''}
-                  onChange={(e) => onChange({ annual_payroll: e.target.value ? Number(e.target.value) : null })}
-                  placeholder="e.g. 250000"
-                  min={0}
+                <DollarInput
+                  value={data.annual_payroll}
+                  onChange={(v) => onChange({ annual_payroll: v })}
+                  placeholder="e.g. $250,000"
                   disabled={disabled}
                 />
               </Field>
