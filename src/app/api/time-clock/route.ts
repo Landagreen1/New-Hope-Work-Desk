@@ -4,38 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 /**
- * Map time-clock status ('available' | 'lunch' | 'unavailable') to the
- * availability_status enum ('available' | 'break' | 'unavailable') used by
- * set_my_availability RPC and the profiles table.
- */
-function toAvailabilityEnum(clockStatus: string): string {
-  return clockStatus === "lunch" ? "break" : clockStatus;
-}
-
-/**
- * Sync profile availability using the set_my_availability RPC when the user is
- * an agent. This ensures rotation queues are properly started/updated.
- * Falls back to a direct profile update for non-agent roles.
- */
-async function syncAvailability(
-  supabase: Awaited<ReturnType<typeof createClient>> & object,
-  userId: string,
-  clockStatus: string,
-) {
-  const availabilityValue = toAvailabilityEnum(clockStatus);
-
-  // Try calling the RPC — it handles rotation queue logic for agents.
-  // It will raise 'Agent permission required' for non-agent roles, which is fine.
-  const { error } = await supabase.rpc("set_my_availability", { p_status: availabilityValue });
-
-  if (error) {
-    // Non-agent roles don't participate in rotation queues —
-    // fall back to direct profile update for them.
-    await supabase.from("profiles").update({ availability: availabilityValue }).eq("id", userId);
-  }
-}
-
-/**
  * GET /api/time-clock
  * Get current user's clock entries (or all for managers).
  * Query params: ?profile_id=...&date=YYYY-MM-DD&range=week|month
@@ -148,9 +116,6 @@ export async function POST(request: Request) {
 
   if (error) return Response.json({ error: error.message }, { status: 400 });
 
-  // Sync profile availability via set_my_availability RPC (handles rotation queues for agents)
-  await syncAvailability(supabase, user.id, status);
-
   return Response.json({ entry: data }, { status: 201 });
 }
 
@@ -254,9 +219,6 @@ export async function PATCH(request: Request) {
       .eq("id", activeEntry.id);
 
     if (error) return Response.json({ error: error.message }, { status: 400 });
-
-    // Sync profile availability via set_my_availability RPC (handles rotation queues for agents)
-    await syncAvailability(supabase, user.id, "unavailable");
 
     return Response.json({ success: true, total_hours: totalHours });
   }

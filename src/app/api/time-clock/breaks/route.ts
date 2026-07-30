@@ -3,22 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 /**
- * Map time-clock status to the availability_status enum and call
- * set_my_availability RPC for proper rotation queue handling.
- */
-async function syncAvailability(
-  supabase: Awaited<ReturnType<typeof createClient>> & object,
-  userId: string,
-  availabilityValue: string,
-) {
-  const { error } = await supabase.rpc("set_my_availability", { p_status: availabilityValue });
-  if (error) {
-    // Non-agent roles fall back to direct update
-    await supabase.from("profiles").update({ availability: availabilityValue }).eq("id", userId);
-  }
-}
-
-/**
  * POST /api/time-clock/breaks
  * Start a break. Body: { break_type?: 'lunch' | 'short' | 'personal' }
  */
@@ -65,9 +49,8 @@ export async function POST(request: Request) {
 
   if (error) return Response.json({ error: error.message }, { status: 400 });
 
-  // Update clock entry status and set profile to break via RPC (rotation queue aware)
+  // Update clock entry status
   await supabase.from("time_clock_entries").update({ clock_status: "lunch" }).eq("id", activeEntry.id);
-  await syncAvailability(supabase, user.id, "break");
 
   return Response.json({ break: data }, { status: 201 });
 }
@@ -129,9 +112,6 @@ export async function PATCH(request: Request) {
       .update({ clock_status: "available" })
       .eq("id", activeEntry.id);
   }
-
-  // Set back to available via RPC (rotation queue aware)
-  await syncAvailability(supabase, user.id, "available");
 
   return Response.json({ success: true, duration_minutes: durationMinutes });
 }
