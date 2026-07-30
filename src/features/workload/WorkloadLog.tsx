@@ -273,7 +273,7 @@ export default function WorkloadLog({
   }
 
   const canManage = initialProfile.role === "manager" || initialProfile.role === "super_admin" || initialProfile.role === "sales_supervisor";
-  const canView = initialProfile.role === "manager" || initialProfile.role === "super_admin" || initialProfile.role === "agent" || initialProfile.role === "sales_supervisor";
+  const canView = canManage || initialProfile.role === "agent" || initialProfile.role === "customer_service" || initialProfile.role === "customer_service_supervisor";
 
   if (!canView) {
     return (
