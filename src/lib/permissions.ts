@@ -52,11 +52,8 @@ export function canManageCommercial(role: AppRole): boolean {
 }
 
 export function canAccessSales(role: AppRole): boolean {
-  return (
-    role === "agent" ||
-    role === "customer_service" ||
-    canManageSales(role)
-  );
+  // Sales queue and quote intakes are visible to all employees
+  return true;
 }
 
 /**
