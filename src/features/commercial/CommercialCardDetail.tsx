@@ -6,6 +6,7 @@ import {
   Download,
   Eye,
   FileText,
+  Mail,
   MessageSquare,
   Paperclip,
   Pause,
@@ -492,11 +493,14 @@ export default function CommercialCardDetail({
                 <Paperclip className="h-3.5 w-3.5" /> Attachments ({attachments.length})
               </h4>
               <div className="mt-2 space-y-2">
-                {attachments.map((att) => {
+                {[...attachments]
+                  .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                  .map((att) => {
                   const ext = att.file_name.split('.').pop()?.toLowerCase() ?? '';
                   const isAudio = ['mp3', 'wav', 'ogg', 'm4a'].includes(ext);
                   const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
                   const isPdf = ext === 'pdf';
+                  const isEml = ext === 'eml';
 
                   return (
                     <AttachmentItem
@@ -506,6 +510,7 @@ export default function CommercialCardDetail({
                       isAudio={isAudio}
                       isImage={isImage}
                       isPdf={isPdf}
+                      isEml={isEml}
                       onDelete={() => void deleteAttachment(att.id)}
                       formatFileSize={formatFileSize}
                       formatDate={formatDate}
@@ -739,16 +744,19 @@ interface AttachmentItemProps {
   isAudio: boolean;
   isImage: boolean;
   isPdf: boolean;
+  isEml: boolean;
   onDelete: () => void;
   formatFileSize: (bytes: number) => string;
   formatDate: (iso: string) => string;
 }
 
-function AttachmentItem({ attachment: att, quoteId, isAudio, isImage, isPdf, onDelete, formatFileSize, formatDate }: AttachmentItemProps) {
+function AttachmentItem({ attachment: att, quoteId, isAudio, isImage, isPdf, isEml, onDelete, formatFileSize, formatDate }: AttachmentItemProps) {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [emlData, setEmlData] = useState<{ subject: string; from: string; to: string; date: string; body: string } | null>(null);
+  const [emlLoading, setEmlLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const fetchSignedUrl = async () => {
@@ -770,6 +778,29 @@ function AttachmentItem({ attachment: att, quoteId, isAudio, isImage, isPdf, onD
   };
 
   const handleView = async () => {
+    if (isEml) {
+      // Toggle EML preview
+      if (expanded && emlData) {
+        setExpanded(false);
+        return;
+      }
+      setEmlLoading(true);
+      try {
+        const res = await fetch(
+          `/api/commercial-quotes/${quoteId}/attachments/eml?path=${encodeURIComponent(att.storage_path)}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        setEmlData(data);
+        setExpanded(true);
+      } catch {
+        // silently fail
+      } finally {
+        setEmlLoading(false);
+      }
+      return;
+    }
+
     const url = await fetchSignedUrl();
     if (!url) return;
 
@@ -827,16 +858,16 @@ function AttachmentItem({ attachment: att, quoteId, isAudio, isImage, isPdf, onD
               {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             </button>
           )}
-          {/* View button for images/PDFs */}
-          {(isImage || isPdf) && (
+          {/* View button for images/PDFs/EML */}
+          {(isImage || isPdf || isEml) && (
             <button
               type="button"
               onClick={() => void handleView()}
-              disabled={loading}
+              disabled={loading || emlLoading}
               className="grid h-7 w-7 place-items-center rounded-lg text-[#223f7a] hover:bg-[#eef3fb]"
-              title="Preview"
+              title={isEml ? 'View Email' : 'Preview'}
             >
-              <Eye className="h-3.5 w-3.5" />
+              {isEml ? <Mail className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             </button>
           )}
           {/* Download button */}
@@ -894,6 +925,45 @@ function AttachmentItem({ attachment: att, quoteId, isAudio, isImage, isPdf, onD
             title={att.file_name}
             className="h-72 w-full rounded-lg border border-slate-200"
           />
+        </div>
+      )}
+
+      {/* Inline EML preview */}
+      {isEml && expanded && emlData && (
+        <div className="border-t border-slate-100 p-3.5 space-y-2">
+          <div className="space-y-1">
+            <div className="flex gap-2 text-xs">
+              <span className="font-black text-slate-500 w-14 shrink-0">Subject</span>
+              <span className="font-semibold text-slate-800">{emlData.subject}</span>
+            </div>
+            <div className="flex gap-2 text-xs">
+              <span className="font-black text-slate-500 w-14 shrink-0">From</span>
+              <span className="font-medium text-slate-700">{emlData.from}</span>
+            </div>
+            <div className="flex gap-2 text-xs">
+              <span className="font-black text-slate-500 w-14 shrink-0">To</span>
+              <span className="font-medium text-slate-700">{emlData.to}</span>
+            </div>
+            {emlData.date && (
+              <div className="flex gap-2 text-xs">
+                <span className="font-black text-slate-500 w-14 shrink-0">Date</span>
+                <span className="font-medium text-slate-700">{emlData.date}</span>
+              </div>
+            )}
+          </div>
+          <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3">
+            <pre className="whitespace-pre-wrap break-words text-xs font-medium text-slate-600">
+              {emlData.body || '(No body content)'}
+            </pre>
+          </div>
+        </div>
+      )}
+
+      {/* EML loading state */}
+      {isEml && emlLoading && (
+        <div className="border-t border-slate-100 px-3.5 py-3 flex items-center gap-2">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-[#223f7a]" />
+          <span className="text-xs font-semibold text-slate-500">Loading email...</span>
         </div>
       )}
     </div>
