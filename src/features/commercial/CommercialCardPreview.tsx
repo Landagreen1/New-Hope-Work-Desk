@@ -83,12 +83,11 @@ export default function CommercialCardPreview({
   const attachmentCount = getAttachmentCount(quote);
   const checklistProgress = getChecklistProgress(quote);
   const agentName = quote.profiles?.display_name ?? 'Unassigned';
-  const timeInList = getRelativeTime(quote.column_entered_at);
-  const timeOnBoard = getRelativeTime(quote.board_entered_at);
 
   // Time since last update — visual staleness marker
   const daysSinceUpdate = Math.floor((Date.now() - new Date(quote.updated_at).getTime()) / 86400000);
   const lastUpdateLabel = getRelativeTime(quote.updated_at);
+  const lastUpdateDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(quote.updated_at));
   const lastUpdateColor =
     daysSinceUpdate <= 2 ? 'bg-emerald-500' :
     daysSinceUpdate <= 7 ? 'bg-amber-400' :
@@ -173,10 +172,9 @@ export default function CommercialCardPreview({
         </div>
 
         {/* Time row */}
-        <div className="mt-2 flex items-center gap-3 text-[10px] font-semibold text-slate-400">
-          <span title="Time in list">{timeInList}</span>
-          <span title="Time on board">{timeOnBoard}</span>
-          <span className="ml-auto flex items-center gap-1" title={`Last updated: ${lastUpdateLabel} ago`}>
+        <div className="mt-2 flex items-center justify-between text-[10px] font-semibold text-slate-400">
+          <span title="Last updated">{lastUpdateDate}</span>
+          <span className="flex items-center gap-1" title={`${lastUpdateLabel} since last update`}>
             <span className={`inline-block h-2 w-2 rounded-full ${lastUpdateColor}`} />
             <span>{lastUpdateLabel}</span>
           </span>
