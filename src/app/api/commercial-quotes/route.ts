@@ -187,6 +187,7 @@ export async function POST(request: Request) {
     coverage_type_other: body.coverage_type_other ?? null,
     assigned_to: body.assigned_to ?? user.id,
     is_mirrored: body.is_mirrored ?? true,
+    created_by: user.id,
   };
 
   const { data, error } = await supabase

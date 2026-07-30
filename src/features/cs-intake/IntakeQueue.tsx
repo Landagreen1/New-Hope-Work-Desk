@@ -458,6 +458,7 @@ export default function IntakeQueue({
                 <th className={ui.th}>Status</th>
                 <th className={ui.th}>Quote Status</th>
                 <th className={ui.th}>Agent</th>
+                <th className={ui.th}>Created By</th>
                 <th className={ui.th}>Actions</th>
               </tr>
             </thead>
@@ -547,6 +548,11 @@ export default function IntakeQueue({
                       ) : (
                         <p className="text-xs text-slate-400">Unassigned</p>
                       )}
+                    </td>
+
+                    {/* Created By (who originally created the intake) */}
+                    <td className={ui.td}>
+                      <p className="font-bold text-slate-700">{profileName(agents, row.created_by)}</p>
                     </td>
 
                     {/* Actions */}
@@ -714,8 +720,15 @@ export default function IntakeQueue({
               </>
             )}
 
-            {/* Edit mode: IntakeEditForm */}
-            {modalMode === 'edit' && (
+            {/* Edit mode: IntakeEditForm (or full form for renewal requotes) */}
+            {modalMode === 'edit' && selected.submission.source_renewal_id ? (
+              <IntakeForm
+                profileId={profile.id}
+                initial={selected}
+                readOnly={false}
+                onDone={() => { closeModal(); void refresh(); }}
+              />
+            ) : modalMode === 'edit' ? (
               <IntakeEditForm
                 intake={selected.submission}
                 drivers={selected.drivers}
@@ -724,7 +737,7 @@ export default function IntakeQueue({
                 onSave={() => { closeModal(); void refresh(); }}
                 onCancel={closeModal}
               />
-            )}
+            ) : null}
           </div>
         ) : null}
       </QueueModal>

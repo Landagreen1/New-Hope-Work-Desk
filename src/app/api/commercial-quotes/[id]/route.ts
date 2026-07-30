@@ -65,7 +65,8 @@ export async function GET(request: Request, context: RouteContext) {
         id, from_column, to_column, moved_at,
         profiles!commercial_quote_column_history_moved_by_fkey(display_name)
       ),
-      profiles!commercial_quotes_assigned_to_fkey(display_name, initials, role)`
+      profiles!commercial_quotes_assigned_to_fkey(display_name, initials, role),
+      creator:profiles!commercial_quotes_created_by_fkey(display_name, initials)`
     )
     .eq("id", id)
     .single();

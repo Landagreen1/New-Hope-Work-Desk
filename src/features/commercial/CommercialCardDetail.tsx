@@ -310,6 +310,9 @@ export default function CommercialCardDetail({
             <p className="mt-1 text-xs font-semibold text-slate-500">
               in <span className="font-bold text-[#223f7a]">{BOARD_COLUMNS.find((c) => c.id === quote.board_column)?.label}</span>
               {' · '}Assigned to {quote.profiles?.display_name ?? 'Unknown'}
+              {quote.creator?.display_name && (
+                <>{' · '}Created by <span className="font-bold text-slate-700">{quote.creator.display_name}</span></>
+              )}
             </p>
           </div>
           <button

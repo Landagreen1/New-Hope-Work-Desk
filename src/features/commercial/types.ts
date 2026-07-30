@@ -83,6 +83,7 @@ export interface CommercialQuote {
   deleted_reason: string | null;
   // Joined relations
   profiles?: CommercialQuoteProfile;
+  creator?: { display_name: string; initials: string } | null;
   commercial_quote_comments?: Array<{ count: number }> | { count: number }[];
   commercial_quote_attachments?: Array<{ count: number }> | { count: number }[];
   commercial_quote_checklists?: Array<{
