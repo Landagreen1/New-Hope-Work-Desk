@@ -85,8 +85,12 @@ type DraftSubmission = Partial<CsIntakeSubmission> & {
 };
 
 /** LOBs that need drivers/vehicles sections */
-const LOBS_WITH_DRIVERS: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking'];
-const LOBS_WITH_VEHICLES: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking'];
+const LOBS_WITH_DRIVERS: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking', 'commercial_gl'];
+const LOBS_WITH_VEHICLES: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking', 'commercial_gl'];
+
+/** LOBs where at least 1 driver and 1 vehicle are required */
+const LOBS_REQUIRE_DRIVERS: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking'];
+const LOBS_REQUIRE_VEHICLES: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking'];
 
 interface Props {
   profileId: string;
@@ -146,9 +150,9 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         };
   });
   const [drivers, setDrivers] = useState<CsIntakeDriver[]>(
-    initial?.drivers?.length ? initial.drivers.map((row) => ({ ...row, document_type: row.document_type || 'driver_license' })) : [emptyDriver()],
+    initial?.drivers?.length ? initial.drivers.map((row) => ({ ...row, document_type: row.document_type || 'driver_license' })) : (submission.line_of_business === 'commercial_gl' ? [] : [emptyDriver()]),
   );
-  const [vehicles, setVehicles] = useState<CsIntakeVehicle[]>(initial?.vehicles?.length ? initial.vehicles : [emptyVehicle()]);
+  const [vehicles, setVehicles] = useState<CsIntakeVehicle[]>(initial?.vehicles?.length ? initial.vehicles : (submission.line_of_business === 'commercial_gl' ? [] : [emptyVehicle()]));
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [salespeople, setSalespeople] = useState<DealerSalesperson[]>([]);
   const [loadingSalespeople, setLoadingSalespeople] = useState(false);
@@ -190,6 +194,8 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   }, [submission.dealer_id]);
 
   useEffect(() => {
+    // Only auto-sync insured→driver for personal/commercial auto and trucking (not commercial_gl)
+    if (currentLob === 'commercial_gl') return;
     setDrivers((current) => {
       if (!current.length) return [emptyDriver()];
       const primary = current[0];
@@ -210,7 +216,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       ) return current;
       return [synced, ...current.slice(1)];
     });
-  }, [submission.insured_dob, submission.insured_first_name, submission.insured_last_name]);
+  }, [currentLob, submission.insured_dob, submission.insured_first_name, submission.insured_last_name]);
 
   const selectedDealer = dealers.find((dealer) => dealer.id === submission.dealer_id);
   const selectedSalesperson = salespeople.find((person) => person.id === submission.salesperson_id);
@@ -228,7 +234,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
     } else if (currentLob === 'trucking') {
       required.push(submission.business_name, submission.dot_number);
     } else if (currentLob === 'commercial_gl') {
-      required.push(submission.business_name);
+      required.push(submission.business_name, submission.insured_phone_primary);
     } else if (currentLob === 'homeowners') {
       required.push(submission.property_address_street);
     } else {
@@ -246,10 +252,10 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       }
     }
 
-    if (showDrivers) {
+    if (showDrivers && LOBS_REQUIRE_DRIVERS.includes(currentLob)) {
       required.push(...drivers.flatMap((driver) => [driver.first_name, driver.last_name, driver.dob, driver.license_number, driver.license_state]));
     }
-    if (showVehicles) {
+    if (showVehicles && LOBS_REQUIRE_VEHICLES.includes(currentLob)) {
       required.push(...vehicles.flatMap((vehicle) => [vehicle.year, vehicle.make, vehicle.model, vehicle.vin || (vehicle.vin_pending ? 'pending' : '')]));
     }
 
@@ -289,6 +295,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
     // Commercial GL validation
     if (currentLob === 'commercial_gl') {
       if (!submission.business_name?.trim()) return 'Business name is required for Commercial GL.';
+      if (!submission.insured_phone_primary?.trim()) return 'Owner phone is required for Commercial GL.';
     }
 
     // Commercial-routed LOBs require an assignee
@@ -319,7 +326,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
 
     // Drivers validation (for LOBs that need them)
     if (showDrivers) {
-      if (!drivers.length) return 'Add at least one person or driver.';
+      if (LOBS_REQUIRE_DRIVERS.includes(currentLob) && !drivers.length) return 'Add at least one person or driver.';
       for (const [index, driver] of drivers.entries()) {
         if (!driver.first_name || !driver.last_name || !driver.dob || !driver.license_number || !driver.license_state) {
           return `Complete the name, DOB, ${driver.document_type === 'state_id' ? 'ID' : driver.document_type === 'passport' ? 'passport' : 'license'} number and state for person ${index + 1}.`;
@@ -329,7 +336,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
 
     // Vehicles validation (for LOBs that need them)
     if (showVehicles) {
-      if (!vehicles.length) return 'Add at least one vehicle.';
+      if (LOBS_REQUIRE_VEHICLES.includes(currentLob) && !vehicles.length) return 'Add at least one vehicle.';
       for (const [index, vehicle] of vehicles.entries()) {
         if (!vehicle.year || !vehicle.make || !vehicle.model || (!vehicle.vin && !vehicle.vin_pending)) {
           return `Complete year, make, model and VIN (or VIN pending) for vehicle ${index + 1}.`;

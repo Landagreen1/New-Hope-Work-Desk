@@ -168,14 +168,14 @@ export default function CommercialGlSection({ data, onChange, disabled }: Commer
             <div>
               <h3 className="text-lg font-black text-slate-950">Owner Information</h3>
               <p className="mt-1 text-sm font-semibold text-slate-500">
-                Business owner contact details
+                Business owner contact details (mandatory)
               </p>
             </div>
           </div>
         </div>
         <div className={ui.cardPad}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Owner First Name">
+            <Field label="Owner First Name" required>
               <input
                 type="text"
                 className={ui.input}
@@ -197,7 +197,7 @@ export default function CommercialGlSection({ data, onChange, disabled }: Commer
               />
             </Field>
 
-            <Field label="Owner Last Name">
+            <Field label="Owner Last Name" required>
               <input
                 type="text"
                 className={ui.input}
@@ -218,7 +218,7 @@ export default function CommercialGlSection({ data, onChange, disabled }: Commer
               />
             </Field>
 
-            <Field label="Owner Phone">
+            <Field label="Owner Phone" required>
               <input
                 type="tel"
                 className={ui.input}
