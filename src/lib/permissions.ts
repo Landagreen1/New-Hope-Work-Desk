@@ -65,12 +65,11 @@ export function canAccessSalesIntakeQueue(role: AppRole): boolean {
 }
 
 export function canAccessCustomerService(role: AppRole): boolean {
-  return role === "customer_service" || canManageCustomerService(role) || role === "sales_supervisor";
+  return role === "agent" || role === "customer_service" || canManageCustomerService(role) || role === "sales_supervisor";
 }
 
 export function canAccessCommercial(role: AppRole): boolean {
-  // Commercial intake is visible to all employees
-  return true;
+  return role === "commercial" || canManageCommercial(role);
 }
 
 export function canAccessRenewals(role: AppRole): boolean {

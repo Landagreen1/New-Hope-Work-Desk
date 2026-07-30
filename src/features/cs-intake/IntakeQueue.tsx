@@ -9,6 +9,7 @@ import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { csIntakeStatusTone, statusLabel, ui } from '../nhwd-shared/ui';
 import { subscribeToRotationChanges } from '../notifications/api';
+import CommercialCardDetail from '../commercial/CommercialCardDetail';
 import IntakeEditForm from './IntakeEditForm';
 import IntakeForm from './IntakeForm';
 import QuoteActivityModal from './QuoteActivityModal';
@@ -103,6 +104,9 @@ export default function IntakeQueue({
   // Quote Activity Modal state
   const [selectedQuoteWorkItemId, setSelectedQuoteWorkItemId] = useState<string | null>(null);
   const [isQuoteActivityOpen, setIsQuoteActivityOpen] = useState(false);
+
+  // Commercial Card Detail modal state
+  const [openCommercialCardId, setOpenCommercialCardId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -555,6 +559,17 @@ export default function IntakeQueue({
                           </button>
                         ) : null}
 
+                        {/* View Card: visible for commercial intakes linked to a commercial card */}
+                        {row.source_commercial_quote_id ? (
+                          <button
+                            type="button"
+                            className={ui.btnSecondary}
+                            onClick={() => setOpenCommercialCardId(row.source_commercial_quote_id)}
+                          >
+                            <ExternalLink className="h-4 w-4" />View Card
+                          </button>
+                        ) : null}
+
                         {/* Delete Quote: Manager only */}
                         {canManageCs && hasLinkedQuote && row.work_item_id ? (
                           <button
@@ -713,6 +728,17 @@ export default function IntakeQueue({
           setSelectedQuoteWorkItemId(null);
         }}
       />
+
+      {/* Commercial Card Detail Modal */}
+      {openCommercialCardId && (
+        <CommercialCardDetail
+          quoteId={openCommercialCardId}
+          onClose={() => setOpenCommercialCardId(null)}
+          onRefresh={refresh}
+          currentUserId={profile.id}
+          isManager={canManageCs}
+        />
+      )}
     </ModuleShell>
   );
 }
