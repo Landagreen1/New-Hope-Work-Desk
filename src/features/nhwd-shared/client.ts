@@ -53,7 +53,7 @@ export async function listActiveAgents(): Promise<ProfileLite[]> {
     .from("profiles")
     .select("id,display_name,initials,role,is_active")
     .eq("is_active", true)
-    .eq("role", "agent")
+    .in("role", ["agent", "sales_supervisor"])
     .order("display_name");
 
   if (error) {

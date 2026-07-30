@@ -597,10 +597,10 @@ export default function IntakeQueue({
                           </button>
                         ) : null}
 
-                        {/* Edit: Manager can always edit; agent who created can edit if not yet assigned to another agent */}
+                        {/* Edit: Manager can always edit; agent/sales_supervisor who created can edit if not yet assigned to another agent */}
                         {!isDeleted && (
                           canManageCs
-                          || (profile.role === 'agent' && row.created_by === profile.id && (!row.claimed_by || row.claimed_by === profile.id))
+                          || ((profile.role === 'agent' || profile.role === 'sales_supervisor') && row.created_by === profile.id && (!row.claimed_by || row.claimed_by === profile.id))
                         ) ? (
                           <button type="button" className={ui.btnSecondary} disabled={busyId === row.id} onClick={() => void handleEdit(row)}>
                             <Edit3 className="h-4 w-4" />Edit
@@ -631,8 +631,8 @@ export default function IntakeQueue({
                           </button>
                         ) : null}
 
-                        {/* Non-RC unclaimed: any agent can claim */}
-                        {!isRc && row.status === 'submitted' && profile.role === 'agent' && !isDeleted ? (
+                        {/* Non-RC unclaimed: agents and sales_supervisors can claim */}
+                        {!isRc && row.status === 'submitted' && (profile.role === 'agent' || profile.role === 'sales_supervisor') && !isDeleted ? (
                           <button
                             type="button"
                             className={ui.btnPrimary}
@@ -704,7 +704,7 @@ export default function IntakeQueue({
                     <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void handleClaimRc(selected.submission)}><UserCheck className="h-4 w-4" />Claim Intake</button>
                   ) : null}
                   {/* General claim in modal */}
-                  {!isRingcentralSource(selected.submission) && selected.submission.status === 'submitted' && profile.role === 'agent' ? (
+                  {!isRingcentralSource(selected.submission) && selected.submission.status === 'submitted' && (profile.role === 'agent' || profile.role === 'sales_supervisor') ? (
                     <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void handleClaimGeneral(selected.submission)}><UserCheck className="h-4 w-4" />Claim Intake</button>
                   ) : null}
                   {(selected.submission.claimed_by === profile.id || canManageCs) && selected.submission.status === 'claimed' ? (
