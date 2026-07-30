@@ -8,6 +8,7 @@ import type { ProfileLite } from '../nhwd-shared/client';
 import {
   dismissNotification,
   getUnreadNotifications,
+  markAllAsRead,
   markAsRead,
   subscribeToNotifications,
 } from './api';
@@ -88,27 +89,6 @@ export function NotificationPanel({ profile }: NotificationPanelProps) {
     };
   }, [isOpen]);
 
-  const handleAction = useCallback(
-    async (notification: Notification) => {
-      try {
-        await markAsRead(notification.id);
-        setNotifications((prev) =>
-          prev.map((n) =>
-            n.id === notification.id ? { ...n, is_read: true } : n,
-          ),
-        );
-      } catch {
-        // Non-blocking — navigate anyway
-      }
-
-      if (notification.action_url) {
-        setIsOpen(false);
-        router.push(notification.action_url);
-      }
-    },
-    [router],
-  );
-
   const handleDismiss = useCallback(async (notificationId: string) => {
     try {
       await dismissNotification(notificationId);
@@ -117,6 +97,41 @@ export function NotificationPanel({ profile }: NotificationPanelProps) {
       // Silently fail — user can retry
     }
   }, []);
+
+  const handleMarkAllRead = useCallback(async () => {
+    try {
+      await markAllAsRead();
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, is_read: true, read_at: new Date().toISOString() })),
+      );
+    } catch {
+      // Silently fail
+    }
+  }, []);
+
+  const handleClickNotification = useCallback(
+    async (notification: Notification) => {
+      // Mark as read on click
+      if (!notification.is_read) {
+        try {
+          await markAsRead(notification.id);
+          setNotifications((prev) =>
+            prev.map((n) =>
+              n.id === notification.id ? { ...n, is_read: true } : n,
+            ),
+          );
+        } catch {
+          // Non-blocking
+        }
+      }
+      // Navigate if there's an action URL
+      if (notification.action_url) {
+        setIsOpen(false);
+        router.push(notification.action_url);
+      }
+    },
+    [router],
+  );
 
   return (
     <div ref={panelRef} className="relative">
@@ -139,8 +154,17 @@ export function NotificationPanel({ profile }: NotificationPanelProps) {
       {isOpen && (
         <div className="absolute right-0 top-full z-50 mt-2 w-[min(380px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           {/* Header */}
-          <div className="border-b border-slate-100 bg-gradient-to-r from-[#eef3fb] to-white px-4 py-3">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-[#eef3fb] to-white px-4 py-3">
             <h3 className="text-sm font-black text-slate-800">Notifications</h3>
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={() => void handleMarkAllRead()}
+                className="text-xs font-bold text-[#223f7a] hover:underline"
+              >
+                Mark all read
+              </button>
+            )}
           </div>
 
           {/* Notification list */}
@@ -154,7 +178,8 @@ export function NotificationPanel({ profile }: NotificationPanelProps) {
                 {notifications.map((notification) => (
                   <li
                     key={notification.id}
-                    className={`relative flex gap-3 px-4 py-3 transition ${
+                    onClick={() => void handleClickNotification(notification)}
+                    className={`relative flex gap-3 px-4 py-3 transition cursor-pointer hover:bg-slate-50 ${
                       notification.is_read
                         ? 'bg-white'
                         : 'bg-blue-50/50'
@@ -175,22 +200,12 @@ export function NotificationPanel({ profile }: NotificationPanelProps) {
                       <p className="mt-1 text-[11px] text-slate-400">
                         {formatRelativeTime(notification.created_at)}
                       </p>
-
-                      {notification.action_url && (
-                        <button
-                          type="button"
-                          onClick={() => handleAction(notification)}
-                          className="mt-1.5 rounded-lg bg-[#223f7a] px-3 py-1 text-xs font-bold text-white transition hover:bg-[#1a3263]"
-                        >
-                          Open
-                        </button>
-                      )}
                     </div>
 
                     {/* Dismiss button */}
                     <button
                       type="button"
-                      onClick={() => handleDismiss(notification.id)}
+                      onClick={(e) => { e.stopPropagation(); void handleDismiss(notification.id); }}
                       className="shrink-0 self-start rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
                       aria-label="Dismiss notification"
                     >

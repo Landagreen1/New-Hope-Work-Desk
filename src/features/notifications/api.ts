@@ -34,6 +34,19 @@ export async function markAsRead(notificationId: string): Promise<void> {
   throwIfError(error);
 }
 
+/** Mark all unread notifications as read for the current user */
+export async function markAllAsRead(): Promise<void> {
+  const supabase = getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq('recipient_id', user.id)
+    .eq('is_read', false);
+  throwIfError(error);
+}
+
 /** Dismiss a notification (hide from list) */
 export async function dismissNotification(notificationId: string): Promise<void> {
   const { error } = await getSupabase()

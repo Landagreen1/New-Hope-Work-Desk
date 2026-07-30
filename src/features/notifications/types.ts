@@ -6,10 +6,13 @@
 export type NotificationType =
   | 'quote_assigned'
   | 'intake_claimed'
+  | 'intake_submitted'
   | 'duplicate_flagged'
   | 'duplicate_resolved'
   | 'intake_updated'
-  | 'quote_reassigned';
+  | 'quote_reassigned'
+  | 'turn_changed'
+  | 'quote_outcome';
 
 export interface Notification {
   id: string;

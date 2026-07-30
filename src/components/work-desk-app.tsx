@@ -2976,16 +2976,19 @@ export function WorkDeskApp({
 
   // Unclaimed intakes count for agent Intake Queue badge
   const [unclaimedIntakeCount, setUnclaimedIntakeCount] = useState(0);
-  useEffect(() => {
-    if (sessionProfile.role !== 'agent') return;
-    fetch('/api/intakes')
-      .then((r) => r.json())
-      .then((body) => {
-        const intakes = (body.intakes ?? []) as Array<{ status: string }>;
-        setUnclaimedIntakeCount(intakes.filter((i) => i.status === 'submitted' || i.status === 'waiting_for_claim').length);
-      })
-      .catch(() => {});
+  const refreshIntakeCount = useCallback(async () => {
+    if (sessionProfile.role !== 'agent' && sessionProfile.role !== 'sales_supervisor') return;
+    try {
+      const res = await fetch('/api/intakes');
+      const body = await res.json();
+      const intakes = (body.intakes ?? []) as Array<{ status: string }>;
+      setUnclaimedIntakeCount(intakes.filter((i) => i.status === 'submitted' || i.status === 'waiting_for_claim').length);
+    } catch { /* non-critical */ }
   }, [sessionProfile.role]);
+
+  useEffect(() => {
+    void refreshIntakeCount();
+  }, [refreshIntakeCount]);
 
   const myRecentActivity = workItems
     .filter(
@@ -3259,6 +3262,7 @@ export function WorkDeskApp({
         const data = await loadDashboardData(supabase);
         applyDashboardData(data);
         setLastUpdatedAt(new Date());
+        void refreshIntakeCount();
       } catch (caught) {
         if (!silent)
           showToast(
@@ -3270,7 +3274,7 @@ export function WorkDeskApp({
         refreshInFlight.current = false;
       }
     },
-    [applyDashboardData, supabase],
+    [applyDashboardData, refreshIntakeCount, supabase],
   );
 
   useEffect(() => {
@@ -3344,6 +3348,11 @@ export function WorkDeskApp({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "turn_events" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cs_intake_submissions" },
         scheduleRefresh,
       )
       .subscribe();
