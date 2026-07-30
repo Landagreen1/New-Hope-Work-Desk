@@ -52,7 +52,8 @@ export function canManageCommercial(role: AppRole): boolean {
 }
 
 export function canAccessSales(role: AppRole): boolean {
-  // Sales queue and quote intakes are visible to all employees
+  // Commercial role does not have sales access — only commercial, CS, and time/attendance
+  if (role === "commercial" || role === "commercial_supervisor") return false;
   return true;
 }
 
@@ -65,7 +66,7 @@ export function canAccessSalesIntakeQueue(role: AppRole): boolean {
 }
 
 export function canAccessCustomerService(role: AppRole): boolean {
-  return role === "agent" || role === "customer_service" || canManageCustomerService(role) || role === "sales_supervisor";
+  return role === "agent" || role === "customer_service" || role === "commercial" || role === "commercial_supervisor" || canManageCustomerService(role) || role === "sales_supervisor";
 }
 
 export function canAccessCommercial(role: AppRole): boolean {
