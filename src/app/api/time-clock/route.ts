@@ -4,6 +4,38 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 /**
+ * Map time-clock status ('available' | 'lunch' | 'unavailable') to the
+ * availability_status enum ('available' | 'break' | 'unavailable') used by
+ * set_my_availability RPC and the profiles table.
+ */
+function toAvailabilityEnum(clockStatus: string): string {
+  return clockStatus === "lunch" ? "break" : clockStatus;
+}
+
+/**
+ * Sync profile availability using the set_my_availability RPC when the user is
+ * an agent. This ensures rotation queues are properly started/updated.
+ * Falls back to a direct profile update for non-agent roles.
+ */
+async function syncAvailability(
+  supabase: Awaited<ReturnType<typeof createClient>> & object,
+  userId: string,
+  clockStatus: string,
+) {
+  const availabilityValue = toAvailabilityEnum(clockStatus);
+
+  // Try calling the RPC — it handles rotation queue logic for agents.
+  // It will raise 'Agent permission required' for non-agent roles, which is fine.
+  const { error } = await supabase.rpc("set_my_availability", { p_status: availabilityValue });
+
+  if (error) {
+    // Non-agent roles don't participate in rotation queues —
+    // fall back to direct profile update for them.
+    await supabase.from("profiles").update({ availability: availabilityValue }).eq("id", userId);
+  }
+}
+
+/**
  * GET /api/time-clock
  * Get current user's clock entries (or all for managers).
  * Query params: ?profile_id=...&date=YYYY-MM-DD&range=week|month
@@ -116,8 +148,8 @@ export async function POST(request: Request) {
 
   if (error) return Response.json({ error: error.message }, { status: 400 });
 
-  // Update profile availability to match clock status
-  await supabase.from("profiles").update({ availability: status }).eq("id", user.id);
+  // Sync profile availability via set_my_availability RPC (handles rotation queues for agents)
+  await syncAvailability(supabase, user.id, status);
 
   return Response.json({ entry: data }, { status: 201 });
 }
@@ -223,11 +255,77 @@ export async function PATCH(request: Request) {
 
     if (error) return Response.json({ error: error.message }, { status: 400 });
 
-    // Set profile to unavailable
-    await supabase.from("profiles").update({ availability: "unavailable" }).eq("id", user.id);
+    // Sync profile availability via set_my_availability RPC (handles rotation queues for agents)
+    await syncAvailability(supabase, user.id, "unavailable");
 
     return Response.json({ success: true, total_hours: totalHours });
   }
 
-  return Response.json({ error: "Invalid action. Use 'clock_out' or 'edit'." }, { status: 400 });
+  if (action === "change_status") {
+    const newStatus = String(body.status ?? "");
+    if (!["available", "lunch", "unavailable"].includes(newStatus)) {
+      return Response.json({ error: "Invalid status." }, { status: 400 });
+    }
+
+    // If changing TO lunch, auto-start a lunch break so the time is tracked and deducted
+    if (newStatus === "lunch") {
+      // Check if there's already an active break
+      const { data: existingBreak } = await supabase
+        .from("time_clock_breaks")
+        .select("id")
+        .eq("clock_entry_id", activeEntry.id)
+        .is("break_end", null)
+        .maybeSingle();
+
+      if (!existingBreak) {
+        await supabase
+          .from("time_clock_breaks")
+          .insert({ clock_entry_id: activeEntry.id, break_type: "lunch" });
+      }
+    }
+
+    // If changing FROM lunch to something else, auto-end the active break
+    if (newStatus !== "lunch") {
+      const { data: activeBreakRow } = await supabase
+        .from("time_clock_breaks")
+        .select("id, break_start, break_type")
+        .eq("clock_entry_id", activeEntry.id)
+        .is("break_end", null)
+        .maybeSingle();
+
+      if (activeBreakRow) {
+        const now = new Date();
+        const breakStart = new Date(activeBreakRow.break_start);
+        const durationMinutes = Math.round((now.getTime() - breakStart.getTime()) / 60000);
+
+        await supabase
+          .from("time_clock_breaks")
+          .update({ break_end: now.toISOString(), duration_minutes: durationMinutes })
+          .eq("id", activeBreakRow.id);
+
+        // Only deduct lunch breaks from paid time — short breaks are paid
+        if (activeBreakRow.break_type === "lunch") {
+          const newBreakMinutes = (activeEntry.break_minutes || 0) + durationMinutes;
+          await supabase
+            .from("time_clock_entries")
+            .update({ break_minutes: newBreakMinutes })
+            .eq("id", activeEntry.id);
+        }
+      }
+    }
+
+    const { error } = await supabase
+      .from("time_clock_entries")
+      .update({ clock_status: newStatus })
+      .eq("id", activeEntry.id);
+
+    if (error) return Response.json({ error: error.message }, { status: 400 });
+
+    // Sync profile availability via set_my_availability RPC (handles rotation queues for agents)
+    await syncAvailability(supabase, user.id, newStatus);
+
+    return Response.json({ success: true, status: newStatus });
+  }
+
+  return Response.json({ error: "Invalid action. Use 'clock_out', 'change_status', or 'edit'." }, { status: 400 });
 }
