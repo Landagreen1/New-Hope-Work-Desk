@@ -64,12 +64,12 @@ export function SidebarLayout({
               Operations Platform
             </p>
           </div>
-          {headerRight && (
-            <div className="flex items-center">
-              {headerRight}
-            </div>
-          )}
         </div>
+        {headerRight && (
+          <div className="flex items-center">
+            {headerRight}
+          </div>
+        )}
       </header>
 
       {/* Body: sidebar + content */}

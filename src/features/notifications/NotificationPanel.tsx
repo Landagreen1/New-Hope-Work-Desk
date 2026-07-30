@@ -139,12 +139,12 @@ export function NotificationPanel({ profile }: NotificationPanelProps) {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="relative rounded-full p-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#223f7a] focus:ring-offset-2"
+        className="relative grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-[#223f7a]/30 hover:bg-[#eef3fb] hover:text-[#223f7a] focus:outline-none focus:ring-2 focus:ring-[#223f7a] focus:ring-offset-2"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white shadow-sm ring-2 ring-white">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -152,15 +152,15 @@ export function NotificationPanel({ profile }: NotificationPanelProps) {
 
       {/* Dropdown panel */}
       {isOpen && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-[min(380px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="absolute right-0 top-full z-50 mt-3 w-[min(400px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/5">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-[#eef3fb] to-white px-4 py-3">
-            <h3 className="text-sm font-black text-slate-800">Notifications</h3>
+          <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-[#223f7a] to-[#2d5299] px-5 py-3.5">
+            <h3 className="text-sm font-black text-white">Notifications</h3>
             {unreadCount > 0 && (
               <button
                 type="button"
                 onClick={() => void handleMarkAllRead()}
-                className="text-xs font-bold text-[#223f7a] hover:underline"
+                className="rounded-lg bg-white/20 px-2.5 py-1 text-[11px] font-bold text-white/90 transition hover:bg-white/30"
               >
                 Mark all read
               </button>
@@ -168,10 +168,12 @@ export function NotificationPanel({ profile }: NotificationPanelProps) {
           </div>
 
           {/* Notification list */}
-          <div className="max-h-[400px] overflow-y-auto">
+          <div className="max-h-[420px] overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-slate-500">
-                No notifications
+              <div className="px-5 py-10 text-center">
+                <Bell className="mx-auto h-8 w-8 text-slate-300" />
+                <p className="mt-2 text-sm font-bold text-slate-400">No notifications</p>
+                <p className="mt-1 text-xs text-slate-400">You're all caught up</p>
               </div>
             ) : (
               <ul className="divide-y divide-slate-100">
@@ -179,25 +181,25 @@ export function NotificationPanel({ profile }: NotificationPanelProps) {
                   <li
                     key={notification.id}
                     onClick={() => void handleClickNotification(notification)}
-                    className={`relative flex gap-3 px-4 py-3 transition cursor-pointer hover:bg-slate-50 ${
+                    className={`relative flex gap-3 px-5 py-3.5 transition cursor-pointer ${
                       notification.is_read
-                        ? 'bg-white'
-                        : 'bg-blue-50/50'
+                        ? 'bg-white hover:bg-slate-50'
+                        : 'bg-blue-50/60 hover:bg-blue-50'
                     }`}
                   >
                     {/* Unread indicator */}
                     {!notification.is_read && (
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
+                      <span className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-[#223f7a] ring-2 ring-blue-100" />
                     )}
 
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-slate-800">
+                      <p className={`text-sm ${notification.is_read ? 'font-semibold text-slate-700' : 'font-black text-slate-900'}`}>
                         {notification.title}
                       </p>
                       <p className="mt-0.5 text-xs text-slate-600 line-clamp-2">
                         {notification.body}
                       </p>
-                      <p className="mt-1 text-[11px] text-slate-400">
+                      <p className="mt-1.5 text-[11px] font-semibold text-slate-400">
                         {formatRelativeTime(notification.created_at)}
                       </p>
                     </div>
@@ -206,7 +208,7 @@ export function NotificationPanel({ profile }: NotificationPanelProps) {
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); void handleDismiss(notification.id); }}
-                      className="shrink-0 self-start rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                      className="shrink-0 self-start rounded-lg p-1.5 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600"
                       aria-label="Dismiss notification"
                     >
                       <X className="h-3.5 w-3.5" />
