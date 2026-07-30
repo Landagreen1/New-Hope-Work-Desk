@@ -4400,7 +4400,39 @@ export function WorkDeskApp({
 
             {agentTab === "desk" ? (
               <div className="space-y-6">
-                <section className="grid gap-5 xl:grid-cols-3">
+                {/* Intake alert banner */}
+                {unclaimedIntakeCount > 0 && (
+                  <section
+                    className="flex items-center justify-between rounded-[26px] border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-amber-100/60 p-5 shadow-sm"
+                    role="alert"
+                  >
+                    <div className="flex items-center gap-4">
+                      <span className="relative grid h-12 w-12 place-items-center rounded-2xl bg-amber-500 text-white shadow-md shadow-amber-200">
+                        <ClipboardList className="h-6 w-6" />
+                        <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-rose-600 text-[10px] font-black text-white ring-2 ring-white">
+                          {unclaimedIntakeCount}
+                        </span>
+                      </span>
+                      <div>
+                        <p className="text-sm font-black text-amber-900">
+                          {unclaimedIntakeCount} intake{unclaimedIntakeCount !== 1 ? 's' : ''} waiting to be claimed
+                        </p>
+                        <p className="mt-0.5 text-xs font-semibold text-amber-700">
+                          New quotes from Customer Service are available in the Sales Intake Queue.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAgentTab("intake_queue")}
+                      className="shrink-0 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-black text-white shadow-sm hover:bg-amber-600"
+                    >
+                      View Queue
+                    </button>
+                  </section>
+                )}
+
+                <section className="grid gap-5 xl:grid-cols-2">
                   <RotationCard
                     variant="whatsapp"
                     current={whatsappCurrent}
@@ -4439,26 +4471,6 @@ export function WorkDeskApp({
                     onRecoverTimer={() =>
                       whatsappTimer && void recoverTimedQuote(whatsappTimer.id)
                     }
-                  />
-                  <RotationCard
-                    variant="ringcentral"
-                    current={ringCentralCurrent}
-                    upcoming={
-                      ringCentralCurrentId
-                        ? upcomingAgents(
-                            agentList,
-                            ringCentralCurrentId,
-                            "ringcentral",
-                          )
-                        : []
-                    }
-                    isMyTurn={
-                      ringCentralCurrentId !== null &&
-                      currentUserId === ringCentralCurrentId
-                    }
-                    currentUserId={currentUserId}
-                    onAction={() => setModal("ringcentral_quote")}
-                    onPass={() => handlePass("ringcentral")}
                   />
                   <RotationCard
                     variant="workload"

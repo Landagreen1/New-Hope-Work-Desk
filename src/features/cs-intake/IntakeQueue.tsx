@@ -496,12 +496,21 @@ export default function IntakeQueue({
                           : 'Not submitted'}
                       </p>
                       {row.submitted_at && (
-                        <p className="mt-0.5 text-xs text-slate-400">
-                          {new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
-                            -Math.max(0, Math.round(((lastUpdated?.getTime() ?? new Date(row.submitted_at).getTime()) - new Date(row.submitted_at).getTime()) / 3_600_000)),
-                            'hour',
-                          )}
-                        </p>
+                        <>
+                          <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                            {new Date(row.submitted_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            {(() => {
+                              const hoursAgo = Math.max(0, Math.round((Date.now() - new Date(row.submitted_at).getTime()) / 3_600_000));
+                              if (hoursAgo < 1) return 'Just now';
+                              if (hoursAgo === 1) return '1 hour ago';
+                              if (hoursAgo < 24) return `${hoursAgo} hours ago`;
+                              const daysAgo = Math.floor(hoursAgo / 24);
+                              return daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`;
+                            })()}
+                          </p>
+                        </>
                       )}
                     </td>
 
@@ -592,32 +601,8 @@ export default function IntakeQueue({
                           </button>
                         ) : null}
 
-                        {/* RingCentral-sourced unclaimed: claim only if current RC agent or manager */}
-                        {isRc && row.status === 'submitted' && canClaimRc && !isDeleted ? (
-                          <button
-                            type="button"
-                            className={ui.btnPrimary}
-                            disabled={busyId === row.id}
-                            onClick={() => void handleClaimRc(row)}
-                          >
-                            <UserCheck className="h-4 w-4" />Claim
-                          </button>
-                        ) : null}
-
-                        {/* RingCentral-sourced unclaimed but NOT current agent: show disabled with tooltip */}
-                        {isRc && row.status === 'submitted' && !canClaimRc && !canManageCs ? (
-                          <button
-                            type="button"
-                            className={ui.btnPrimary}
-                            disabled
-                            title={`Only ${rcTurnHolderName} can claim RingCentral intakes right now`}
-                          >
-                            <UserCheck className="h-4 w-4" />Claim
-                          </button>
-                        ) : null}
-
-                        {/* Non-RingCentral unclaimed: any agent can claim */}
-                        {!isRc && row.status === 'submitted' && profile.role === 'agent' ? (
+                        {/* Any agent can claim unclaimed intakes */}
+                        {row.status === 'submitted' && profile.role === 'agent' && !isDeleted ? (
                           <button
                             type="button"
                             className={ui.btnPrimary}
@@ -684,12 +669,8 @@ export default function IntakeQueue({
               <>
                 <IntakeForm profileId={profile.id} initial={selected} readOnly onDone={closeModal} />
                 <div className="sticky bottom-4 flex flex-wrap justify-end gap-2 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
-                  {/* RC claim in modal */}
-                  {isRingcentralSource(selected.submission) && selected.submission.status === 'submitted' && canClaimRc ? (
-                    <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void handleClaimRc(selected.submission)}><UserCheck className="h-4 w-4" />Claim RingCentral Intake</button>
-                  ) : null}
-                  {/* General claim in modal */}
-                  {!isRingcentralSource(selected.submission) && selected.submission.status === 'submitted' && profile.role === 'agent' ? (
+                  {/* Any agent can claim from modal */}
+                  {selected.submission.status === 'submitted' && profile.role === 'agent' ? (
                     <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void handleClaimGeneral(selected.submission)}><UserCheck className="h-4 w-4" />Claim Intake</button>
                   ) : null}
                   {(selected.submission.claimed_by === profile.id || canManageCs) && selected.submission.status === 'claimed' ? (
