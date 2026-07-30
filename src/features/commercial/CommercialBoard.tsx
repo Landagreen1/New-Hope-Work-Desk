@@ -294,7 +294,7 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
                   onRefresh={fetchQuotes}
                   isManager={isManager}
                   currentUserId={initialProfile.id}
-                  canAddCard={isManager || column.id === 'quote_intake'}
+                  canAddCard={isManager && column.id !== 'quote_intake'}
                 />
               ))}
             </div>
