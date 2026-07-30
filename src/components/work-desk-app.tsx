@@ -4549,6 +4549,66 @@ export function WorkDeskApp({
                   </section>
                 </section>
 
+                {/* RC Sales Intake Queue Order (read-only visual for agents) */}
+                <section className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+                    <PhoneCall className="h-4 w-4" />
+                    RC Sales Intake Queue Order
+                  </div>
+                  <p className="mt-1 text-xs font-semibold text-slate-400">
+                    Current rotation order for claiming RingCentral intakes
+                  </p>
+                  <div className="mt-4 divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden">
+                    {orderedAgents(agentList, "ringcentral").map((agent, index) => {
+                      const isCurrent = agent.id === ringCentralCurrentId;
+                      const isMe = agent.id === currentUserId;
+                      const eligible = rotationEligibility(agent, "ringcentral");
+                      const statusText = !eligible
+                        ? "Paused"
+                        : agent.availability === "available"
+                          ? "Active"
+                          : agent.availability === "break"
+                            ? "On Break"
+                            : "Unavailable";
+                      return (
+                        <div
+                          key={agent.id}
+                          className={cn(
+                            "flex items-center gap-3 px-4 py-2.5",
+                            isCurrent && "bg-blue-50",
+                            isMe && !isCurrent && "bg-slate-50",
+                          )}
+                        >
+                          <span className={cn(
+                            "grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs font-black",
+                            isCurrent ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500",
+                          )}>
+                            {index + 1}
+                          </span>
+                          <Avatar agent={agent} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <p className={cn("truncate text-sm font-black", isMe && "text-blue-700")}>
+                              {agent.name}{isMe ? " (You)" : ""}
+                            </p>
+                          </div>
+                          <span className={cn(
+                            "rounded-full px-2 py-0.5 text-[10px] font-bold",
+                            isCurrent
+                              ? "bg-blue-100 text-blue-700 ring-1 ring-blue-200"
+                              : !eligible
+                                ? "bg-slate-100 text-slate-400"
+                                : agent.availability === "available"
+                                  ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                                  : "bg-amber-50 text-amber-600 ring-1 ring-amber-200",
+                          )}>
+                            {isCurrent ? "Current Turn" : statusText}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
                 <section className="grid gap-5 xl:grid-cols-[1.45fr_.55fr]">
                   <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
                     <div className="flex flex-col gap-3 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
