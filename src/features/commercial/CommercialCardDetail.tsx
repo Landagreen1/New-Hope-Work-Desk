@@ -7,6 +7,7 @@ import {
   Eye,
   FileText,
   Mail,
+  Maximize2,
   MessageSquare,
   Paperclip,
   Pause,
@@ -754,6 +755,7 @@ function AttachmentItem({ attachment: att, quoteId, isAudio, isImage, isPdf, isE
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [emlData, setEmlData] = useState<{ subject: string; from: string; to: string; date: string; body: string } | null>(null);
   const [emlLoading, setEmlLoading] = useState(false);
@@ -835,6 +837,32 @@ function AttachmentItem({ attachment: att, quoteId, isAudio, isImage, isPdf, isE
     if (url) window.open(url, '_blank');
   };
 
+  const handleExpand = async () => {
+    if (isEml) {
+      if (!emlData) {
+        setEmlLoading(true);
+        try {
+          const res = await fetch(
+            `/api/commercial-quotes/${quoteId}/attachments/eml?path=${encodeURIComponent(att.storage_path)}`
+          );
+          if (!res.ok) return;
+          const data = await res.json();
+          setEmlData(data);
+        } catch {
+          return;
+        } finally {
+          setEmlLoading(false);
+        }
+      }
+      setFullscreen(true);
+      return;
+    }
+
+    const url = await fetchSignedUrl();
+    if (!url) return;
+    setFullscreen(true);
+  };
+
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50 overflow-hidden">
       <div className="flex items-center justify-between px-3.5 py-2.5">
@@ -868,6 +896,18 @@ function AttachmentItem({ attachment: att, quoteId, isAudio, isImage, isPdf, isE
               title={isEml ? 'View Email' : 'Preview'}
             >
               {isEml ? <Mail className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          {/* Expand to full page */}
+          {(isImage || isPdf || isEml) && (
+            <button
+              type="button"
+              onClick={() => void handleExpand()}
+              disabled={loading || emlLoading}
+              className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-slate-200"
+              title="Full page preview"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
             </button>
           )}
           {/* Download button */}
@@ -964,6 +1004,97 @@ function AttachmentItem({ attachment: att, quoteId, isAudio, isImage, isPdf, isE
         <div className="border-t border-slate-100 px-3.5 py-3 flex items-center gap-2">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-[#223f7a]" />
           <span className="text-xs font-semibold text-slate-500">Loading email...</span>
+        </div>
+      )}
+
+      {/* Full-page preview modal */}
+      {fullscreen && (
+        <div
+          className="fixed inset-0 z-[60] flex flex-col bg-black/80 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setFullscreen(false);
+          }}
+        >
+          {/* Header bar */}
+          <div className="flex items-center justify-between bg-slate-900/90 px-6 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold text-white">{att.file_name}</p>
+              <p className="text-[10px] font-semibold text-slate-400">
+                {formatFileSize(att.file_size)} · {formatDate(att.created_at)}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleDownload()}
+                className="grid h-8 w-8 place-items-center rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white"
+                title="Download"
+              >
+                <Download className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setFullscreen(false)}
+                className="grid h-8 w-8 place-items-center rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Content area */}
+          <div className="flex-1 overflow-auto p-4">
+            {/* Full image */}
+            {isImage && signedUrl && (
+              <div className="flex h-full items-center justify-center">
+                <img
+                  src={signedUrl}
+                  alt={att.file_name}
+                  className="max-h-full max-w-full rounded-lg object-contain"
+                />
+              </div>
+            )}
+
+            {/* Full PDF */}
+            {isPdf && signedUrl && (
+              <iframe
+                src={signedUrl}
+                title={att.file_name}
+                className="h-full w-full rounded-lg border-0"
+              />
+            )}
+
+            {/* Full EML */}
+            {isEml && emlData && (
+              <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-2xl">
+                <div className="space-y-3 border-b border-slate-200 pb-4">
+                  <h3 className="text-lg font-black text-slate-900">{emlData.subject}</h3>
+                  <div className="space-y-1">
+                    <div className="flex gap-2 text-sm">
+                      <span className="w-12 shrink-0 font-black text-slate-500">From</span>
+                      <span className="font-medium text-slate-700">{emlData.from}</span>
+                    </div>
+                    <div className="flex gap-2 text-sm">
+                      <span className="w-12 shrink-0 font-black text-slate-500">To</span>
+                      <span className="font-medium text-slate-700">{emlData.to}</span>
+                    </div>
+                    {emlData.date && (
+                      <div className="flex gap-2 text-sm">
+                        <span className="w-12 shrink-0 font-black text-slate-500">Date</span>
+                        <span className="font-medium text-slate-700">{emlData.date}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <pre className="whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-slate-600">
+                    {emlData.body || '(No body content)'}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
