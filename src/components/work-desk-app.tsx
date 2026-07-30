@@ -4400,39 +4400,7 @@ export function WorkDeskApp({
 
             {agentTab === "desk" ? (
               <div className="space-y-6">
-                {/* Intake alert banner */}
-                {unclaimedIntakeCount > 0 && (
-                  <section
-                    className="flex items-center justify-between rounded-[26px] border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-amber-100/60 p-5 shadow-sm"
-                    role="alert"
-                  >
-                    <div className="flex items-center gap-4">
-                      <span className="relative grid h-12 w-12 place-items-center rounded-2xl bg-amber-500 text-white shadow-md shadow-amber-200">
-                        <ClipboardList className="h-6 w-6" />
-                        <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-rose-600 text-[10px] font-black text-white ring-2 ring-white">
-                          {unclaimedIntakeCount}
-                        </span>
-                      </span>
-                      <div>
-                        <p className="text-sm font-black text-amber-900">
-                          {unclaimedIntakeCount} intake{unclaimedIntakeCount !== 1 ? 's' : ''} waiting to be claimed
-                        </p>
-                        <p className="mt-0.5 text-xs font-semibold text-amber-700">
-                          New quotes from Customer Service are available in the Sales Intake Queue.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setAgentTab("intake_queue")}
-                      className="shrink-0 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-black text-white shadow-sm hover:bg-amber-600"
-                    >
-                      View Queue
-                    </button>
-                  </section>
-                )}
-
-                <section className="grid gap-5 xl:grid-cols-2">
+                <section className="grid gap-5 xl:grid-cols-3">
                   <RotationCard
                     variant="whatsapp"
                     current={whatsappCurrent}
@@ -4492,6 +4460,84 @@ export function WorkDeskApp({
                     onAction={() => setModal("workload_turn")}
                     onPass={() => handlePass("workload")}
                   />
+
+                  {/* Intake Queue Card */}
+                  <section className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+                          <ClipboardList className="h-4 w-4" />
+                          Sales Intake Queue
+                        </div>
+                        <p className="mt-1 text-xs font-semibold text-slate-400">
+                          Quotes submitted by Customer Service
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-[10px] font-black ring-1",
+                          unclaimedIntakeCount > 0
+                            ? ringCentralCurrentId !== null && currentUserId === ringCentralCurrentId
+                              ? "bg-red-50 text-red-700 ring-red-200"
+                              : "bg-amber-50 text-amber-700 ring-amber-200"
+                            : "bg-slate-100 text-slate-500 ring-slate-200",
+                        )}
+                      >
+                        {unclaimedIntakeCount > 0
+                          ? ringCentralCurrentId !== null && currentUserId === ringCentralCurrentId
+                            ? "YOUR TURN"
+                            : `${unclaimedIntakeCount} WAITING`
+                          : "CLEAR"}
+                      </span>
+                    </div>
+
+                    {unclaimedIntakeCount > 0 ? (
+                      <>
+                        <div className="mt-5 flex items-center gap-3">
+                          <span className="relative grid h-12 w-12 place-items-center rounded-2xl bg-amber-100 text-amber-700">
+                            <ClipboardList className="h-6 w-6" />
+                            <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-amber-600 text-[10px] font-black text-white ring-2 ring-white">
+                              {unclaimedIntakeCount}
+                            </span>
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                              Unclaimed
+                            </p>
+                            <p className="text-xl font-black tracking-tight text-slate-900">
+                              {unclaimedIntakeCount} intake{unclaimedIntakeCount !== 1 ? "s" : ""}
+                            </p>
+                          </div>
+                        </div>
+                        {ringCentralCurrentId !== null && currentUserId === ringCentralCurrentId ? (
+                          <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-center text-xs font-black text-emerald-700 ring-1 ring-emerald-200">
+                            You can claim intakes immediately
+                          </p>
+                        ) : (
+                          <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-center text-xs font-bold text-slate-500 ring-1 ring-slate-200">
+                            Start a recovery timer to claim
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
+                        <p className="font-black text-slate-700">Queue is clear</p>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                          No unclaimed intakes. New submissions will appear here.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="mt-5">
+                      <button
+                        type="button"
+                        onClick={() => setAgentTab("intake_queue")}
+                        className="w-full rounded-xl bg-[#223f7a] px-4 py-3 text-xs font-black text-white hover:bg-[#17305f]"
+                      >
+                        Open Intake Queue
+                      </button>
+                    </div>
+                  </section>
                 </section>
 
                 <section className="grid gap-5 xl:grid-cols-[1.45fr_.55fr]">

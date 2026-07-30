@@ -601,8 +601,32 @@ export default function IntakeQueue({
                           </button>
                         ) : null}
 
-                        {/* Any agent can claim unclaimed intakes */}
-                        {row.status === 'submitted' && profile.role === 'agent' && !isDeleted ? (
+                        {/* RC-sourced unclaimed: claim only if current RC turn holder or manager */}
+                        {isRc && row.status === 'submitted' && canClaimRc && !isDeleted ? (
+                          <button
+                            type="button"
+                            className={ui.btnPrimary}
+                            disabled={busyId === row.id}
+                            onClick={() => void handleClaimRc(row)}
+                          >
+                            <UserCheck className="h-4 w-4" />Claim
+                          </button>
+                        ) : null}
+
+                        {/* RC-sourced unclaimed but NOT current turn: show disabled */}
+                        {isRc && row.status === 'submitted' && !canClaimRc && !canManageCs && !isDeleted ? (
+                          <button
+                            type="button"
+                            className={ui.btnPrimary}
+                            disabled
+                            title={`Only ${rcTurnHolderName} can claim immediately. Start a recovery timer from My Desk.`}
+                          >
+                            <UserCheck className="h-4 w-4" />Claim
+                          </button>
+                        ) : null}
+
+                        {/* Non-RC unclaimed: any agent can claim */}
+                        {!isRc && row.status === 'submitted' && profile.role === 'agent' && !isDeleted ? (
                           <button
                             type="button"
                             className={ui.btnPrimary}
@@ -669,8 +693,12 @@ export default function IntakeQueue({
               <>
                 <IntakeForm profileId={profile.id} initial={selected} readOnly onDone={closeModal} />
                 <div className="sticky bottom-4 flex flex-wrap justify-end gap-2 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
-                  {/* Any agent can claim from modal */}
-                  {selected.submission.status === 'submitted' && profile.role === 'agent' ? (
+                  {/* RC claim in modal */}
+                  {isRingcentralSource(selected.submission) && selected.submission.status === 'submitted' && canClaimRc ? (
+                    <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void handleClaimRc(selected.submission)}><UserCheck className="h-4 w-4" />Claim Intake</button>
+                  ) : null}
+                  {/* General claim in modal */}
+                  {!isRingcentralSource(selected.submission) && selected.submission.status === 'submitted' && profile.role === 'agent' ? (
                     <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void handleClaimGeneral(selected.submission)}><UserCheck className="h-4 w-4" />Claim Intake</button>
                   ) : null}
                   {(selected.submission.claimed_by === profile.id || canManageCs) && selected.submission.status === 'claimed' ? (
