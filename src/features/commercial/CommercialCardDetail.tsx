@@ -528,23 +528,6 @@ export default function CommercialCardDetail({
 
           {/* Sidebar - Custom Fields */}
           <aside className="space-y-4">
-            {/* Status */}
-            <div>
-              <label className={ui.label}>Status</label>
-              <select
-                value={quote.card_status}
-                onChange={(e) => void updateField('card_status', e.target.value)}
-                className={ui.select + ' mt-1 text-xs'}
-                disabled={!canEditFields}
-              >
-                <option value="in_progress">In Progress</option>
-                <option value="price_sent">Price Sent</option>
-                <option value="done">Done</option>
-                <option value="blocked">Blocked</option>
-                <option value="waiting">Waiting</option>
-              </select>
-            </div>
-
             {/* Policy Number */}
             <div>
               <label className={ui.label}>Policy Number</label>
