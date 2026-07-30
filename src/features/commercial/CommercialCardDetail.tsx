@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Paperclip,
   Pause,
+  Pencil,
   Play,
   Plus,
   Send,
@@ -68,6 +69,11 @@ export default function CommercialCardDetail({
   const [showChecklistForm, setShowChecklistForm] = useState(false);
   const [newItemInputs, setNewItemInputs] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
+
+  // Description editing
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [draftDescription, setDraftDescription] = useState('');
+  const [savingDescription, setSavingDescription] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -289,12 +295,12 @@ export default function CommercialCardDetail({
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      <div className="my-8 w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
           <div className="min-w-0 flex-1">
@@ -323,17 +329,75 @@ export default function CommercialCardDetail({
           </div>
         )}
 
-        <div className="grid gap-6 px-6 py-5 lg:grid-cols-[1fr_240px]">
+        <div className="grid gap-6 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_240px]">
           {/* Main content */}
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             {/* Description */}
             <section>
               <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-500">
                 <FileText className="h-3.5 w-3.5" /> Description
+                {canEditFields && !editingDescription && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftDescription(quote.description ?? '');
+                      setEditingDescription(true);
+                    }}
+                    className="ml-auto grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-[#223f7a]"
+                    title="Edit description"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                )}
               </h4>
-              <p className="mt-2 whitespace-pre-wrap text-sm font-medium text-slate-700">
-                {quote.description || 'No description yet.'}
-              </p>
+              {editingDescription ? (
+                <div className="mt-2 space-y-2">
+                  <textarea
+                    value={draftDescription}
+                    onChange={(e) => setDraftDescription(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium outline-none transition focus:border-[#7890bc] focus:ring-2 focus:ring-[#eef3fb]"
+                    rows={5}
+                    placeholder="Add a description..."
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={savingDescription}
+                      onClick={async () => {
+                        setSavingDescription(true);
+                        await updateField('description', draftDescription.trim() || null);
+                        setSavingDescription(false);
+                        setEditingDescription(false);
+                      }}
+                      className={ui.btnPrimary + ' text-xs px-3 py-1.5'}
+                    >
+                      {savingDescription ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDescription(false)}
+                      className="text-xs font-bold text-slate-500 hover:text-slate-700"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p
+                  className={`mt-2 whitespace-pre-wrap break-words text-sm font-medium ${
+                    quote.description ? 'text-slate-700' : 'text-slate-400 italic'
+                  } ${canEditFields ? 'cursor-pointer rounded-lg p-2 -mx-2 hover:bg-slate-50' : ''}`}
+                  onClick={() => {
+                    if (canEditFields) {
+                      setDraftDescription(quote.description ?? '');
+                      setEditingDescription(true);
+                    }
+                  }}
+                >
+                  {quote.description || 'No description yet. Click to add one.'}
+                </p>
+              )}
             </section>
 
             {/* Checklists */}
