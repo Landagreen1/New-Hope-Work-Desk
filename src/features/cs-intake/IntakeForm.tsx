@@ -86,8 +86,8 @@ type DraftSubmission = Partial<CsIntakeSubmission> & {
 };
 
 /** LOBs that need drivers/vehicles sections */
-const LOBS_WITH_DRIVERS: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking', 'commercial_gl'];
-const LOBS_WITH_VEHICLES: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking', 'commercial_gl'];
+const LOBS_WITH_DRIVERS: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking'];
+const LOBS_WITH_VEHICLES: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking'];
 
 /** LOBs where at least 1 driver and 1 vehicle are required */
 const LOBS_REQUIRE_DRIVERS: ExtendedLob[] = ['personal_auto', 'commercial_auto', 'trucking'];
@@ -168,6 +168,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   const showDrivers = LOBS_WITH_DRIVERS.includes(currentLob);
   const showVehicles = LOBS_WITH_VEHICLES.includes(currentLob);
   const isCommercialRouted = isCommercialRoute(currentLob);
+  const isFromRenewal = Boolean(submission.source_renewal_id);
   const disabled = readOnly || busy;
 
   useEffect(() => {
@@ -543,6 +544,11 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
 
   return (
     <div className="space-y-5">
+      {isFromRenewal && (
+        <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm font-bold text-cyan-900">
+          Renewal Requote — This intake was created from a renewal and is locked as a requote. Complete the missing information and submit.
+        </div>
+      )}
       {submission.status === 'returned' && submission.return_reason ? (
         <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm font-bold text-violet-900">
           Returned by Sales: {submission.return_reason}
@@ -573,7 +579,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
                 ? 'This intake will create a card on the Commercial Board.'
                 : 'This intake will be sent to the Personal Sales Queue.'}
             </p>
-            {!readOnly && !initial && (
+            {!readOnly && !initial && !isFromRenewal && (
               <button
                 type="button"
                 className="mt-2 text-xs font-black text-[#223f7a] hover:underline"
@@ -596,10 +602,11 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       <Section icon={<ShieldCheck className="h-5 w-5" />} title="Coverage and routing" subtitle="Tell Sales what kind of quote is needed and where the lead came from.">
         <div className={ui.fieldRow}>
           <Field label="Quote type" required>
-            <select className={ui.select} disabled={disabled} value={submission.quote_kind || 'new_quote'} onChange={(event) => patch({ quote_kind: event.target.value as 'new_quote' | 'requote' })}>
+            <select className={ui.select} disabled={disabled || isFromRenewal} value={submission.quote_kind || 'new_quote'} onChange={(event) => patch({ quote_kind: event.target.value as 'new_quote' | 'requote' })}>
               <option value="new_quote">New Quote</option>
               <option value="requote">Requote</option>
             </select>
+            {isFromRenewal && <span className="mt-1 block text-xs font-bold text-amber-600">Locked — this intake originated from a renewal requote.</span>}
           </Field>
           <Field label="Dealer / source">
             <select
@@ -650,10 +657,11 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       <Section icon={<ShieldCheck className="h-5 w-5" />} title="Quote details" subtitle="Quote type, source, and assignment for this intake.">
         <div className={ui.fieldRow}>
           <Field label="Quote type" required>
-            <select className={ui.select} disabled={disabled} value={submission.quote_kind || 'new_quote'} onChange={(event) => patch({ quote_kind: event.target.value as 'new_quote' | 'requote' })}>
+            <select className={ui.select} disabled={disabled || isFromRenewal} value={submission.quote_kind || 'new_quote'} onChange={(event) => patch({ quote_kind: event.target.value as 'new_quote' | 'requote' })}>
               <option value="new_quote">New Quote</option>
               <option value="requote">Requote</option>
             </select>
+            {isFromRenewal && <span className="mt-1 block text-xs font-bold text-amber-600">Locked — this intake originated from a renewal requote.</span>}
           </Field>
           <Field label="Source / Dealer">
             <select
