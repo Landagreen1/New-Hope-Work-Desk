@@ -29,12 +29,10 @@ import type {
   CommercialComment,
   CommercialQuote,
   ColumnHistory,
-  RiskLevel,
 } from './types';
 import {
   BOARD_COLUMNS,
   COVERAGE_LABELS,
-  RISK_STYLES,
   STATUS_STYLES,
 } from './types';
 
@@ -287,7 +285,6 @@ export default function CommercialCardDetail({
     );
   }
 
-  const riskStyle = RISK_STYLES[quote.risk_level];
   const statusStyle = STATUS_STYLES[quote.card_status];
 
   return (
@@ -599,25 +596,6 @@ export default function CommercialCardDetail({
                 />
                 <p className="mt-1 text-[10px] font-semibold text-slate-400">
                   Total annual premium for this policy.
-                </p>
-              </div>
-              <div>
-                <label className={ui.label}>Total Premium ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  defaultValue={quote.total_premium ?? ''}
-                  onBlur={(e) => {
-                    const val = e.target.value ? parseFloat(e.target.value) : null;
-                    if (val !== quote.total_premium) void updateField('total_premium', val);
-                  }}
-                  placeholder="e.g. 5000.00"
-                  className={ui.input + ' mt-1 text-xs'}
-                  disabled={!canEditFields}
-                />
-                <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                  Total premium across all policies on this card.
                 </p>
               </div>
               </>

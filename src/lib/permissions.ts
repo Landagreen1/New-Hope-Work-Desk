@@ -72,7 +72,7 @@ export function canAccessCustomerService(role: AppRole): boolean {
 }
 
 export function canAccessCommercial(role: AppRole): boolean {
-  return role === "commercial" || canManageCommercial(role);
+  return role === "agent" || role === "commercial" || canManageCommercial(role);
 }
 
 export function canAccessRenewals(role: AppRole): boolean {

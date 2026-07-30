@@ -49,10 +49,9 @@ export async function POST(request: Request) {
 
   if (error) return Response.json({ error: error.message }, { status: 400 });
 
-  // Update status to lunch/unavailable
-  const newStatus = breakType === "lunch" ? "lunch" : "unavailable";
-  await supabase.from("time_clock_entries").update({ clock_status: newStatus }).eq("id", activeEntry.id);
-  await supabase.from("profiles").update({ availability: newStatus === "lunch" ? "break" : "unavailable" }).eq("id", user.id);
+  // Update status to on-break
+  await supabase.from("time_clock_entries").update({ clock_status: "lunch" }).eq("id", activeEntry.id);
+  await supabase.from("profiles").update({ availability: "break" }).eq("id", user.id);
 
   return Response.json({ break: data }, { status: 201 });
 }

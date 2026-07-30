@@ -189,16 +189,6 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
     finally { setBusy(false); }
   };
 
-  const handleChangeStatus = async (status: ClockStatus) => {
-    setBusy(true); setError(null);
-    try {
-      const res = await fetch('/api/time-clock', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'change_status', status }) });
-      if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Status change failed.'); }
-      await fetchActive();
-    } catch (err) { setError(err instanceof Error ? err.message : 'Status change failed.'); }
-    finally { setBusy(false); }
-  };
-
   const handleStartBreak = async (type: string = 'lunch') => {
     setBusy(true); setError(null);
     try {
@@ -315,19 +305,8 @@ export default function TimeClock({ initialProfile }: TimeClockProps) {
                     <button type="button" onClick={() => void handleStartBreak('short')} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"><Pause className="h-3.5 w-3.5" /> Short Break</button>
                   </>
                 ) : (
-                  <button type="button" onClick={() => void handleEndBreak()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"><Play className="h-3.5 w-3.5" /> End Break</button>
+                  <button type="button" onClick={() => void handleEndBreak()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"><Play className="h-3.5 w-3.5" /> {activeBreak.break_type === 'lunch' ? 'End Lunch' : 'End Break'}</button>
                 )}
-              </div>
-            )}
-            {clockedIn && !activeBreak && (
-              <div className="mt-2 flex gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
-                {(['available', 'lunch', 'unavailable'] as ClockStatus[]).map((s) => {
-                  const style = CLOCK_STATUS_STYLES[s];
-                  const isActive = currentEntry?.clock_status === s;
-                  return (
-                    <button key={s} type="button" onClick={() => void handleChangeStatus(s)} disabled={busy || isActive} className={`rounded-lg px-2.5 py-1.5 text-[10px] font-black transition ${isActive ? `${style.bg} ${style.text}` : 'text-slate-500 hover:bg-white'} disabled:opacity-50`}>{style.label}</button>
-                  );
-                })}
               </div>
             )}
           </div>

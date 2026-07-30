@@ -4,7 +4,6 @@ import {
   AlertCircle,
   BarChart3,
   Clock,
-  DollarSign,
   Layers,
   PieChart,
   RefreshCw,
@@ -41,7 +40,6 @@ interface AgentMetric {
   notSold: number;
   conversionRate: number;
   avgDaysToSold: number;
-  totalPremium: number;
 }
 
 interface ColumnDistribution {
@@ -109,9 +107,6 @@ export default function CommercialReports({ initialProfile, embedded = false }: 
     const totalCompleted = soldQuotes.length + notSoldQuotes.length;
     const conversionRate = totalCompleted > 0 ? Math.round((soldQuotes.length / totalCompleted) * 100) : 0;
 
-    // 1. Total Pipeline Value
-    const totalPremium = soldQuotes.reduce((sum, q) => sum + (q.sold_premium ?? 0), 0);
-
     // 2. Average days from intake to sold
     const soldWithDays = soldQuotes.map((q) => daysBetween(q.board_entered_at, q.column_entered_at));
     const avgDaysToSold = soldWithDays.length > 0 ? Math.round(soldWithDays.reduce((a, b) => a + b, 0) / soldWithDays.length) : 0;
@@ -150,13 +145,12 @@ export default function CommercialReports({ initialProfile, embedded = false }: 
       const name = q.profiles?.display_name ?? 'Unknown';
       const initials = q.profiles?.initials ?? '?';
       if (!agentMap.has(q.assigned_to)) {
-        agentMap.set(q.assigned_to, { name, initials, total: 0, sold: 0, notSold: 0, conversionRate: 0, avgDaysToSold: 0, totalPremium: 0 });
+        agentMap.set(q.assigned_to, { name, initials, total: 0, sold: 0, notSold: 0, conversionRate: 0, avgDaysToSold: 0 });
       }
       const m = agentMap.get(q.assigned_to)!;
       m.total++;
       if (['sold', 'commission_approved', 'commission_not_approved'].includes(q.board_column)) {
         m.sold++;
-        m.totalPremium += q.sold_premium ?? 0;
       }
       if (q.board_column === 'not_sold') m.notSold++;
     }
@@ -179,7 +173,6 @@ export default function CommercialReports({ initialProfile, embedded = false }: 
     const summaryCards: ReportCard[] = [
       { title: 'Active Pipeline', value: activeQuotes.length, subtitle: 'cards in progress', icon: Layers, color: 'text-[#223f7a]' },
       { title: 'Conversion Rate', value: `${conversionRate}%`, subtitle: `${soldQuotes.length} sold / ${totalCompleted} completed`, icon: TrendingUp, color: 'text-emerald-600' },
-      { title: 'Total Premium (Sold)', value: `$${totalPremium.toLocaleString()}`, subtitle: `${soldQuotes.length} policies`, icon: DollarSign, color: 'text-green-700' },
       { title: 'Avg Days to Sold', value: avgDaysToSold, subtitle: 'from intake to sold', icon: Clock, color: 'text-violet-600' },
       { title: 'New This Month', value: newThisMonth, subtitle: 'quotes created', icon: BarChart3, color: 'text-blue-600' },
       { title: 'Sold This Month', value: soldThisMonth, subtitle: 'closed this month', icon: TrendingUp, color: 'text-emerald-600' },
@@ -301,7 +294,6 @@ export default function CommercialReports({ initialProfile, embedded = false }: 
                       <th className={ui.th}>Sold</th>
                       <th className={ui.th}>Not Sold</th>
                       <th className={ui.th}>Conv. Rate</th>
-                      <th className={ui.th}>Premium</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -322,9 +314,6 @@ export default function CommercialReports({ initialProfile, embedded = false }: 
                           <span className={`text-xs font-black ${agent.conversionRate >= 50 ? 'text-emerald-700' : agent.conversionRate >= 25 ? 'text-amber-700' : 'text-rose-600'}`}>
                             {agent.conversionRate}%
                           </span>
-                        </td>
-                        <td className={ui.td + ' text-xs font-black text-green-700'}>
-                          ${agent.totalPremium.toLocaleString()}
                         </td>
                       </tr>
                     ))}

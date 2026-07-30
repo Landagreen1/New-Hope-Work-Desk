@@ -227,6 +227,7 @@ export async function POST(request: Request) {
       { checklist_id: checklist.id, label: "Email", position: 1 },
       { checklist_id: checklist.id, label: "Recording", position: 2 },
       { checklist_id: checklist.id, label: "Form", position: 3 },
+      { checklist_id: checklist.id, label: "WhatsApp", position: 4 },
     ]);
   }
 

@@ -5,11 +5,8 @@ import {
   Archive,
   ChevronDown,
   ChevronUp,
-  Eye,
   FileText,
   Filter,
-  History,
-  Paperclip,
   RefreshCw,
   Search,
   Trash2,
@@ -20,15 +17,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { canManageCommercial } from '@/lib/permissions';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
-import CommercialActivityLog from './CommercialActivityLog';
-import CommercialAttachmentViewer from './CommercialAttachmentViewer';
 import CommercialCardDetail from './CommercialCardDetail';
-import type { BoardColumn, CardStatus, CommercialQuote, CoverageType, RiskLevel } from './types';
+import type { BoardColumn, CardStatus, CommercialQuote, CoverageType } from './types';
 import {
   BOARD_COLUMNS,
   COMMISSION_STATUS_STYLES,
   COVERAGE_LABELS,
-  RISK_STYLES,
   STATUS_STYLES,
 } from './types';
 
@@ -37,7 +31,7 @@ interface CommercialDatabaseProps {
   embedded?: boolean;
 }
 
-type SortField = 'business_name' | 'board_column' | 'risk_level' | 'card_status' | 'created_at' | 'updated_at' | 'assigned_to';
+type SortField = 'business_name' | 'board_column' | 'card_status' | 'created_at' | 'updated_at' | 'assigned_to';
 type SortDirection = 'asc' | 'desc';
 
 export default function CommercialDatabase({ initialProfile, embedded = false }: CommercialDatabaseProps) {
@@ -49,7 +43,6 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [filterColumn, setFilterColumn] = useState<BoardColumn | ''>('');
-  const [filterRisk, setFilterRisk] = useState<RiskLevel | ''>('');
   const [filterStatus, setFilterStatus] = useState<CardStatus | ''>('');
   const [filterCoverage, setFilterCoverage] = useState<CoverageType | ''>('');
   const [showDeleted, setShowDeleted] = useState(false);
@@ -60,8 +53,6 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
 
   // Detail panels
   const [openDetailId, setOpenDetailId] = useState<string | null>(null);
-  const [openActivityId, setOpenActivityId] = useState<string | null>(null);
-  const [openAttachmentsId, setOpenAttachmentsId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
 
@@ -128,7 +119,6 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
 
     // Filters
     if (filterColumn) result = result.filter((q) => q.board_column === filterColumn);
-    if (filterRisk) result = result.filter((q) => q.risk_level === filterRisk);
     if (filterStatus) result = result.filter((q) => q.card_status === filterStatus);
     if (filterCoverage) result = result.filter((q) => q.coverage_type === filterCoverage);
 
@@ -145,11 +135,6 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
         case 'board_column':
           aVal = BOARD_COLUMNS.findIndex((c) => c.id === a.board_column);
           bVal = BOARD_COLUMNS.findIndex((c) => c.id === b.board_column);
-          break;
-        case 'risk_level':
-          const riskOrder = { low: 0, medium: 1, high: 2 };
-          aVal = riskOrder[a.risk_level];
-          bVal = riskOrder[b.risk_level];
           break;
         case 'card_status':
           aVal = a.card_status;
@@ -175,7 +160,7 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
     });
 
     return result;
-  }, [quotes, searchTerm, filterColumn, filterRisk, filterStatus, filterCoverage, sortField, sortDir]);
+  }, [quotes, searchTerm, filterColumn, filterStatus, filterCoverage, sortField, sortDir]);
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
   const handleSort = (field: SortField) => {
@@ -209,12 +194,11 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
   const clearFilters = () => {
     setSearchTerm('');
     setFilterColumn('');
-    setFilterRisk('');
     setFilterStatus('');
     setFilterCoverage('');
   };
 
-  const hasActiveFilters = searchTerm || filterColumn || filterRisk || filterStatus || filterCoverage;
+  const hasActiveFilters = searchTerm || filterColumn || filterStatus || filterCoverage;
 
   // ─── Format helpers ─────────────────────────────────────────────────────────
   function formatDate(iso: string): string {
@@ -303,20 +287,6 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
             ))}
         </select>
 
-        {/* Risk filter (managers only) */}
-        {isManager && (
-          <select
-            value={filterRisk}
-            onChange={(e) => setFilterRisk(e.target.value as RiskLevel | '')}
-            className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-[#7890bc]"
-          >
-            <option value="">All Risk</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-        )}
-
         {/* Status filter */}
         <select
           value={filterStatus}
@@ -386,11 +356,6 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
                 <th className={ui.th + ' cursor-pointer select-none'} onClick={() => handleSort('board_column')}>
                   <span className="flex items-center gap-1">Column <SortIcon field="board_column" /></span>
                 </th>
-                {isManager && (
-                  <th className={ui.th + ' cursor-pointer select-none'} onClick={() => handleSort('risk_level')}>
-                    <span className="flex items-center gap-1">Risk <SortIcon field="risk_level" /></span>
-                  </th>
-                )}
                 <th className={ui.th + ' cursor-pointer select-none'} onClick={() => handleSort('card_status')}>
                   <span className="flex items-center gap-1">Status <SortIcon field="card_status" /></span>
                 </th>
@@ -407,14 +372,14 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
             <tbody>
               {filteredQuotes.map((quote) => {
                 const columnDef = BOARD_COLUMNS.find((c) => c.id === quote.board_column);
-                const riskStyle = RISK_STYLES[quote.risk_level];
                 const statusStyle = STATUS_STYLES[quote.card_status];
                 const commStyle = quote.commission_status ? COMMISSION_STATUS_STYLES[quote.commission_status] : null;
 
                 return (
                   <tr
                     key={quote.id}
-                    className={`${ui.trHover} ${quote.is_deleted ? 'opacity-50 bg-rose-50/30' : ''}`}
+                    onClick={() => setOpenDetailId(quote.id)}
+                    className={`${ui.trHover} cursor-pointer ${quote.is_deleted ? 'opacity-50 bg-rose-50/30' : ''}`}
                   >
                     <td className={ui.td}>
                       <div className="min-w-[140px]">
@@ -440,13 +405,6 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
                         <span className="text-xs font-bold text-slate-700">{columnDef?.label ?? quote.board_column}</span>
                       </span>
                     </td>
-                    {isManager && (
-                      <td className={ui.td}>
-                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${riskStyle.bg} ${riskStyle.text}`}>
-                          {riskStyle.label}
-                        </span>
-                      </td>
-                    )}
                     <td className={ui.td}>
                       <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${statusStyle.bg} ${statusStyle.text}`}>
                         {statusStyle.label}
@@ -471,32 +429,8 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
                     <td className={ui.td}>
                       <span className="text-xs font-semibold text-slate-500">{formatDate(quote.updated_at)}</span>
                     </td>
-                    <td className={ui.td}>
+                    <td className={ui.td} onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setOpenDetailId(quote.id)}
-                          className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-[#223f7a]"
-                          title="Open card"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setOpenActivityId(quote.id)}
-                          className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-violet-50 hover:text-violet-700"
-                          title="Activity log"
-                        >
-                          <History className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setOpenAttachmentsId(quote.id)}
-                          className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-amber-50 hover:text-amber-700"
-                          title="Attachments"
-                        >
-                          <Paperclip className="h-3.5 w-3.5" />
-                        </button>
                         {!quote.is_deleted && isManager && (
                           <button
                             type="button"
@@ -525,22 +459,6 @@ export default function CommercialDatabase({ initialProfile, embedded = false }:
           onRefresh={fetchQuotes}
           currentUserId={initialProfile.id}
           isManager={isManager}
-        />
-      )}
-
-      {/* Activity Log Modal */}
-      {openActivityId && (
-        <CommercialActivityLog
-          quoteId={openActivityId}
-          onClose={() => setOpenActivityId(null)}
-        />
-      )}
-
-      {/* Attachment Viewer Modal */}
-      {openAttachmentsId && (
-        <CommercialAttachmentViewer
-          quoteId={openAttachmentsId}
-          onClose={() => setOpenAttachmentsId(null)}
         />
       )}
 

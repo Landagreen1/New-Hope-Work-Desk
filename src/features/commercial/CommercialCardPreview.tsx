@@ -7,7 +7,7 @@ import { useState } from 'react';
 
 import CommercialCardDetail from './CommercialCardDetail';
 import type { CommercialQuote } from './types';
-import { LOCKED_COLUMNS, STATUS_STYLES } from './types';
+import { LOCKED_COLUMNS } from './types';
 
 interface CommercialCardPreviewProps {
   quote: CommercialQuote;
@@ -79,14 +79,21 @@ export default function CommercialCardPreview({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const statusStyle = STATUS_STYLES[quote.card_status];
   const commentCount = getCommentCount(quote);
   const attachmentCount = getAttachmentCount(quote);
   const checklistProgress = getChecklistProgress(quote);
   const agentName = quote.profiles?.display_name ?? 'Unassigned';
-  const agentInitials = quote.profiles?.initials ?? '?';
   const timeInList = getRelativeTime(quote.column_entered_at);
   const timeOnBoard = getRelativeTime(quote.board_entered_at);
+
+  // Time since last update — visual staleness marker
+  const daysSinceUpdate = Math.floor((Date.now() - new Date(quote.updated_at).getTime()) / 86400000);
+  const lastUpdateLabel = getRelativeTime(quote.updated_at);
+  const lastUpdateColor =
+    daysSinceUpdate <= 2 ? 'bg-emerald-500' :
+    daysSinceUpdate <= 7 ? 'bg-amber-400' :
+    daysSinceUpdate <= 14 ? 'bg-orange-500' :
+    'bg-rose-500';
 
   // Agent label color based on first letter (matching Trello's member colors)
   const labelColors = [
@@ -137,13 +144,6 @@ export default function CommercialCardPreview({
         {/* Business name */}
         <p className="text-sm font-black leading-snug text-slate-900">{quote.business_name}</p>
 
-        {/* Badges row */}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${statusStyle.bg} ${statusStyle.text}`}>
-            {statusStyle.label}
-          </span>
-        </div>
-
         {/* Metadata row */}
         <div className="mt-2.5 flex items-center gap-3 text-[10px] font-semibold text-slate-400">
           {commentCount > 0 && (
@@ -176,6 +176,10 @@ export default function CommercialCardPreview({
         <div className="mt-2 flex items-center gap-3 text-[10px] font-semibold text-slate-400">
           <span title="Time in list">{timeInList}</span>
           <span title="Time on board">{timeOnBoard}</span>
+          <span className="ml-auto flex items-center gap-1" title={`Last updated: ${lastUpdateLabel} ago`}>
+            <span className={`inline-block h-2 w-2 rounded-full ${lastUpdateColor}`} />
+            <span>{lastUpdateLabel}</span>
+          </span>
         </div>
       </div>
 
