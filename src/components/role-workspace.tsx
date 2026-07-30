@@ -22,6 +22,7 @@ import TimeAttendanceWorkspace from "@/features/time-attendance/TimeAttendanceWo
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type { ProfileLite } from "@/features/nhwd-shared/types";
+import { NotificationPanel } from "@/features/notifications/NotificationPanel";
 import RenewalsPage from "@/features/renewals/RenewalsPage";
 import WorkloadLog from "@/features/workload/WorkloadLog";
 import { getRolePermissions, isBroadManagerRole } from "@/lib/permissions";
@@ -259,6 +260,17 @@ export function RoleWorkspace({
       navigation={activeNavigation}
       onNavigate={handleNavigate}
       onSignOut={() => void handleSignOut()}
+      headerRight={
+        <NotificationPanel
+          profile={{
+            id: sessionProfile.id,
+            display_name: sessionProfile.displayName,
+            initials: sessionProfile.initials,
+            role: sessionProfile.role,
+            is_active: true,
+          }}
+        />
+      }
     >
       {renderContent()}
     </SidebarLayout>
