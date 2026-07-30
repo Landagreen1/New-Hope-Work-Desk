@@ -41,6 +41,7 @@ import NonOwnersSection, { type NonOwnersData } from './NonOwnersSection';
 import TruckingSection, { type TruckingData } from './TruckingSection';
 import CommercialGlSection, { type CommercialGlData } from './CommercialGlSection';
 import HomeownersSection, { type HomeownersData } from './HomeownersSection';
+import OtherPersonalSection, { type OtherPersonalData } from './OtherPersonalSection';
 
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
@@ -308,6 +309,41 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       if (!submission.property_address_street?.trim()) return 'Property address is required for Homeowners.';
     }
 
+    // Motorcycle validation
+    if (currentLob === 'motorcycle') {
+      const s = submission as Record<string, unknown>;
+      if (!s.moto_year || !String(s.moto_year).trim()) return 'Motorcycle year is required.';
+      if (!s.moto_make || !String(s.moto_make).trim()) return 'Motorcycle make is required.';
+      if (!s.moto_model || !String(s.moto_model).trim()) return 'Motorcycle model is required.';
+    }
+
+    // Boat validation
+    if (currentLob === 'boat') {
+      const s = submission as Record<string, unknown>;
+      if (!s.boat_year || !String(s.boat_year).trim()) return 'Boat year is required.';
+      if (!s.boat_make || !String(s.boat_make).trim()) return 'Boat make is required.';
+      if (!s.boat_model || !String(s.boat_model).trim()) return 'Boat model is required.';
+      if (!s.boat_type || !String(s.boat_type).trim()) return 'Watercraft type is required.';
+    }
+
+    // Trailer validation
+    if (currentLob === 'trailer') {
+      const s = submission as Record<string, unknown>;
+      if (!s.trailer_year || !String(s.trailer_year).trim()) return 'Trailer year is required.';
+      if (!s.trailer_make || !String(s.trailer_make).trim()) return 'Trailer make is required.';
+      if (!s.trailer_model || !String(s.trailer_model).trim()) return 'Trailer model is required.';
+      if (!s.trailer_type || !String(s.trailer_type).trim()) return 'Trailer type is required.';
+    }
+
+    // Renters validation
+    if (currentLob === 'renters') {
+      const s = submission as Record<string, unknown>;
+      if (!s.renters_property_address || !String(s.renters_property_address).trim()) return 'Rental property address is required.';
+      if (!s.renters_city || !String(s.renters_city).trim()) return 'City is required for renters.';
+      if (!s.renters_state || !String(s.renters_state).trim()) return 'State is required for renters.';
+      if (!s.renters_zip || !String(s.renters_zip).trim()) return 'ZIP is required for renters.';
+    }
+
     // Personal auto / commercial auto standard validation
     if (currentLob === 'personal_auto' || currentLob === 'commercial_auto') {
       if (!submission.insured_dob) return 'Date of birth is required.';
@@ -454,6 +490,43 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
     document_expiration: ((submission as Record<string, unknown>).no_document_expiration as string) || '',
   };
 
+  const sub = submission as Record<string, unknown>;
+  const otherPersonalData: OtherPersonalData = {
+    moto_year: (sub.moto_year as string) || '',
+    moto_make: (sub.moto_make as string) || '',
+    moto_model: (sub.moto_model as string) || '',
+    moto_vin: (sub.moto_vin as string) || '',
+    moto_cc: (sub.moto_cc as string) || '',
+    moto_type: (sub.moto_type as string) || '',
+    boat_year: (sub.boat_year as string) || '',
+    boat_make: (sub.boat_make as string) || '',
+    boat_model: (sub.boat_model as string) || '',
+    boat_hin: (sub.boat_hin as string) || '',
+    boat_length: (sub.boat_length as string) || '',
+    boat_type: (sub.boat_type as string) || '',
+    boat_hp: (sub.boat_hp as string) || '',
+    boat_value: (sub.boat_value as string) || '',
+    boat_trailer_included: (sub.boat_trailer_included as boolean) || false,
+    trailer_year: (sub.trailer_year as string) || '',
+    trailer_make: (sub.trailer_make as string) || '',
+    trailer_model: (sub.trailer_model as string) || '',
+    trailer_vin: (sub.trailer_vin as string) || '',
+    trailer_length: (sub.trailer_length as string) || '',
+    trailer_type: (sub.trailer_type as string) || '',
+    trailer_value: (sub.trailer_value as string) || '',
+    trailer_park_name: (sub.trailer_park_name as string) || '',
+    trailer_lot_number: (sub.trailer_lot_number as string) || '',
+    renters_property_address: (sub.renters_property_address as string) || '',
+    renters_city: (sub.renters_city as string) || '',
+    renters_state: (sub.renters_state as string) || '',
+    renters_zip: (sub.renters_zip as string) || '',
+    renters_unit: (sub.renters_unit as string) || '',
+    renters_landlord_name: (sub.renters_landlord_name as string) || '',
+    renters_personal_property_value: (sub.renters_personal_property_value as string) || '',
+    renters_liability_limit: (sub.renters_liability_limit as string) || '',
+    renters_move_in_date: (sub.renters_move_in_date as string) || '',
+  };
+
   // If LOB hasn't been picked yet, show the picker
   if (!lobPicked) {
     return (
@@ -490,6 +563,10 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
               {currentLob === 'commercial_gl' && 'Commercial (GL, WC)'}
               {currentLob === 'homeowners' && 'Homeowners'}
               {currentLob === 'non_owners' && 'Non-Owners / SR-22'}
+              {currentLob === 'motorcycle' && 'Motorcycle / ATV'}
+              {currentLob === 'boat' && 'Boat / Watercraft'}
+              {currentLob === 'trailer' && 'Home / Trailer'}
+              {currentLob === 'renters' && 'Renters Insurance'}
             </h2>
             <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
               {isCommercialRouted
@@ -514,8 +591,8 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         </div>
       </section>
 
-      {/* Coverage and routing section — shown for personal_auto and commercial_auto */}
-      {(currentLob === 'personal_auto' || currentLob === 'commercial_auto') && (
+      {/* Coverage and routing section — shown for personal-route LOBs (not commercial-routed, not non_owners which has its own) */}
+      {(currentLob === 'personal_auto' || currentLob === 'commercial_auto' || currentLob === 'motorcycle' || currentLob === 'boat' || currentLob === 'trailer' || currentLob === 'renters') && (
       <Section icon={<ShieldCheck className="h-5 w-5" />} title="Coverage and routing" subtitle="Tell Sales what kind of quote is needed and where the lead came from.">
         <div className={ui.fieldRow}>
           <Field label="Quote type" required>
@@ -568,9 +645,9 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       </Section>
       )}
 
-      {/* Priority and quote type for commercial-routed LOBs */}
+      {/* Quote details and source for commercial-routed LOBs */}
       {isCommercialRouted && (
-      <Section icon={<ShieldCheck className="h-5 w-5" />} title="Quote details" subtitle="Priority and quote type for this intake.">
+      <Section icon={<ShieldCheck className="h-5 w-5" />} title="Quote details" subtitle="Quote type, source, and assignment for this intake.">
         <div className={ui.fieldRow}>
           <Field label="Quote type" required>
             <select className={ui.select} disabled={disabled} value={submission.quote_kind || 'new_quote'} onChange={(event) => patch({ quote_kind: event.target.value as 'new_quote' | 'requote' })}>
@@ -578,11 +655,15 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
               <option value="requote">Requote</option>
             </select>
           </Field>
-          <Field label="Priority">
-            <select className={ui.select} disabled={disabled} value={submission.priority} onChange={(event) => patch({ priority: event.target.value as CsIntakePriority })}>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
+          <Field label="Source / Dealer">
+            <select
+              className={ui.select}
+              disabled={disabled}
+              value={submission.dealer_id || ''}
+              onChange={(event) => patch({ dealer_id: event.target.value || null, salesperson_id: null })}
+            >
+              <option value="">Direct / No source</option>
+              {dealers.map((dealer) => <option key={dealer.id} value={dealer.id}>{dealer.name}</option>)}
             </select>
           </Field>
           <Field label="Assign to" required>
@@ -700,6 +781,18 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
             if ('document_state' in noPatch) mapped.no_document_state = noPatch.document_state || null;
             if ('document_expiration' in noPatch) mapped.no_document_expiration = noPatch.document_expiration || null;
             patch(mapped as Partial<DraftSubmission>);
+          }}
+          disabled={disabled}
+        />
+      )}
+
+      {/* Motorcycle, Boat, Trailer, Renters sections */}
+      {(currentLob === 'motorcycle' || currentLob === 'boat' || currentLob === 'trailer' || currentLob === 'renters') && (
+        <OtherPersonalSection
+          lob={currentLob}
+          data={otherPersonalData}
+          onChange={(opPatch) => {
+            patch(opPatch as unknown as Partial<DraftSubmission>);
           }}
           disabled={disabled}
         />

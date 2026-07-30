@@ -1,9 +1,9 @@
 'use client';
 
-import { Building2, Car, ClipboardCheck, Home, Truck, UserRound } from 'lucide-react';
+import { Anchor, Building2, Car, ClipboardCheck, Home, Key, Ship, Truck, UserRound } from 'lucide-react';
 import type { CsIntakeLob } from './api';
 
-export type ExtendedLob = CsIntakeLob | 'trucking' | 'commercial_gl' | 'homeowners' | 'non_owners';
+export type ExtendedLob = CsIntakeLob | 'trucking' | 'commercial_gl' | 'homeowners' | 'non_owners' | 'motorcycle' | 'boat' | 'trailer' | 'renters';
 
 interface LobOption {
   value: ExtendedLob;
@@ -54,6 +54,34 @@ const LOB_OPTIONS: LobOption[] = [
     label: 'Non-Owners',
     description: 'SR-22 filing, non-owner liability',
     icon: <ClipboardCheck className="h-7 w-7" />,
+    route: 'personal',
+  },
+  {
+    value: 'motorcycle',
+    label: 'Motorcycle',
+    description: 'Motorcycles, scooters, ATVs',
+    icon: <Car className="h-7 w-7" />,
+    route: 'personal',
+  },
+  {
+    value: 'boat',
+    label: 'Boat / Watercraft',
+    description: 'Boats, jet skis, watercraft coverage',
+    icon: <Ship className="h-7 w-7" />,
+    route: 'personal',
+  },
+  {
+    value: 'trailer',
+    label: 'Home / Trailer',
+    description: 'Mobile homes, travel trailers, RVs',
+    icon: <Home className="h-7 w-7" />,
+    route: 'personal',
+  },
+  {
+    value: 'renters',
+    label: 'Renters',
+    description: 'Renters insurance, personal property',
+    icon: <Key className="h-7 w-7" />,
     route: 'personal',
   },
 ];
@@ -141,5 +169,5 @@ export function isCommercialRoute(lob: ExtendedLob | null): boolean {
 
 /** Helper to check if a LOB routes to personal sales queue */
 export function isPersonalRoute(lob: ExtendedLob | null): boolean {
-  return lob === 'personal_auto' || lob === 'commercial_auto' || lob === 'non_owners';
+  return lob === 'personal_auto' || lob === 'commercial_auto' || lob === 'non_owners' || lob === 'motorcycle' || lob === 'boat' || lob === 'trailer' || lob === 'renters';
 }

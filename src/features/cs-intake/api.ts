@@ -12,7 +12,7 @@ export type CsIntakeStatus =
   | 'rejected'
   | 'deleted';
 export type CsIntakePriority = 'normal' | 'high' | 'urgent';
-export type CsIntakeLob = 'personal_auto' | 'commercial_auto' | 'auto' | 'trucking' | 'commercial_gl' | 'homeowners' | 'non_owners';
+export type CsIntakeLob = 'personal_auto' | 'commercial_auto' | 'auto' | 'trucking' | 'commercial_gl' | 'homeowners' | 'non_owners' | 'motorcycle' | 'boat' | 'trailer' | 'renters';
 export type DesiredCoverage = 'liability_only' | 'full_coverage' | 'unsure';
 export type QuoteKind = 'new_quote' | 'requote';
 
