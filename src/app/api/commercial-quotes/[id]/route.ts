@@ -65,14 +65,24 @@ export async function GET(request: Request, context: RouteContext) {
         id, from_column, to_column, moved_at,
         profiles!commercial_quote_column_history_moved_by_fkey(display_name)
       ),
-      profiles!commercial_quotes_assigned_to_fkey(display_name, initials, role),
-      creator:profiles!commercial_quotes_created_by_fkey(display_name, initials)`
+      profiles!commercial_quotes_assigned_to_fkey(display_name, initials, role)`
     )
     .eq("id", id)
     .single();
 
   if (error) {
     return Response.json({ error: error.message }, { status: 404 });
+  }
+
+  // Resolve creator profile separately (graceful if created_by column doesn't exist yet)
+  let creator: { display_name: string; initials: string } | null = null;
+  if (data.created_by) {
+    const { data: creatorProfile } = await supabase
+      .from("profiles")
+      .select("display_name, initials")
+      .eq("id", data.created_by)
+      .single();
+    creator = creatorProfile ?? null;
   }
 
   // Strip sensitive fields from commercial employees without management access.
@@ -94,7 +104,7 @@ export async function GET(request: Request, context: RouteContext) {
     };
   }
 
-  return Response.json({ quote });
+  return Response.json({ quote: { ...quote, creator } });
 }
 
 /**
