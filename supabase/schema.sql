@@ -391,14 +391,13 @@ begin
   returning * into v_item;
 
   v_next := public.next_eligible_profile('whatsapp', v_me.whatsapp_position);
-  if v_next is null then raise exception 'No eligible next agent'; end if;
 
   update public.rotation_state
-  set current_profile_id = v_next, version = version + 1, updated_at = now(), updated_by = v_me.id
+  set current_profile_id = coalesce(v_next, v_me.id), version = version + 1, updated_at = now(), updated_by = v_me.id
   where kind = 'whatsapp';
 
   insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, work_item_id)
-  values ('whatsapp', 'claim', v_me.id, v_me.id, v_next, v_item.id);
+  values ('whatsapp', 'claim', v_me.id, v_me.id, coalesce(v_next, v_me.id), v_item.id);
 
   return v_item;
 end;
@@ -435,14 +434,13 @@ begin
   returning * into v_item;
 
   v_next := public.next_eligible_profile('ringcentral', v_me.ringcentral_position);
-  if v_next is null then raise exception 'No eligible next agent'; end if;
 
   update public.rotation_state
-  set current_profile_id = v_next, version = version + 1, updated_at = now(), updated_by = v_me.id
+  set current_profile_id = coalesce(v_next, v_me.id), version = version + 1, updated_at = now(), updated_by = v_me.id
   where kind = 'ringcentral';
 
   insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, work_item_id)
-  values ('ringcentral', 'claim', v_me.id, v_me.id, v_next, v_item.id);
+  values ('ringcentral', 'claim', v_me.id, v_me.id, coalesce(v_next, v_me.id), v_item.id);
 
   return v_item;
 end;
@@ -481,14 +479,13 @@ begin
   returning * into v_item;
 
   v_next := public.next_eligible_profile('workload', v_me.workload_position);
-  if v_next is null then raise exception 'No eligible next agent'; end if;
 
   update public.rotation_state
-  set current_profile_id = v_next, version = version + 1, updated_at = now(), updated_by = v_me.id
+  set current_profile_id = coalesce(v_next, v_me.id), version = version + 1, updated_at = now(), updated_by = v_me.id
   where kind = 'workload';
 
   insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, work_item_id)
-  values ('workload', 'claim', v_me.id, v_me.id, v_next, v_item.id);
+  values ('workload', 'claim', v_me.id, v_me.id, coalesce(v_next, v_me.id), v_item.id);
 
   return v_item;
 end;
