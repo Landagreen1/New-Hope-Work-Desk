@@ -64,6 +64,26 @@ export async function listActiveAgents(): Promise<ProfileLite[]> {
 }
 
 /**
+ * Return all active profiles regardless of role.
+ * Used for display-name resolution (e.g. "Created by" columns) where
+ * the creator could be any role: agent, customer_service, manager, super_admin.
+ */
+export async function listAllActiveProfiles(): Promise<ProfileLite[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,display_name,initials,role,is_active")
+    .eq("is_active", true)
+    .order("display_name");
+
+  if (error) {
+    throw new Error(`Unable to load profiles: ${error.message}`);
+  }
+
+  return (data ?? []) as ProfileLite[];
+}
+
+/**
  * Return the active employees who can be assigned renewal records.
  *
  * Managers control assignment but are not included as renewal assignees.

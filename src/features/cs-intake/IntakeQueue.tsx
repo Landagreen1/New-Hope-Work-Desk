@@ -4,7 +4,7 @@ import { CheckCircle2, Edit3, ExternalLink, Eye, FileText, RefreshCw, RotateCcw,
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { canManageCustomerService, canManageSales } from '@/lib/permissions';
-import { getSupabase, listActiveAgents } from '../nhwd-shared/client';
+import { getSupabase, listActiveAgents, listAllActiveProfiles } from '../nhwd-shared/client';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import { csIntakeStatusTone, statusLabel, ui } from '../nhwd-shared/ui';
@@ -83,6 +83,7 @@ export default function IntakeQueue({
   embedded?: boolean;
 }) {
   const [agents, setAgents] = useState<ProfileLite[]>([]);
+  const [allProfiles, setAllProfiles] = useState<ProfileLite[]>([]);
   const [rows, setRows] = useState<CsIntakeSubmission[]>([]);
   const [selected, setSelected] = useState<LoadedIntake | null>(null);
   const [modalMode, setModalMode] = useState<ModalMode>('view');
@@ -111,12 +112,14 @@ export default function IntakeQueue({
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      const [queueRows, activeAgents] = await Promise.all([
+      const [queueRows, activeAgents, activeProfiles] = await Promise.all([
         listAllIntakes(),
         listActiveAgents(),
+        listAllActiveProfiles(),
       ]);
       setRows(queueRows);
       setAgents(activeAgents);
+      setAllProfiles(activeProfiles);
       setLastUpdated(new Date());
 
       // Fetch quote statuses for converted rows that still have work_item_id
@@ -235,9 +238,9 @@ export default function IntakeQueue({
   // Resolve RC turn holder display name
   const rcTurnHolderName = useMemo(() => {
     if (!rcTurnHolderId) return 'Not assigned';
-    const found = agents.find((a) => a.id === rcTurnHolderId);
+    const found = allProfiles.find((a) => a.id === rcTurnHolderId);
     return found?.display_name ?? 'Loading…';
-  }, [rcTurnHolderId, agents]);
+  }, [rcTurnHolderId, allProfiles]);
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -318,7 +321,7 @@ export default function IntakeQueue({
 
   async function assign(row: CsIntakeSubmission, agentId: string) {
     if (!agentId) return;
-    await action(row.id, () => managerAssignIntake(row.id, agentId), `Intake assigned to ${profileName(agents, agentId)}.`);
+    await action(row.id, () => managerAssignIntake(row.id, agentId), `Intake assigned to ${profileName(allProfiles, agentId)}.`);
   }
 
   async function requestReturn(row: CsIntakeSubmission) {
@@ -537,7 +540,7 @@ export default function IntakeQueue({
                     {/* Agent (who claimed or is assigned) */}
                     <td className={ui.td}>
                       {row.claimed_by ? (
-                        <p className="font-bold text-slate-700">{profileName(agents, row.claimed_by)}</p>
+                        <p className="font-bold text-slate-700">{profileName(allProfiles, row.claimed_by)}</p>
                       ) : isRc && row.status === 'submitted' ? (
                         <div>
                           <p className="font-bold text-slate-700">{rcTurnHolderName}</p>
@@ -552,7 +555,7 @@ export default function IntakeQueue({
 
                     {/* Created By (who originally created the intake) */}
                     <td className={ui.td}>
-                      <p className="font-bold text-slate-700">{profileName(agents, row.created_by)}</p>
+                      <p className="font-bold text-slate-700">{profileName(allProfiles, row.created_by)}</p>
                     </td>
 
                     {/* Actions */}
