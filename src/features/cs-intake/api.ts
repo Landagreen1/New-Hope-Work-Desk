@@ -47,6 +47,7 @@ export interface CsIntakeSubmission {
   addr_state: string | null;
   addr_zip: string | null;
   mailing_same_as_addr: boolean;
+  is_walk_in: boolean;
   business_name: string | null;
   dot_number: string | null;
   dot_not_applicable: boolean;

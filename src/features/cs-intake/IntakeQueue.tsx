@@ -523,6 +523,7 @@ export default function IntakeQueue({
                       <div className="flex flex-wrap gap-2">
                         <span className={`${ui.badge} ${ui.badgeTone[csIntakeStatusTone[row.status] || 'neutral']}`}>{statusLabel(row.status)}</span>
                         <span className={`${ui.badge} ${row.priority === 'urgent' ? ui.badgeTone.danger : row.priority === 'high' ? ui.badgeTone.progress : ui.badgeTone.neutral}`}>{statusLabel(row.priority)}</span>
+                        {row.is_walk_in && <span className={`${ui.badge} bg-amber-100 text-amber-800 ring-1 ring-amber-300`}>Walk-in</span>}
                       </div>
                     </td>
 

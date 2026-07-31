@@ -597,6 +597,13 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         </div>
       </section>
 
+      {/* Walk-in office flag */}
+      <label className={`${ui.checkboxRow} rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4`}>
+        <input type="checkbox" disabled={disabled} checked={submission.is_walk_in ?? false} onChange={(event) => patch({ is_walk_in: event.target.checked } as Partial<DraftSubmission>)} />
+        <span className="text-sm font-black text-amber-900">Walk-in (Office)</span>
+        <span className="ml-2 text-xs font-semibold text-amber-700">— Customer is physically present. US team priority.</span>
+      </label>
+
       {/* Coverage and routing section — shown for personal-route LOBs (not commercial-routed, not non_owners which has its own) */}
       {(currentLob === 'personal_auto' || currentLob === 'commercial_auto' || currentLob === 'motorcycle' || currentLob === 'boat' || currentLob === 'trailer' || currentLob === 'renters') && (
       <Section icon={<ShieldCheck className="h-5 w-5" />} title="Coverage and routing" subtitle="Tell Sales what kind of quote is needed and where the lead came from.">
