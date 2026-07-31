@@ -1,0 +1,727 @@
+{
+  "eligibility_changes": {
+    "ok": true,
+    "rows": [
+      {
+        "created_at": "2026-07-18 17:32:40.337068+00",
+        "actor": "Andrea Rodriguez",
+        "target": "Estefania Bayas",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "true",
+        "old_rc": "true",
+        "new_rc": "true",
+        "old_wl": "true",
+        "new_wl": "true",
+        "old_avail": "unavailable",
+        "new_avail": "unavailable"
+      },
+      {
+        "created_at": "2026-07-18 17:32:36.549166+00",
+        "actor": "Andrea Rodriguez",
+        "target": "Estefania Bayas",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "true",
+        "new_wa": "false",
+        "old_rc": "true",
+        "new_rc": "true",
+        "old_wl": "true",
+        "new_wl": "true",
+        "old_avail": "unavailable",
+        "new_avail": "unavailable"
+      },
+      {
+        "created_at": "2026-07-15 17:54:39.135338+00",
+        "actor": "Oscar Landaverde",
+        "target": "Maria Trujillo",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "true",
+        "new_wa": "true",
+        "old_rc": "true",
+        "new_rc": "true",
+        "old_wl": "false",
+        "new_wl": "true",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-15 17:54:38.004576+00",
+        "actor": "Oscar Landaverde",
+        "target": "Maria Trujillo",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "true",
+        "new_wa": "true",
+        "old_rc": "false",
+        "new_rc": "true",
+        "old_wl": "false",
+        "new_wl": "false",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-15 17:54:36.792237+00",
+        "actor": "Oscar Landaverde",
+        "target": "Maria Trujillo",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "true",
+        "old_rc": "false",
+        "new_rc": "false",
+        "old_wl": "false",
+        "new_wl": "false",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-15 17:54:31.708936+00",
+        "actor": "Oscar Landaverde",
+        "target": "Maria Trujillo",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "false",
+        "old_rc": "false",
+        "new_rc": "false",
+        "old_wl": "true",
+        "new_wl": "false",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-15 17:54:30.172848+00",
+        "actor": "Oscar Landaverde",
+        "target": "Maria Trujillo",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "false",
+        "old_rc": "true",
+        "new_rc": "false",
+        "old_wl": "true",
+        "new_wl": "true",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-15 17:54:28.870078+00",
+        "actor": "Oscar Landaverde",
+        "target": "Maria Trujillo",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "true",
+        "new_wa": "false",
+        "old_rc": "true",
+        "new_rc": "true",
+        "old_wl": "true",
+        "new_wl": "true",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-15 03:30:35.981362+00",
+        "actor": "Oscar Landaverde",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "true",
+        "new_wa": "true",
+        "old_rc": "true",
+        "new_rc": "true",
+        "old_wl": "false",
+        "new_wl": "true",
+        "old_avail": "unavailable",
+        "new_avail": "unavailable"
+      },
+      {
+        "created_at": "2026-07-15 03:30:35.301652+00",
+        "actor": "Oscar Landaverde",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "true",
+        "new_wa": "true",
+        "old_rc": "false",
+        "new_rc": "true",
+        "old_wl": "false",
+        "new_wl": "false",
+        "old_avail": "unavailable",
+        "new_avail": "unavailable"
+      },
+      {
+        "created_at": "2026-07-15 03:30:34.520301+00",
+        "actor": "Oscar Landaverde",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "true",
+        "old_rc": "false",
+        "new_rc": "false",
+        "old_wl": "false",
+        "new_wl": "false",
+        "old_avail": "unavailable",
+        "new_avail": "unavailable"
+      },
+      {
+        "created_at": "2026-07-14 22:09:59.752044+00",
+        "actor": "Oscar Landaverde",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "false",
+        "old_rc": "true",
+        "new_rc": "false",
+        "old_wl": "false",
+        "new_wl": "false",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 22:09:58.533107+00",
+        "actor": "Oscar Landaverde",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "false",
+        "old_rc": "true",
+        "new_rc": "true",
+        "old_wl": "true",
+        "new_wl": "false",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 22:09:57.403336+00",
+        "actor": "Oscar Landaverde",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "false",
+        "old_rc": "false",
+        "new_rc": "true",
+        "old_wl": "true",
+        "new_wl": "true",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 22:09:55.739399+00",
+        "actor": "Oscar Landaverde",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "false",
+        "old_rc": "true",
+        "new_rc": "false",
+        "old_wl": "true",
+        "new_wl": "true",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 22:09:53.471834+00",
+        "actor": "Oscar Landaverde",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "true",
+        "new_wa": "false",
+        "old_rc": "true",
+        "new_rc": "true",
+        "old_wl": "true",
+        "new_wl": "true",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 20:51:53.186555+00",
+        "actor": "Andrea Rodriguez",
+        "target": "Galo Alfaro",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "true",
+        "old_rc": "true",
+        "new_rc": "true",
+        "old_wl": "true",
+        "new_wl": "true",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 20:51:51.215745+00",
+        "actor": "Andrea Rodriguez",
+        "target": "Galo Alfaro",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "true",
+        "new_wa": "false",
+        "old_rc": "true",
+        "new_rc": "true",
+        "old_wl": "true",
+        "new_wl": "true",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 20:50:53.736892+00",
+        "actor": "Oscar Landaverde",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "true",
+        "new_wa": "true",
+        "old_rc": "true",
+        "new_rc": "true",
+        "old_wl": "false",
+        "new_wl": "true",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 20:50:52.23879+00",
+        "actor": "Oscar Landaverde",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "true",
+        "new_wa": "true",
+        "old_rc": "false",
+        "new_rc": "true",
+        "old_wl": "false",
+        "new_wl": "false",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 20:50:48.246739+00",
+        "actor": "Oscar Landaverde",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "true",
+        "old_rc": "false",
+        "new_rc": "false",
+        "old_wl": "false",
+        "new_wl": "false",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 19:07:20.213003+00",
+        "actor": "Jason Toro",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "false",
+        "old_rc": "false",
+        "new_rc": "false",
+        "old_wl": "true",
+        "new_wl": "false",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 19:07:19.213155+00",
+        "actor": "Jason Toro",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "false",
+        "new_wa": "false",
+        "old_rc": "true",
+        "new_rc": "false",
+        "old_wl": "true",
+        "new_wl": "true",
+        "old_avail": "available",
+        "new_avail": "available"
+      },
+      {
+        "created_at": "2026-07-14 19:07:17.407549+00",
+        "actor": "Jason Toro",
+        "target": "Elvin Argueta",
+        "reason": "Manager changed rotation eligibility from Team Controls",
+        "old_wa": "true",
+        "new_wa": "false",
+        "old_rc": "true",
+        "new_rc": "true",
+        "old_wl": "true",
+        "new_wl": "true",
+        "old_avail": "available",
+        "new_avail": "available"
+      }
+    ]
+  },
+  "all_audit_recent": {
+    "ok": true,
+    "rows": [
+      {
+        "created_at": "2026-07-31 00:21:45.323136+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Mauricio Plaza",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-31 00:00:35.275858+00",
+        "action": "quote_note_added",
+        "actor": "Pablo Teran",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 23:50:11.227435+00",
+        "action": "quote_note_added",
+        "actor": "Estefania Bayas",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 23:47:01.190792+00",
+        "action": "quote_note_added",
+        "actor": "Miguel Leiva",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 23:45:18.617506+00",
+        "action": "quote_note_added",
+        "actor": "Miguel Leiva",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 23:24:49.7234+00",
+        "action": "quote_note_added",
+        "actor": "Estefania Bayas",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 23:13:59.015762+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Estefania Bayas",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 22:56:24.000852+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Mauricio Plaza",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 22:51:15.412742+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Pablo Teran",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 22:35:23.378792+00",
+        "action": "change_quote_outcome",
+        "actor": "Mauricio Plaza",
+        "target": null,
+        "reason": "sold"
+      },
+      {
+        "created_at": "2026-07-30 22:31:23.482834+00",
+        "action": "quote_note_added",
+        "actor": "Estefania Bayas",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 22:29:50.412933+00",
+        "action": "manual_workload_logged",
+        "actor": "Estefania Bayas",
+        "target": null,
+        "reason": "Logged without moving the Additional Workload rotation"
+      },
+      {
+        "created_at": "2026-07-30 22:11:00.433258+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Mauricio Plaza",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 22:05:31.853793+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Estefania Bayas",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 21:52:46.496586+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Mauricio Plaza",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 21:15:22.925415+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Maria Zumarraga",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 21:14:40.936595+00",
+        "action": "quote_note_added",
+        "actor": "Berenice Bollate",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 21:14:30.397554+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Berenice Bollate",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 21:13:46.367698+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Maria Trujillo",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 21:07:22.584457+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Juliana Abrego",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:51:47.878474+00",
+        "action": "quote_note_added",
+        "actor": "Berenice Bollate",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:48:53.079806+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Elvin Argueta",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:47:27.195587+00",
+        "action": "quote_deleted",
+        "actor": "Osmary MacGregor",
+        "target": null,
+        "reason": "Duplicate"
+      },
+      {
+        "created_at": "2026-07-30 20:47:03.039154+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Maria Zumarraga",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:46:15.810503+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Maria Zumarraga",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:39:04.036214+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Pablo Teran",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:38:29.448025+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Maria Trujillo",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:35:08.724334+00",
+        "action": "change_quote_outcome",
+        "actor": "Mauricio Plaza",
+        "target": null,
+        "reason": "sold"
+      },
+      {
+        "created_at": "2026-07-30 20:23:54.638728+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Estefania Bayas",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:20:30.075344+00",
+        "action": "quote_note_added",
+        "actor": "Galo Alfaro",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:16:00.025099+00",
+        "action": "manual_workload_logged",
+        "actor": "Juliana Abrego",
+        "target": null,
+        "reason": "Logged without moving the Additional Workload rotation"
+      },
+      {
+        "created_at": "2026-07-30 20:10:50.411332+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Galo Alfaro",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:00:49.64507+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Mauricio Plaza",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:59:27.868613+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Estefania Bayas",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:58:50.215518+00",
+        "action": "quote_note_added",
+        "actor": "Miguel Leiva",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:38:13.408214+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Maria Trujillo",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:37:20.812037+00",
+        "action": "password_reset",
+        "actor": "Oscar Landaverde",
+        "target": "Micaela Delgado",
+        "reason": "Manager-set temporary password reset from User Administration"
+      },
+      {
+        "created_at": "2026-07-30 19:36:06.985089+00",
+        "action": "change_quote_outcome",
+        "actor": "Mauricio Plaza",
+        "target": null,
+        "reason": "sold"
+      },
+      {
+        "created_at": "2026-07-30 19:35:52.115439+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Juliana Abrego",
+        "target": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:35:26.165695+00",
+        "action": "quote_moved_to_pending_pricing",
+        "actor": "Maria Zumarraga",
+        "target": null,
+        "reason": null
+      }
+    ]
+  },
+  "timers_cols": {
+    "ok": true,
+    "rows": [
+      {
+        "column_name": "id",
+        "data_type": "uuid"
+      },
+      {
+        "column_name": "rotation",
+        "data_type": "USER-DEFINED"
+      },
+      {
+        "column_name": "current_profile_id",
+        "data_type": "uuid"
+      },
+      {
+        "column_name": "started_by_profile_id",
+        "data_type": "uuid"
+      },
+      {
+        "column_name": "received_at",
+        "data_type": "timestamp with time zone"
+      },
+      {
+        "column_name": "deadline_at",
+        "data_type": "timestamp with time zone"
+      },
+      {
+        "column_name": "customer_name",
+        "data_type": "text"
+      },
+      {
+        "column_name": "dealer_id",
+        "data_type": "uuid"
+      },
+      {
+        "column_name": "work_type",
+        "data_type": "USER-DEFINED"
+      },
+      {
+        "column_name": "note",
+        "data_type": "text"
+      },
+      {
+        "column_name": "status",
+        "data_type": "text"
+      },
+      {
+        "column_name": "claimed_by_profile_id",
+        "data_type": "uuid"
+      },
+      {
+        "column_name": "source_work_item_id",
+        "data_type": "uuid"
+      },
+      {
+        "column_name": "started_at",
+        "data_type": "timestamp with time zone"
+      },
+      {
+        "column_name": "warning_sent_at",
+        "data_type": "timestamp with time zone"
+      },
+      {
+        "column_name": "completed_at",
+        "data_type": "timestamp with time zone"
+      },
+      {
+        "column_name": "salesperson_id",
+        "data_type": "uuid"
+      }
+    ]
+  },
+  "rotation_updated": {
+    "ok": true,
+    "rows": [
+      {
+        "kind": "whatsapp",
+        "current_profile_id": null,
+        "version": 873,
+        "updated_at": "2026-07-31 00:30:30.399646+00",
+        "updated_by_name": "Miguel Leiva"
+      },
+      {
+        "kind": "ringcentral",
+        "current_profile_id": null,
+        "version": 401,
+        "updated_at": "2026-07-31 00:30:30.399646+00",
+        "updated_by_name": "Miguel Leiva"
+      },
+      {
+        "kind": "workload",
+        "current_profile_id": null,
+        "version": 344,
+        "updated_at": "2026-07-31 01:02:38.345647+00",
+        "updated_by_name": "Estefania Bayas"
+      }
+    ]
+  }
+}

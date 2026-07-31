@@ -1,0 +1,408 @@
+{
+  "manager_fns": {
+    "ok": true,
+    "rows": [
+      {
+        "sig": "manager_set_rotation_current(p_rotation rotation_kind, p_profile_id uuid, p_reason text)",
+        "def": "CREATE OR REPLACE FUNCTION public.manager_set_rotation_current(p_rotation rotation_kind, p_profile_id uuid, p_reason text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_old uuid;\r\nbegin\r\n  if not public.can_manage_sales() then raise exception 'Manager permission required'; end if;\r\n  if nullif(trim(p_reason), '') is null then raise exception 'A reason is required'; end if;\r\n\r\n  select current_profile_id into v_old from public.rotation_state where kind = p_rotation for update;\r\n\r\n  update public.rotation_state\r\n  set current_profile_id = p_profile_id, version = version + 1, updated_at = now(), updated_by = auth.uid()\r\n  where kind = p_rotation;\r\n\r\n  insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, reason)\r\n  values (p_rotation, 'manual_change', auth.uid(), v_old, p_profile_id, p_reason);\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "manager_set_rotation_eligibility(p_profile_id uuid, p_rotation rotation_kind, p_active boolean, p_reason text)",
+        "def": "CREATE OR REPLACE FUNCTION public.manager_set_rotation_eligibility(p_profile_id uuid, p_rotation rotation_kind, p_active boolean, p_reason text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_old jsonb;\r\n  v_profile public.profiles%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_next uuid;\r\n  v_position integer;\r\nbegin\r\n  if not public.can_manage_sales() then raise exception 'Manager permission required'; end if;\r\n  if nullif(trim(p_reason), '') is null then raise exception 'A reason is required'; end if;\r\n\r\n  select * into v_profile from public.profiles where id = p_profile_id for update;\r\n  if not found or v_profile.role <> 'agent' then raise exception 'Active agent not found'; end if;\r\n  v_old := to_jsonb(v_profile);\r\n\r\n  if p_rotation = 'whatsapp' then\r\n    update public.profiles set whatsapp_active = p_active where id = p_profile_id;\r\n    v_position := v_profile.whatsapp_position;\r\n  elsif p_rotation = 'ringcentral' then\r\n    update public.profiles set ringcentral_active = p_active where id = p_profile_id;\r\n    v_position := v_profile.ringcentral_position;\r\n  else\r\n    update public.profiles set workload_active = p_active where id = p_profile_id;\r\n    v_position := v_profile.workload_position;\r\n  end if;\r\n\r\n  -- Pausing the current agent must not leave the queue stuck on someone who cannot act.\r\n  if not p_active then\r\n    select * into v_state from public.rotation_state where kind = p_rotation for update;\r\n    if v_state.current_profile_id = p_profile_id then\r\n      v_next := public.next_eligible_profile(p_rotation, v_position);\r\n      if v_next is not null and v_next <> p_profile_id then\r\n        update public.rotation_state\r\n        set current_profile_id = v_next, version = version + 1, updated_at = now(), updated_by = auth.uid()\r\n        where kind = p_rotation;\r\n\r\n        insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, reason)\r\n        values (p_rotation, 'auto_skip', auth.uid(), p_profile_id, v_next, 'Manager paused current agent from queue');\r\n      end if;\r\n    end if;\r\n  end if;\r\n\r\n  insert into public.audit_log(actor_profile_id, action, entity_type, entity_id, old_value, new_value, reason)\r\n  select auth.uid(), 'rotation_eligibility_changed', 'profile', p_profile_id, v_old, to_jsonb(p), p_reason\r\n  from public.profiles p where p.id = p_profile_id;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "manager_update_customer_service_overflow(p_enabled boolean, p_customer_service_profile_id uuid)",
+        "def": "CREATE OR REPLACE FUNCTION public.manager_update_customer_service_overflow(p_enabled boolean, p_customer_service_profile_id uuid DEFAULT NULL::uuid)\n RETURNS work_desk_settings\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_target public.profiles%rowtype;\r\n  v_settings public.work_desk_settings%rowtype;\r\nbegin\r\n  if not public.can_manage_sales() then raise exception 'Manager permission required'; end if;\r\n\r\n  if p_enabled then\r\n    if p_customer_service_profile_id is null then raise exception 'Select a Customer Service account before enabling overflow'; end if;\r\n    select * into v_target\r\n    from public.profiles\r\n    where id = p_customer_service_profile_id\r\n      and role = 'customer_service'\r\n      and is_active;\r\n    if not found then raise exception 'The overflow assignee must have the Customer Service role'; end if;\r\n  elsif p_customer_service_profile_id is not null then\r\n    select * into v_target\r\n    from public.profiles\r\n    where id = p_customer_service_profile_id\r\n      and role = 'customer_service'\r\n      and is_active;\r\n    if not found then raise exception 'Selected Customer Service account is not active'; end if;\r\n  end if;\r\n\r\n  insert into public.work_desk_settings(\r\n    singleton_id,\r\n    customer_service_overflow_enabled,\r\n    customer_service_profile_id,\r\n    updated_at,\r\n    updated_by\r\n  ) values (\r\n    true,\r\n    coalesce(p_enabled, false),\r\n    p_customer_service_profile_id,\r\n    now(),\r\n    auth.uid()\r\n  )\r\n  on conflict (singleton_id) do update set\r\n    customer_service_overflow_enabled = excluded.customer_service_overflow_enabled,\r\n    customer_service_profile_id = excluded.customer_service_profile_id,\r\n    updated_at = now(),\r\n    updated_by = auth.uid()\r\n  returning * into v_settings;\r\n\r\n  insert into public.audit_log(actor_profile_id, action, entity_type, entity_id, new_value, reason)\r\n  values (\r\n    auth.uid(),\r\n    'update_customer_service_overflow',\r\n    'work_desk_settings',\r\n    null,\r\n    jsonb_build_object(\r\n      'enabled', v_settings.customer_service_overflow_enabled,\r\n      'customer_service_profile_id', v_settings.customer_service_profile_id\r\n    ),\r\n    case when v_settings.customer_service_overflow_enabled\r\n      then 'Customer Service overflow enabled'\r\n      else 'Customer Service overflow disabled'\r\n    end\r\n  );\r\n\r\n  return v_settings;\r\nend;\r\n$function$\n"
+      }
+    ]
+  },
+  "business_date": {
+    "ok": true,
+    "rows": [
+      {
+        "business_date": "2026-07-30",
+        "db_now": "2026-07-31 00:50:35.697332+00",
+        "db_tz": "UTC"
+      }
+    ]
+  },
+  "business_date_fn": {
+    "ok": true,
+    "rows": [
+      {
+        "def": "CREATE OR REPLACE FUNCTION public.current_business_date()\n RETURNS date\n LANGUAGE sql\n STABLE\n SET search_path TO 'public'\nAS $function$\r\n  select (now() at time zone 'America/New_York')::date;\r\n$function$\n"
+      }
+    ]
+  },
+  "day_state": {
+    "ok": true,
+    "rows": [
+      {
+        "singleton_key": true,
+        "business_date": "2026-07-30",
+        "reset_at": "2026-07-30 04:00:00.022855+00"
+      }
+    ]
+  },
+  "daily_starts": {
+    "ok": true,
+    "rows": [
+      {
+        "business_date": "2026-07-30",
+        "rotation": "ringcentral",
+        "starter_profile_id": "70a20c34-29ea-458f-8876-65109ca3ffe5",
+        "display_name": "Berenice Bollate"
+      },
+      {
+        "business_date": "2026-07-30",
+        "rotation": "whatsapp",
+        "starter_profile_id": "70a20c34-29ea-458f-8876-65109ca3ffe5",
+        "display_name": "Berenice Bollate"
+      },
+      {
+        "business_date": "2026-07-30",
+        "rotation": "workload",
+        "starter_profile_id": "70a20c34-29ea-458f-8876-65109ca3ffe5",
+        "display_name": "Berenice Bollate"
+      },
+      {
+        "business_date": "2026-07-29",
+        "rotation": "ringcentral",
+        "starter_profile_id": "2e1ff749-1ed0-4810-9270-bb0ab5157a99",
+        "display_name": "Galo Alfaro"
+      },
+      {
+        "business_date": "2026-07-29",
+        "rotation": "whatsapp",
+        "starter_profile_id": "2e1ff749-1ed0-4810-9270-bb0ab5157a99",
+        "display_name": "Galo Alfaro"
+      },
+      {
+        "business_date": "2026-07-29",
+        "rotation": "workload",
+        "starter_profile_id": "2e1ff749-1ed0-4810-9270-bb0ab5157a99",
+        "display_name": "Galo Alfaro"
+      },
+      {
+        "business_date": "2026-07-28",
+        "rotation": "ringcentral",
+        "starter_profile_id": "38dc0842-e29d-44b2-8166-720ef98c8d55",
+        "display_name": "Maria Trujillo"
+      },
+      {
+        "business_date": "2026-07-28",
+        "rotation": "whatsapp",
+        "starter_profile_id": "38dc0842-e29d-44b2-8166-720ef98c8d55",
+        "display_name": "Maria Trujillo"
+      },
+      {
+        "business_date": "2026-07-28",
+        "rotation": "workload",
+        "starter_profile_id": "38dc0842-e29d-44b2-8166-720ef98c8d55",
+        "display_name": "Maria Trujillo"
+      },
+      {
+        "business_date": "2026-07-27",
+        "rotation": "ringcentral",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-27",
+        "rotation": "whatsapp",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-27",
+        "rotation": "workload",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-26",
+        "rotation": "ringcentral",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-26",
+        "rotation": "whatsapp",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-26",
+        "rotation": "workload",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-25",
+        "rotation": "ringcentral",
+        "starter_profile_id": "2e1ff749-1ed0-4810-9270-bb0ab5157a99",
+        "display_name": "Galo Alfaro"
+      },
+      {
+        "business_date": "2026-07-25",
+        "rotation": "whatsapp",
+        "starter_profile_id": "2e1ff749-1ed0-4810-9270-bb0ab5157a99",
+        "display_name": "Galo Alfaro"
+      },
+      {
+        "business_date": "2026-07-25",
+        "rotation": "workload",
+        "starter_profile_id": "2e1ff749-1ed0-4810-9270-bb0ab5157a99",
+        "display_name": "Galo Alfaro"
+      },
+      {
+        "business_date": "2026-07-24",
+        "rotation": "ringcentral",
+        "starter_profile_id": "87fa5a57-a654-4f7f-a7c5-5738f8f2c70d",
+        "display_name": "Miguel Leiva"
+      },
+      {
+        "business_date": "2026-07-24",
+        "rotation": "whatsapp",
+        "starter_profile_id": "87fa5a57-a654-4f7f-a7c5-5738f8f2c70d",
+        "display_name": "Miguel Leiva"
+      },
+      {
+        "business_date": "2026-07-24",
+        "rotation": "workload",
+        "starter_profile_id": "87fa5a57-a654-4f7f-a7c5-5738f8f2c70d",
+        "display_name": "Miguel Leiva"
+      },
+      {
+        "business_date": "2026-07-23",
+        "rotation": "ringcentral",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-23",
+        "rotation": "whatsapp",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-23",
+        "rotation": "workload",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-22",
+        "rotation": "ringcentral",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-22",
+        "rotation": "whatsapp",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-22",
+        "rotation": "workload",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-21",
+        "rotation": "ringcentral",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-21",
+        "rotation": "whatsapp",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      },
+      {
+        "business_date": "2026-07-21",
+        "rotation": "workload",
+        "starter_profile_id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga"
+      }
+    ]
+  },
+  "eligibility_audit_tables": {
+    "ok": true,
+    "rows": [
+      {
+        "relname": "audit_log"
+      },
+      {
+        "relname": "commercial_quote_column_history"
+      },
+      {
+        "relname": "failed_history_events"
+      },
+      {
+        "relname": "intake_history_events"
+      },
+      {
+        "relname": "profiles"
+      },
+      {
+        "relname": "quote_history_events"
+      }
+    ]
+  },
+  "agent_eligibility": {
+    "ok": true,
+    "rows": [
+      {
+        "display_name": "Berenice Bollate",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "wa_on": true,
+        "wa_pos": 2,
+        "rc_on": true,
+        "rc_pos": 2,
+        "wl_on": true,
+        "wl_pos": 2
+      },
+      {
+        "display_name": "Mauricio Plaza",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "wa_on": true,
+        "wa_pos": 3,
+        "rc_on": true,
+        "rc_pos": 3,
+        "wl_on": true,
+        "wl_pos": 3
+      },
+      {
+        "display_name": "Galo Alfaro",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "wa_on": true,
+        "wa_pos": 4,
+        "rc_on": true,
+        "rc_pos": 4,
+        "wl_on": true,
+        "wl_pos": 4
+      },
+      {
+        "display_name": "Estefania Bayas",
+        "role": "agent",
+        "is_active": true,
+        "availability": "available",
+        "wa_on": true,
+        "wa_pos": 5,
+        "rc_on": true,
+        "rc_pos": 5,
+        "wl_on": true,
+        "wl_pos": 5
+      },
+      {
+        "display_name": "Pablo Teran",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "wa_on": true,
+        "wa_pos": 6,
+        "rc_on": true,
+        "rc_pos": 6,
+        "wl_on": true,
+        "wl_pos": 6
+      },
+      {
+        "display_name": "Elvin Argueta",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "wa_on": true,
+        "wa_pos": 7,
+        "rc_on": true,
+        "rc_pos": 7,
+        "wl_on": true,
+        "wl_pos": 7
+      },
+      {
+        "display_name": "Miguel Leiva",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "wa_on": true,
+        "wa_pos": 8,
+        "rc_on": true,
+        "rc_pos": 8,
+        "wl_on": true,
+        "wl_pos": 8
+      },
+      {
+        "display_name": "Maria Zumarraga",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "wa_on": true,
+        "wa_pos": 9,
+        "rc_on": true,
+        "rc_pos": 9,
+        "wl_on": true,
+        "wl_pos": 9
+      },
+      {
+        "display_name": "Maria Trujillo",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "wa_on": true,
+        "wa_pos": 10,
+        "rc_on": true,
+        "rc_pos": 10,
+        "wl_on": true,
+        "wl_pos": 10
+      },
+      {
+        "display_name": "Juliana Abrego",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "wa_on": true,
+        "wa_pos": 11,
+        "rc_on": true,
+        "rc_pos": 11,
+        "wl_on": true,
+        "wl_pos": 11
+      },
+      {
+        "display_name": "Micaela Delgado",
+        "role": "sales_supervisor",
+        "is_active": true,
+        "availability": "unavailable",
+        "wa_on": false,
+        "wa_pos": 14,
+        "rc_on": false,
+        "rc_pos": 14,
+        "wl_on": false,
+        "wl_pos": 14
+      }
+    ]
+  },
+  "recent_rotation_updates": {
+    "ok": false,
+    "error": "HTTP 400: {\"message\":\"Failed to run sql query: ERROR:  42702: column reference \\\"updated_at\\\" is ambiguous\\nLINE 2:     select kind::text as kind, current_profile_id, version, updated_at, updated_by,\\n                                                                    ^\\n\"}"
+  },
+  "events_after": {
+    "ok": true,
+    "rows": [
+      {
+        "events_after_0031": 1
+      }
+    ]
+  },
+  "timer_state": {
+    "ok": false,
+    "error": "HTTP 400: {\"message\":\"Failed to run sql query: ERROR:  42703: column t.claimed_at does not exist\\nLINE 3:            pr.display_name as current_name, t.deadline_at, t.claimed_at,\\n                                                                   ^\\n\"}"
+  }
+}

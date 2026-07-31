@@ -1,0 +1,2677 @@
+{
+  "fn_inventory": {
+    "ok": true,
+    "rowCount": 42,
+    "rows": [
+      {
+        "name": "_create_quote_from_intake",
+        "args": "p_intake_id uuid, p_agent_id uuid, p_method text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "5fd03767b0a09c2abdd39855980dd52b",
+        "body_len": 6074
+      },
+      {
+        "name": "_generate_intake_note_log",
+        "args": "p_intake_id uuid, p_agent_name text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "3bddab05711fd35df0ead5912edc1c4e",
+        "body_len": 18151
+      },
+      {
+        "name": "assign_customer_intake",
+        "args": "p_intake_id uuid, p_agent_id uuid, p_reason text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "a110f34b97df6545d00baf3ce5a543b9",
+        "body_len": 2619
+      },
+      {
+        "name": "can_edit_cs_intake",
+        "args": "p_submission_id uuid",
+        "security_definer": true,
+        "lang": "sql",
+        "body_md5": "fb8e67a4b76cdc54754ea772b824dd28",
+        "body_len": 599
+      },
+      {
+        "name": "can_read_cs_intake",
+        "args": "p_submission_id uuid",
+        "security_definer": true,
+        "lang": "sql",
+        "body_md5": "c062423cd2159e0887f03bec8027dced",
+        "body_len": 700
+      },
+      {
+        "name": "claim_linked_workload_turn",
+        "args": "p_related_quote_source_work_item_id uuid, p_work_type work_type, p_change_type text, p_note text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "cd22b6fd9b9ca27181fb7492b48f614d",
+        "body_len": 4669
+      },
+      {
+        "name": "claim_ringcentral_intake",
+        "args": "p_intake_id uuid",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "74b1d668b73a83d4a38522fd1f8e2cea",
+        "body_len": 4108
+      },
+      {
+        "name": "claim_ringcentral_quote",
+        "args": "p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "d92d59d38b60f27412d20ac6658abadb",
+        "body_len": 2446
+      },
+      {
+        "name": "claim_ringcentral_quote_v094",
+        "args": "p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_note text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "c37e3df3ecf558bc225792ced5cac72a",
+        "body_len": 691
+      },
+      {
+        "name": "claim_timed_quote",
+        "args": "p_timer_id uuid",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "c48b156607214be9842a7f4cdd3b53ef",
+        "body_len": 3330
+      },
+      {
+        "name": "claim_unlinked_workload_turn",
+        "args": "p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text, p_note text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "5f60615ad9e444a137cc7b510d6ac175",
+        "body_len": 4357
+      },
+      {
+        "name": "claim_unlinked_workload_turn_v094",
+        "args": "p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text, p_note text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "e7028e6ff5e466816268076175e95984",
+        "body_len": 1329
+      },
+      {
+        "name": "claim_whatsapp_quote",
+        "args": "p_customer_name text, p_dealer_id uuid, p_note text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "d6dc1e7c42b1d92ef562fb3945798b4a",
+        "body_len": 2256
+      },
+      {
+        "name": "claim_whatsapp_quote_v094",
+        "args": "p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_note text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "7769885929569b4e97374d2d3f6dc1dd",
+        "body_len": 649
+      },
+      {
+        "name": "claim_workload_turn",
+        "args": "p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "dfdd0c98376c9a6e9f5c748572efbb5c",
+        "body_len": 2190
+      },
+      {
+        "name": "cs_intake_claim",
+        "args": "p_submission_id uuid",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "aeecf35c777b1fcce41da2a0766ad8e4",
+        "body_len": 1317
+      },
+      {
+        "name": "cs_intake_claim_ringcentral",
+        "args": "p_submission_id uuid",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "8d34a23014f1dea08577d7e48aa3cbb0",
+        "body_len": 5384
+      },
+      {
+        "name": "cs_intake_convert",
+        "args": "p_submission_id uuid",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "67880b709ed13972d3f36f7437477c96",
+        "body_len": 6031
+      },
+      {
+        "name": "cs_intake_manager_assign",
+        "args": "p_submission_id uuid, p_agent_id uuid",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "68e7e6e76840f3099b4d5202c2a5af14",
+        "body_len": 2198
+      },
+      {
+        "name": "cs_intake_return",
+        "args": "p_submission_id uuid, p_reason text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "5ceba2193cccd494925f8394470c4531",
+        "body_len": 1311
+      },
+      {
+        "name": "cs_intake_submit",
+        "args": "p_submission_id uuid",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "e1c7a3a8150740c8d13cb7d2f265a114",
+        "body_len": 7863
+      },
+      {
+        "name": "cs_intake_submit_commercial",
+        "args": "p_submission_id uuid",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "7d0fed081b16127c9545488a2d9d3b0c",
+        "body_len": 13510
+      },
+      {
+        "name": "cs_intake_submit_commercial",
+        "args": "p_submission_id uuid, p_assigned_to uuid",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "578636c735d1bd2d1baab15df6390c26",
+        "body_len": 12244
+      },
+      {
+        "name": "cs_intake_touch_updated_at",
+        "args": "",
+        "security_definer": false,
+        "lang": "plpgsql",
+        "body_md5": "9b7f2b5a27c9e7129d18072a327524c1",
+        "body_len": 178
+      },
+      {
+        "name": "delete_customer_intake",
+        "args": "p_intake_id uuid, p_reason text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "8609ccfb6c2de9514127bb536096437f",
+        "body_len": 3373
+      },
+      {
+        "name": "ensure_daily_availability_reset",
+        "args": "",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "dd7928705212217b34b0dc7d8b402da6",
+        "body_len": 1344
+      },
+      {
+        "name": "log_manual_workload",
+        "args": "p_mode text, p_related_quote_source_work_item_id uuid, p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text, p_note text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "89dca8f63828091096b649e436bdb3b1",
+        "body_len": 6385
+      },
+      {
+        "name": "manager_set_rotation_current",
+        "args": "p_rotation rotation_kind, p_profile_id uuid, p_reason text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "c2567d97e2e0566165e62c13a2da0d72",
+        "body_len": 933
+      },
+      {
+        "name": "manager_set_rotation_eligibility",
+        "args": "p_profile_id uuid, p_rotation rotation_kind, p_active boolean, p_reason text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "62e4d62f0b0abae3136a09ebf91f9aa7",
+        "body_len": 2447
+      },
+      {
+        "name": "next_eligible_profile",
+        "args": "p_rotation rotation_kind, p_after_position integer",
+        "security_definer": true,
+        "lang": "sql",
+        "body_md5": "b4d0a57a38ddff08a662b600035bdbeb",
+        "body_len": 962
+      },
+      {
+        "name": "notify_intake_claimed",
+        "args": "",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "0976bbca6663515419683f37b7402db7",
+        "body_len": 1165
+      },
+      {
+        "name": "notify_intake_submitted",
+        "args": "",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "e9b85f57e8b07da41598082e6a1a9364",
+        "body_len": 1963
+      },
+      {
+        "name": "pass_my_turn",
+        "args": "p_rotation rotation_kind, p_reason text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "42ab312c806098411ca81fefe705093b",
+        "body_len": 1761
+      },
+      {
+        "name": "pass_workload_to_customer_service",
+        "args": "p_work_item_id uuid, p_reason text, p_handoff_note text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "e8ab75b14b569b6852a02400a9589936",
+        "body_len": 4526
+      },
+      {
+        "name": "restore_customer_intake",
+        "args": "p_intake_id uuid, p_reason text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "d92c44bb7abce4f7cb6345010e9c51d6",
+        "body_len": 3945
+      },
+      {
+        "name": "set_my_availability",
+        "args": "p_status availability_status",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "715d2b08aa56e574b5a6a031f63eed89",
+        "body_len": 4887
+      },
+      {
+        "name": "steal_timed_quote",
+        "args": "p_timer_id uuid",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "2be53b6dd82b5d20b50c35fbb8a03cff",
+        "body_len": 5065
+      },
+      {
+        "name": "take_quote_turn",
+        "args": "p_rotation rotation_kind, p_received_at timestamp with time zone, p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "0e672a7b1f591bd8948053cb3aeadac5",
+        "body_len": 6631
+      },
+      {
+        "name": "update_customer_intake",
+        "args": "p_intake_id uuid, p_changes jsonb, p_reason text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "4deb25b3be10a5be130bc16b00dcccd9",
+        "body_len": 8212
+      },
+      {
+        "name": "workload_log_list",
+        "args": "p_from timestamp with time zone, p_to timestamp with time zone, p_include_voided boolean",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "f1dd9a67781f333584438683ab905837",
+        "body_len": 3039
+      },
+      {
+        "name": "workload_reassign",
+        "args": "p_work_item_id uuid, p_profile_id uuid, p_reason text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "dda61311d7122b000832f9b548601443",
+        "body_len": 2874
+      },
+      {
+        "name": "workload_void",
+        "args": "p_work_item_id uuid, p_reason text",
+        "security_definer": true,
+        "lang": "plpgsql",
+        "body_md5": "b44732a3138d20f52fb11a99e489ec2d",
+        "body_len": 1780
+      }
+    ]
+  },
+  "fn_bodies_core": {
+    "ok": true,
+    "rowCount": 6,
+    "rows": [
+      {
+        "sig": "current_business_date()",
+        "def": "CREATE OR REPLACE FUNCTION public.current_business_date()\n RETURNS date\n LANGUAGE sql\n STABLE\n SET search_path TO 'public'\nAS $function$\r\n  select (now() at time zone 'America/New_York')::date;\r\n$function$\n"
+      },
+      {
+        "sig": "ensure_daily_availability_reset()",
+        "def": "CREATE OR REPLACE FUNCTION public.ensure_daily_availability_reset()\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\r\ndeclare\r\n  v_today date := public.current_business_date();\r\n  v_last_business_date date;\r\nbegin\r\n  perform pg_advisory_xact_lock(707200072);\r\n\r\n  insert into public.availability_day_state(singleton_key, business_date, reset_at)\r\n  values (true, v_today, now())\r\n  on conflict (singleton_key) do nothing;\r\n\r\n  select business_date\r\n  into v_last_business_date\r\n  from public.availability_day_state\r\n  where singleton_key = true\r\n  for update;\r\n\r\n  if v_last_business_date < v_today then\r\n    update public.profiles\r\n    set availability = 'unavailable'\r\n    where role::text = 'agent'\r\n      and is_active;\r\n\r\n    update public.rotation_state\r\n    set current_profile_id = null,\r\n        version = version + 1,\r\n        updated_at = now(),\r\n        updated_by = null\r\n    where kind::text in ('whatsapp', 'ringcentral', 'workload');\r\n\r\n    update public.user_notifications\r\n    set read_at = now()\r\n    where notification_type = 'turn'\r\n      and read_at is null;\r\n\r\n    update public.availability_day_state\r\n    set business_date = v_today,\r\n        reset_at = now()\r\n    where singleton_key = true;\r\n\r\n    return true;\r\n  end if;\r\n\r\n  return false;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "is_agent()",
+        "def": "CREATE OR REPLACE FUNCTION public.is_agent()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\n  select exists (\r\n    select 1 from public.profiles\r\n    where id = auth.uid() and role = 'agent' and is_active\r\n  );\r\n$function$\n"
+      },
+      {
+        "sig": "next_eligible_profile(p_rotation rotation_kind, p_after_position integer)",
+        "def": "CREATE OR REPLACE FUNCTION public.next_eligible_profile(p_rotation rotation_kind, p_after_position integer)\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\n  SELECT p.id\r\n  FROM public.profiles p\r\n  WHERE p.is_active\r\n    AND p.role = 'agent'\r\n    AND p.availability = 'available'\r\n    AND CASE\r\n      WHEN p_rotation = 'whatsapp' THEN p.whatsapp_active\r\n      WHEN p_rotation = 'ringcentral' THEN p.ringcentral_active\r\n      ELSE p.workload_active\r\n    END\r\n    AND CASE\r\n      WHEN p_rotation = 'whatsapp' THEN p.whatsapp_position > p_after_position\r\n      WHEN p_rotation = 'ringcentral' THEN p.ringcentral_position > p_after_position\r\n      ELSE p.workload_position > p_after_position\r\n    END\r\n  ORDER BY\r\n    CASE\r\n      WHEN p_rotation = 'whatsapp' THEN p.whatsapp_position\r\n      WHEN p_rotation = 'ringcentral' THEN p.ringcentral_position\r\n      ELSE p.workload_position\r\n    END\r\n  LIMIT 1;\r\n$function$\n"
+      },
+      {
+        "sig": "pass_my_turn(p_rotation rotation_kind, p_reason text)",
+        "def": "CREATE OR REPLACE FUNCTION public.pass_my_turn(p_rotation rotation_kind, p_reason text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_next uuid;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n  if p_rotation = 'workload' then\r\n    raise exception 'Additional Workload turns cannot be passed. Take the task and use Customer Service overflow after acceptance when needed.';\r\n  end if;\r\n  if nullif(trim(p_reason), '') is null then raise exception 'A pass reason is required'; end if;\r\n\r\n  perform public.ensure_daily_availability_reset();\r\n\r\n  select * into v_me from public.profiles where id = auth.uid() and is_active for update;\r\n  if not found then raise exception 'Active profile not found'; end if;\r\n\r\n  select * into v_state from public.rotation_state where kind = p_rotation for update;\r\n  if v_state.current_profile_id is distinct from v_me.id then raise exception 'This turn belongs to another agent'; end if;\r\n\r\n  v_next := public.next_eligible_profile(\r\n    p_rotation,\r\n    case when p_rotation = 'whatsapp' then v_me.whatsapp_position else v_me.ringcentral_position end\r\n  );\r\n  if v_next is null then raise exception 'No eligible next agent'; end if;\r\n\r\n  update public.rotation_state\r\n  set current_profile_id = v_next,\r\n      version = version + 1,\r\n      updated_at = now(),\r\n      updated_by = v_me.id\r\n  where kind = p_rotation;\r\n\r\n  insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, reason)\r\n  values (p_rotation, 'pass', v_me.id, v_me.id, v_next, btrim(p_reason));\r\n\r\n  return v_next;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "set_my_availability(p_status availability_status)",
+        "def": "CREATE OR REPLACE FUNCTION public.set_my_availability(p_status availability_status)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_rotation public.rotation_state%rowtype;\r\n  v_next uuid;\r\n  v_previous uuid;\r\n  v_eligible boolean;\r\n  v_current_usable boolean;\r\n  v_started_today boolean;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n\r\n  perform public.ensure_daily_availability_reset();\r\n\r\n  select * into v_me\r\n  from public.profiles\r\n  where id = auth.uid() and is_active\r\n  for update;\r\n\r\n  if not found then raise exception 'Active profile not found'; end if;\r\n\r\n  update public.profiles\r\n  set availability = p_status\r\n  where id = v_me.id;\r\n\r\n  if p_status = 'available' then\r\n    for v_rotation in select * from public.rotation_state order by kind for update loop\r\n      v_eligible := case\r\n        when v_rotation.kind = 'whatsapp' then v_me.whatsapp_active\r\n        when v_rotation.kind = 'ringcentral' then v_me.ringcentral_active\r\n        else v_me.workload_active\r\n      end;\r\n\r\n      if v_eligible then\r\n        if v_rotation.current_profile_id is null then\r\n          select exists (\r\n            select 1\r\n            from public.daily_rotation_starts d\r\n            where d.business_date = public.current_business_date()\r\n              and d.rotation = v_rotation.kind\r\n          ) into v_started_today;\r\n\r\n          if not v_started_today then\r\n            insert into public.daily_rotation_starts(business_date, rotation, starter_profile_id)\r\n            values (public.current_business_date(), v_rotation.kind, v_me.id)\r\n            on conflict (business_date, rotation) do nothing;\r\n          end if;\r\n\r\n          update public.rotation_state\r\n          set current_profile_id = v_me.id,\r\n              version = version + 1,\r\n              updated_at = now(),\r\n              updated_by = v_me.id\r\n          where kind = v_rotation.kind;\r\n\r\n          insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, reason)\r\n          values (\r\n            v_rotation.kind,\r\n            case when v_started_today then 'auto_skip' else 'daily_start' end,\r\n            v_me.id,\r\n            null,\r\n            v_me.id,\r\n            case when v_started_today then 'Empty queue resumed when an eligible agent became available' else 'First eligible agent available for the business day' end\r\n          );\r\n        else\r\n          select exists (\r\n            select 1 from public.profiles p\r\n            where p.id = v_rotation.current_profile_id\r\n              and p.is_active\r\n              and p.role = 'agent'\r\n              and p.availability = 'available'\r\n              and case\r\n                when v_rotation.kind = 'whatsapp' then p.whatsapp_active\r\n                when v_rotation.kind = 'ringcentral' then p.ringcentral_active\r\n                else p.workload_active\r\n              end\r\n          ) into v_current_usable;\r\n\r\n          if not v_current_usable then\r\n            v_previous := v_rotation.current_profile_id;\r\n\r\n            update public.rotation_state\r\n            set current_profile_id = v_me.id,\r\n                version = version + 1,\r\n                updated_at = now(),\r\n                updated_by = v_me.id\r\n            where kind = v_rotation.kind;\r\n\r\n            insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, reason)\r\n            values (v_rotation.kind, 'auto_skip', v_me.id, v_previous, v_me.id, 'Stale queue corrected when an eligible agent became available');\r\n          end if;\r\n        end if;\r\n      end if;\r\n    end loop;\r\n  else\r\n    for v_rotation in select * from public.rotation_state order by kind for update loop\r\n      if v_rotation.current_profile_id = v_me.id then\r\n        v_next := public.next_eligible_profile(\r\n          v_rotation.kind,\r\n          case\r\n            when v_rotation.kind = 'whatsapp' then v_me.whatsapp_position\r\n            when v_rotation.kind = 'ringcentral' then v_me.ringcentral_position\r\n            else v_me.workload_position\r\n          end\r\n        );\r\n\r\n        update public.rotation_state\r\n        set current_profile_id = v_next,\r\n            version = version + 1,\r\n            updated_at = now(),\r\n            updated_by = v_me.id\r\n        where kind = v_rotation.kind;\r\n\r\n        insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, reason)\r\n        values (\r\n          v_rotation.kind,\r\n          'auto_skip',\r\n          v_me.id,\r\n          v_me.id,\r\n          v_next,\r\n          case when v_next is null then 'Agent became unavailable and no eligible agent is currently available' else 'Agent became unavailable' end\r\n        );\r\n      end if;\r\n    end loop;\r\n  end if;\r\nend;\r\n$function$\n"
+      }
+    ]
+  },
+  "fn_bodies_claims": {
+    "ok": true,
+    "rowCount": 23,
+    "rows": [
+      {
+        "sig": "claim_linked_workload_turn(p_related_quote_source_work_item_id uuid, p_work_type work_type, p_change_type text, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.claim_linked_workload_turn(p_related_quote_source_work_item_id uuid, p_work_type work_type, p_change_type text DEFAULT NULL::text, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_next uuid;\r\n  v_item public.work_items%rowtype;\r\n  v_customer_name text;\r\n  v_dealer_id uuid;\r\n  v_quote_owner_id uuid;\r\n  v_quote_assigned_id uuid;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n  if p_work_type not in ('activation', 'change') then raise exception 'Additional Workload only accepts activations or changes'; end if;\r\n  if p_related_quote_source_work_item_id is null then raise exception 'Select the existing quote this workload belongs to'; end if;\r\n\r\n  perform public.ensure_daily_availability_reset();\r\n\r\n  select * into v_me from public.profiles where id = auth.uid() and is_active for update;\r\n  if not found then raise exception 'Active profile not found'; end if;\r\n  if v_me.availability <> 'available' or not v_me.workload_active then raise exception 'Set your status to Available before taking Additional Workload'; end if;\r\n\r\n  select q.customer_name, q.dealer_id, q.original_owner_profile_id, q.assigned_profile_id\r\n  into v_customer_name, v_dealer_id, v_quote_owner_id, v_quote_assigned_id\r\n  from (\r\n    select w.customer_name, w.dealer_id, w.original_owner_profile_id, w.assigned_profile_id, w.created_at as stage_at\r\n    from public.work_items w\r\n    where w.id = p_related_quote_source_work_item_id\r\n      and w.work_type in ('new_quote', 'requote')\r\n    union all\r\n    select p.customer_name, p.dealer_id, p.original_owner_profile_id, p.assigned_profile_id, p.price_sent_at\r\n    from public.pending_pricing_quotes p\r\n    where p.source_work_item_id = p_related_quote_source_work_item_id\r\n    union all\r\n    select o.customer_name, o.dealer_id, o.original_owner_profile_id, o.assigned_profile_id, o.finalized_at\r\n    from public.quote_outcomes o\r\n    where o.source_work_item_id = p_related_quote_source_work_item_id\r\n  ) q\r\n  order by q.stage_at desc\r\n  limit 1;\r\n\r\n  if v_customer_name is null then raise exception 'The selected quote no longer exists'; end if;\r\n\r\n  select * into v_state from public.rotation_state where kind = 'workload' for update;\r\n  if not found then raise exception 'Additional Workload queue is not initialized'; end if;\r\n  if v_state.current_profile_id is null then raise exception 'No agent has started the Additional Workload queue today. Click Available to start it'; end if;\r\n  if v_state.current_profile_id is distinct from v_me.id then raise exception 'This Additional Workload turn belongs to another agent'; end if;\r\n\r\n  insert into public.work_items(\r\n    customer_name, dealer_id, work_type, original_owner_profile_id,\r\n    assigned_profile_id, assignment_method, status, change_type, note,\r\n    received_through, created_by, accepted_at, related_quote_source_work_item_id\r\n  ) values (\r\n    v_customer_name, v_dealer_id, p_work_type, coalesce(v_quote_owner_id, v_quote_assigned_id),\r\n    v_me.id, 'workload_turn', 'active', nullif(btrim(p_change_type), ''), nullif(btrim(p_note), ''),\r\n    'Linked quote', v_me.id, now(), p_related_quote_source_work_item_id\r\n  ) returning * into v_item;\r\n\r\n  insert into public.work_item_events(source_work_item_id, event_type, actor_profile_id, assigned_profile_id, details, created_at)\r\n  values (\r\n    p_related_quote_source_work_item_id,\r\n    case when p_work_type = 'activation' then 'activation' else 'change' end,\r\n    v_me.id,\r\n    coalesce(v_quote_assigned_id, v_me.id),\r\n    jsonb_build_object('service_work_item_id', v_item.id, 'change_type', nullif(btrim(p_change_type), ''), 'note', nullif(btrim(p_note), '')),\r\n    now()\r\n  );\r\n\r\n  perform public.add_quote_note_if_present(p_related_quote_source_work_item_id, v_me.id, p_note);\r\n\r\n  if p_work_type = 'activation' then\r\n    perform public.finalize_quote_as_sold_from_activation(p_related_quote_source_work_item_id, v_me.id);\r\n  end if;\r\n\r\n  v_next := public.next_eligible_profile('workload', v_me.workload_position);\r\n\r\n  update public.rotation_state\r\n  set current_profile_id = coalesce(v_next, v_me.id),\r\n      version = version + 1,\r\n      updated_at = now(),\r\n      updated_by = v_me.id\r\n  where kind = 'workload';\r\n\r\n  insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, work_item_id)\r\n  values ('workload', 'claim', v_me.id, v_me.id, coalesce(v_next, v_me.id), v_item.id);\r\n\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "claim_ringcentral_intake(p_intake_id uuid)",
+        "def": "CREATE OR REPLACE FUNCTION public.claim_ringcentral_intake(p_intake_id uuid)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\n SET statement_timeout TO '30s'\nAS $function$\ndeclare\n  v_intake          customer_intakes%rowtype;\n  v_caller_id       uuid := auth.uid();\n  v_caller_profile  profiles%rowtype;\n  v_current_rc_id   uuid;\n  v_quote_id        uuid;\nbegin\n  begin\n    select * into v_intake\n    from customer_intakes\n    where id = p_intake_id\n    for update nowait;\n  exception\n    when lock_not_available then\n      raise exception 'ALREADY_LOCKED: Another operation is in progress on this intake. Please try again.';\n  end;\n\n  if not found then\n    raise exception 'INTAKE_NOT_FOUND: Intake % does not exist.', p_intake_id;\n  end if;\n\n  if v_intake.source_type != 'ringcentral' then\n    raise exception 'NOT_RINGCENTRAL: This intake is not RingCentral-sourced.';\n  end if;\n\n  if v_intake.status not in ('submitted', 'waiting_for_claim') then\n    raise exception 'INVALID_STATUS: Intake status \"%\" does not allow claiming.', v_intake.status;\n  end if;\n\n  if v_intake.assigned_to is not null then\n    raise exception 'ALREADY_CLAIMED: This intake has already been claimed.';\n  end if;\n\n  select * into v_caller_profile\n  from profiles\n  where id = v_caller_id;\n\n  if not found then\n    raise exception 'CALLER_NOT_FOUND: No active profile for the authenticated user.';\n  end if;\n\n  -- Managers and super_admins can override the claim\n  if v_caller_profile.role in ('manager', 'super_admin') then\n    null;\n  elsif v_caller_profile.role = 'agent' then\n    if not v_caller_profile.ringcentral_active then\n      raise exception 'NOT_RC_AGENT: You are not active in the RingCentral rotation.';\n    end if;\n\n    select current_profile_id into v_current_rc_id\n    from rotation_state\n    where kind = 'ringcentral';\n\n    if v_current_rc_id is null then\n      raise exception 'NO_RC_AGENT: No RingCentral agent is currently available.';\n    end if;\n\n    if v_caller_id != v_current_rc_id then\n      raise exception 'NOT_YOUR_TURN: Current RingCentral turn belongs to another agent.';\n    end if;\n  else\n    raise exception 'UNAUTHORIZED: Only Agents or Managers can claim intakes.';\n  end if;\n\n  -- Managers/super_admins are exempt from availability check\n  if v_caller_profile.role not in ('manager', 'super_admin') and v_caller_profile.availability != 'available' then\n    raise exception 'AGENT_UNAVAILABLE: You must set your status to Available before claiming.';\n  end if;\n\n  v_quote_id := _create_quote_from_intake(p_intake_id, v_caller_id, 'ringcentral_claim');\n\n  update customer_intakes set\n    status = 'claimed',\n    assigned_to = v_caller_id,\n    claimed_at = now(),\n    assignment_method = 'ringcentral_claim',\n    updated_at = now()\n  where id = p_intake_id;\n\n  insert into intake_history_events (\n    intake_id, linked_quote_id, actor_id, actor_display_name, event_type, details\n  ) values (\n    p_intake_id, v_quote_id, v_caller_id, v_caller_profile.display_name,\n    'claimed', 'RingCentral claim by ' || v_caller_profile.display_name\n  );\n\n  insert into notifications (\n    recipient_id, notification_type, title, body, metadata, action_url\n  ) values (\n    v_intake.created_by, 'intake_claimed', 'Intake Claimed',\n    v_intake.customer_name || ' claimed by ' || v_caller_profile.display_name,\n    jsonb_build_object('intake_id', p_intake_id, 'quote_id', v_quote_id, 'agent_name', v_caller_profile.display_name, 'claimed_at', now()),\n    '/tools/quotes/' || v_quote_id\n  );\n\n  insert into notifications (\n    recipient_id, notification_type, title, body, metadata, action_url\n  ) values (\n    v_caller_id, 'quote_assigned', 'New Quote Assigned',\n    v_intake.customer_name || ' — ' || replace(v_intake.source_type, '_', ' ') || ' / ' || replace(v_intake.line_of_business, '_', ' '),\n    jsonb_build_object('quote_id', v_quote_id, 'intake_id', p_intake_id, 'customer_name', v_intake.customer_name, 'source_type', v_intake.source_type, 'line_of_business', v_intake.line_of_business),\n    '/tools/quotes/' || v_quote_id\n  );\n\n  return v_quote_id;\nend;\n$function$\n"
+      },
+      {
+        "sig": "claim_ringcentral_quote(p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.claim_ringcentral_quote(p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_next uuid;\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n  if p_work_type not in ('new_quote', 'requote') then raise exception 'RingCentral rotation only accepts new quotes or requotes'; end if;\r\n  perform public.ensure_daily_availability_reset();\r\n\r\n  select * into v_me from public.profiles where id = auth.uid() and is_active for update;\r\n  if not found then raise exception 'Active profile not found'; end if;\r\n  if v_me.availability <> 'available' or not v_me.ringcentral_active then raise exception 'Set your status to Available before taking a RingCentral quote'; end if;\r\n\r\n  select * into v_state from public.rotation_state where kind = 'ringcentral' for update;\r\n  if not found then raise exception 'RingCentral queue is not initialized'; end if;\r\n  if v_state.current_profile_id is null then raise exception 'No agent has started the RingCentral queue today. Click Available to start it'; end if;\r\n  if v_state.current_profile_id is distinct from v_me.id then raise exception 'This RingCentral turn belongs to another agent'; end if;\r\n\r\n  insert into public.work_items(customer_name, dealer_id, work_type, assigned_profile_id, assignment_method, status, note, received_through, created_by, accepted_at)\r\n  values (trim(p_customer_name), p_dealer_id, p_work_type, v_me.id, 'ringcentral_turn', 'active', nullif(btrim(p_note), ''), 'RingCentral', v_me.id, now())\r\n  returning * into v_item;\r\n\r\n  perform public.add_quote_note_if_present(v_item.id, v_me.id, p_note);\r\n\r\n  v_next := public.next_eligible_profile('ringcentral', v_me.ringcentral_position);\r\n\r\n  update public.rotation_state\r\n  set current_profile_id = coalesce(v_next, v_me.id),\r\n      version = version + 1,\r\n      updated_at = now(),\r\n      updated_by = v_me.id\r\n  where kind = 'ringcentral';\r\n\r\n  insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, work_item_id)\r\n  values ('ringcentral', 'claim', v_me.id, v_me.id, coalesce(v_next, v_me.id), v_item.id);\r\n\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "claim_ringcentral_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.claim_ringcentral_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  perform public.validate_dealer_salesperson(p_dealer_id, p_salesperson_id, true);\r\n  select * into v_item\r\n  from public.claim_ringcentral_quote(p_customer_name, p_dealer_id, p_work_type, p_note);\r\n\r\n  update public.work_items\r\n  set salesperson_id = p_salesperson_id\r\n  where id = v_item.id\r\n  returning * into v_item;\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "claim_timed_quote(p_timer_id uuid)",
+        "def": "CREATE OR REPLACE FUNCTION public.claim_timed_quote(p_timer_id uuid)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_timer public.quote_take_timers%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_current public.profiles%rowtype;\r\n  v_item public.work_items%rowtype;\r\n  v_next uuid;\r\n  v_position integer;\r\n  v_elapsed integer;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n\r\n  select * into v_timer\r\n  from public.quote_take_timers\r\n  where id = p_timer_id\r\n  for update;\r\n  if not found or v_timer.status <> 'active' then raise exception 'This rescue timer is no longer active'; end if;\r\n  if v_timer.current_profile_id <> auth.uid() then raise exception 'This timed quote belongs to the current queue agent'; end if;\r\n\r\n  select * into v_state\r\n  from public.rotation_state\r\n  where kind = v_timer.rotation\r\n  for update;\r\n  if v_state.current_profile_id is distinct from v_timer.current_profile_id then raise exception 'The queue moved and this timer is no longer valid'; end if;\r\n\r\n  select * into v_current\r\n  from public.profiles\r\n  where id = v_timer.current_profile_id and role = 'agent' and is_active;\r\n  if not found then raise exception 'Current agent profile is invalid'; end if;\r\n\r\n  insert into public.work_items(\r\n    customer_name, dealer_id, work_type, assigned_profile_id, assignment_method,\r\n    status, note, received_through, created_by, assigned_at, accepted_at\r\n  ) values (\r\n    v_timer.customer_name, v_timer.dealer_id, v_timer.work_type, v_current.id,\r\n    case when v_timer.rotation = 'whatsapp' then 'whatsapp_turn'::public.assignment_method else 'ringcentral_turn'::public.assignment_method end,\r\n    'active', v_timer.note,\r\n    case when v_timer.rotation = 'whatsapp' then 'WhatsApp dealership' else 'RingCentral' end,\r\n    v_current.id, now(), now()\r\n  ) returning * into v_item;\r\n\r\n  v_elapsed := greatest(0, floor(extract(epoch from (now() - v_timer.received_at)))::integer);\r\n\r\n  update public.quote_take_timers\r\n  set status = 'claimed', claimed_by_profile_id = v_current.id,\r\n      source_work_item_id = v_item.id, completed_at = now()\r\n  where id = v_timer.id;\r\n\r\n  perform public.add_quote_note_if_present(v_item.id, v_current.id, v_timer.note);\r\n\r\n  insert into public.work_item_events(source_work_item_id, event_type, actor_profile_id, assigned_profile_id, details, created_at)\r\n  values (\r\n    v_item.id, 'timer_claimed', v_current.id, v_current.id,\r\n    jsonb_build_object('timer_id', v_timer.id, 'received_at', v_timer.received_at, 'elapsed_seconds', v_elapsed),\r\n    now()\r\n  );\r\n\r\n  v_position := case when v_timer.rotation = 'whatsapp' then v_current.whatsapp_position else v_current.ringcentral_position end;\r\n  v_next := public.next_eligible_profile(v_timer.rotation, v_position);\r\n\r\n  update public.rotation_state\r\n  set current_profile_id = v_next, version = version + 1,\r\n      updated_at = now(), updated_by = v_current.id\r\n  where kind = v_timer.rotation;\r\n\r\n  insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, work_item_id, reason)\r\n  values (v_timer.rotation, 'claim', v_current.id, v_current.id, v_next, v_item.id, 'Current agent responded to rescue timer');\r\n\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "claim_unlinked_workload_turn(p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.claim_unlinked_workload_turn(p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_original_owner_profile_id uuid DEFAULT NULL::uuid, p_change_type text DEFAULT NULL::text, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_next uuid;\r\n  v_item public.work_items%rowtype;\r\n  v_quote_source_id uuid;\r\n  v_quote_agent_id uuid;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n  if p_work_type not in ('activation', 'change') then raise exception 'Additional Workload only accepts activations or changes'; end if;\r\n  if nullif(btrim(p_customer_name), '') is null then raise exception 'Customer name is required'; end if;\r\n\r\n  perform public.ensure_daily_availability_reset();\r\n\r\n  select * into v_me from public.profiles where id = auth.uid() and is_active for update;\r\n  if not found then raise exception 'Active profile not found'; end if;\r\n  if v_me.availability <> 'available' or not v_me.workload_active then raise exception 'Set your status to Available before taking Additional Workload'; end if;\r\n\r\n  if p_original_owner_profile_id is not null and not exists (\r\n    select 1 from public.profiles where id = p_original_owner_profile_id and role = 'agent' and is_active\r\n  ) then\r\n    raise exception 'Original owner is not an active agent';\r\n  end if;\r\n\r\n  select * into v_state from public.rotation_state where kind = 'workload' for update;\r\n  if not found then raise exception 'Additional Workload queue is not initialized'; end if;\r\n  if v_state.current_profile_id is null then raise exception 'No agent has started the Additional Workload queue today. Click Available to start it'; end if;\r\n  if v_state.current_profile_id is distinct from v_me.id then raise exception 'This Additional Workload turn belongs to another agent'; end if;\r\n\r\n  if p_work_type = 'activation' then\r\n    v_quote_source_id := gen_random_uuid();\r\n  end if;\r\n\r\n  insert into public.work_items(\r\n    customer_name, dealer_id, work_type, original_owner_profile_id,\r\n    assigned_profile_id, assignment_method, status, change_type, note,\r\n    received_through, created_by, accepted_at, related_quote_source_work_item_id\r\n  ) values (\r\n    trim(p_customer_name), p_dealer_id, p_work_type, p_original_owner_profile_id,\r\n    v_me.id, 'workload_turn', 'active', nullif(btrim(p_change_type), ''), nullif(btrim(p_note), ''),\r\n    'Legacy / Existing business', v_me.id, now(), v_quote_source_id\r\n  ) returning * into v_item;\r\n\r\n  if p_work_type = 'activation' then\r\n    v_quote_agent_id := coalesce(p_original_owner_profile_id, v_me.id);\r\n\r\n    insert into public.quote_outcomes(\r\n      source_work_item_id, customer_name, dealer_id, work_type,\r\n      original_owner_profile_id, assigned_profile_id, assignment_method,\r\n      received_through, quote_created_at, assigned_at, accepted_at,\r\n      decision, not_sold_reason, not_sold_reason_other, finalized_at\r\n    ) values (\r\n      v_quote_source_id, trim(p_customer_name), p_dealer_id, 'new_quote',\r\n      p_original_owner_profile_id, v_quote_agent_id, 'workload_turn',\r\n      'Legacy / Existing business', now(), now(), now(),\r\n      'sold', null, null, now()\r\n    );\r\n\r\n    insert into public.work_item_events(source_work_item_id, event_type, actor_profile_id, assigned_profile_id, details, created_at)\r\n    values (\r\n      v_quote_source_id,\r\n      'activation',\r\n      v_me.id,\r\n      v_quote_agent_id,\r\n      jsonb_build_object('service_work_item_id', v_item.id, 'legacy_entry', true, 'note', nullif(btrim(p_note), '')),\r\n      now()\r\n    );\r\n\r\n    perform public.add_quote_note_if_present(v_quote_source_id, v_me.id, p_note);\r\n  end if;\r\n\r\n  v_next := public.next_eligible_profile('workload', v_me.workload_position);\r\n\r\n  update public.rotation_state\r\n  set current_profile_id = coalesce(v_next, v_me.id),\r\n      version = version + 1,\r\n      updated_at = now(),\r\n      updated_by = v_me.id\r\n  where kind = 'workload';\r\n\r\n  insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, work_item_id)\r\n  values ('workload', 'claim', v_me.id, v_me.id, coalesce(v_next, v_me.id), v_item.id);\r\n\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "claim_unlinked_workload_turn_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.claim_unlinked_workload_turn_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_original_owner_profile_id uuid DEFAULT NULL::uuid, p_change_type text DEFAULT NULL::text, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  if p_dealer_id is not null then\r\n    perform public.validate_dealer_salesperson(p_dealer_id, p_salesperson_id, true);\r\n  elsif p_salesperson_id is not null then\r\n    raise exception 'A salesperson cannot be selected without a source';\r\n  end if;\r\n\r\n  select * into v_item\r\n  from public.claim_unlinked_workload_turn(\r\n    p_customer_name,\r\n    p_dealer_id,\r\n    p_work_type,\r\n    p_original_owner_profile_id,\r\n    p_change_type,\r\n    p_note\r\n  );\r\n\r\n  update public.work_items\r\n  set salesperson_id = p_salesperson_id\r\n  where id = v_item.id\r\n  returning * into v_item;\r\n\r\n  -- Legacy/unlinked Activations may create a Sold outcome inside the existing\r\n  -- function before this wrapper receives the work item.\r\n  update public.quote_outcomes\r\n  set salesperson_id = p_salesperson_id\r\n  where source_work_item_id = v_item.id\r\n    and salesperson_id is null;\r\n\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "claim_whatsapp_quote(p_customer_name text, p_dealer_id uuid, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.claim_whatsapp_quote(p_customer_name text, p_dealer_id uuid, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_next uuid;\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n  perform public.ensure_daily_availability_reset();\r\n\r\n  select * into v_me from public.profiles where id = auth.uid() and is_active for update;\r\n  if not found then raise exception 'Active profile not found'; end if;\r\n  if v_me.availability <> 'available' or not v_me.whatsapp_active then raise exception 'Set your status to Available before taking a WhatsApp quote'; end if;\r\n\r\n  select * into v_state from public.rotation_state where kind = 'whatsapp' for update;\r\n  if not found then raise exception 'WhatsApp queue is not initialized'; end if;\r\n  if v_state.current_profile_id is null then raise exception 'No agent has started the WhatsApp queue today. Click Available to start it'; end if;\r\n  if v_state.current_profile_id is distinct from v_me.id then raise exception 'This WhatsApp turn belongs to another agent'; end if;\r\n\r\n  insert into public.work_items(customer_name, dealer_id, work_type, assigned_profile_id, assignment_method, status, note, received_through, created_by, accepted_at)\r\n  values (trim(p_customer_name), p_dealer_id, 'new_quote', v_me.id, 'whatsapp_turn', 'active', nullif(btrim(p_note), ''), 'WhatsApp dealership', v_me.id, now())\r\n  returning * into v_item;\r\n\r\n  perform public.add_quote_note_if_present(v_item.id, v_me.id, p_note);\r\n\r\n  v_next := public.next_eligible_profile('whatsapp', v_me.whatsapp_position);\r\n\r\n  update public.rotation_state\r\n  set current_profile_id = coalesce(v_next, v_me.id),\r\n      version = version + 1,\r\n      updated_at = now(),\r\n      updated_by = v_me.id\r\n  where kind = 'whatsapp';\r\n\r\n  insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, work_item_id)\r\n  values ('whatsapp', 'claim', v_me.id, v_me.id, coalesce(v_next, v_me.id), v_item.id);\r\n\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "claim_whatsapp_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.claim_whatsapp_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  perform public.validate_dealer_salesperson(p_dealer_id, p_salesperson_id, true);\r\n  select * into v_item\r\n  from public.claim_whatsapp_quote(p_customer_name, p_dealer_id, p_note);\r\n\r\n  update public.work_items\r\n  set salesperson_id = p_salesperson_id\r\n  where id = v_item.id\r\n  returning * into v_item;\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "claim_workload_turn(p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text)",
+        "def": "CREATE OR REPLACE FUNCTION public.claim_workload_turn(p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_original_owner_profile_id uuid DEFAULT NULL::uuid, p_change_type text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_next uuid;\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n  if p_work_type not in ('activation', 'change') then raise exception 'Additional Workload only accepts activations or changes'; end if;\r\n\r\n  select * into v_me from public.profiles where id = auth.uid() and is_active for update;\r\n  if not found then raise exception 'Active profile not found'; end if;\r\n  if v_me.availability <> 'available' or not v_me.workload_active then raise exception 'You are not eligible for the Additional Workload rotation'; end if;\r\n\r\n  select * into v_state from public.rotation_state where kind = 'workload' for update;\r\n  if v_state.current_profile_id is distinct from v_me.id then raise exception 'This Additional Workload turn belongs to another agent'; end if;\r\n\r\n  insert into public.work_items(customer_name, dealer_id, work_type, original_owner_profile_id, assigned_profile_id, assignment_method, status, change_type, received_through, created_by, accepted_at)\r\n  values (trim(p_customer_name), p_dealer_id, p_work_type, p_original_owner_profile_id, v_me.id, 'workload_turn', 'active', p_change_type, 'Manager routed', v_me.id, now())\r\n  returning * into v_item;\r\n\r\n  v_next := public.next_eligible_profile('workload', v_me.workload_position);\r\n  if v_next is null then raise exception 'No eligible next agent'; end if;\r\n\r\n  update public.rotation_state\r\n  set current_profile_id = v_next, version = version + 1, updated_at = now(), updated_by = v_me.id\r\n  where kind = 'workload';\r\n\r\n  insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, work_item_id)\r\n  values ('workload', 'claim', v_me.id, v_me.id, v_next, v_item.id);\r\n\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "cs_intake_claim(p_submission_id uuid)",
+        "def": "CREATE OR REPLACE FUNCTION public.cs_intake_claim(p_submission_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_row public.cs_intake_submissions%rowtype;\r\n  v_role text;\r\nbegin\r\n  v_role := public.nhwd_role();\r\n\r\n  -- Agents and sales_supervisors can claim intakes from the queue\r\n  if v_role not in ('agent', 'manager', 'sales_supervisor') then\r\n    raise exception 'Sales Agent or Manager access required to claim intakes.';\r\n  end if;\r\n\r\n  select * into v_row\r\n  from public.cs_intake_submissions\r\n  where id = p_submission_id\r\n  for update;\r\n\r\n  if not found then raise exception 'Intake not found.'; end if;\r\n  if v_row.status::text <> 'submitted' then\r\n    raise exception 'This intake is no longer available to claim.';\r\n  end if;\r\n\r\n  update public.cs_intake_submissions\r\n  set status = 'claimed',\r\n      claimed_by = auth.uid(),\r\n      claimed_at = now(),\r\n      updated_at = now()\r\n  where id = p_submission_id\r\n    and status::text = 'submitted';\r\n\r\n  if not found then\r\n    raise exception 'Another agent claimed this intake first.';\r\n  end if;\r\n\r\n  insert into public.cs_intake_events (submission_id, actor_id, event_type, detail)\r\n  values (p_submission_id, auth.uid(), 'claimed', jsonb_build_object('role', v_role));\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "cs_intake_claim_ringcentral(p_submission_id uuid)",
+        "def": "CREATE OR REPLACE FUNCTION public.cs_intake_claim_ringcentral(p_submission_id uuid)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_row public.cs_intake_submissions%rowtype;\r\n  v_next uuid;\r\n  v_work_item_id uuid;\r\n  v_was_already_claimed boolean := false;\r\nbegin\r\n  if not public.is_agent() then\r\n    raise exception 'Agent permission required.';\r\n  end if;\r\n\r\n  select *\r\n  into v_me\r\n  from public.profiles\r\n  where id = auth.uid()\r\n    and is_active\r\n  for update;\r\n\r\n  if not found then\r\n    raise exception 'Active agent profile not found.';\r\n  end if;\r\n\r\n  select *\r\n  into v_row\r\n  from public.cs_intake_submissions\r\n  where id = p_submission_id\r\n  for update;\r\n\r\n  if not found then\r\n    raise exception 'Intake not found.';\r\n  end if;\r\n\r\n  if v_row.status::text = 'converted'\r\n     and v_row.work_item_id is not null then\r\n    if v_row.claimed_by = v_me.id then\r\n      return v_row.work_item_id;\r\n    end if;\r\n    raise exception 'This intake was already converted by another agent.';\r\n  end if;\r\n\r\n  if v_row.intake_channel <> 'ringcentral' then\r\n    raise exception 'This intake is manager/manual assigned and does not use the RingCentral turn.';\r\n  end if;\r\n\r\n  if v_row.status::text = 'claimed'\r\n     and v_row.claimed_by = v_me.id\r\n     and v_row.work_item_id is null then\r\n    v_was_already_claimed := true;\r\n  elsif v_row.status::text <> 'submitted' then\r\n    raise exception 'This intake is no longer available to claim.';\r\n  end if;\r\n\r\n  if v_me.availability::text <> 'available'\r\n     or not coalesce(v_me.ringcentral_active, false) then\r\n    raise exception 'You are not eligible for the RingCentral rotation.';\r\n  end if;\r\n\r\n  select *\r\n  into v_state\r\n  from public.rotation_state\r\n  where kind::text = 'ringcentral'\r\n  for update;\r\n\r\n  if not found then\r\n    raise exception 'RingCentral rotation state is missing.';\r\n  end if;\r\n\r\n  if v_state.current_profile_id is distinct from v_me.id then\r\n    raise exception 'This RingCentral turn belongs to another agent.';\r\n  end if;\r\n\r\n  if not v_was_already_claimed then\r\n    update public.cs_intake_submissions\r\n    set status = 'claimed',\r\n        claimed_by = v_me.id,\r\n        claimed_at = now(),\r\n        updated_at = now()\r\n    where id = p_submission_id\r\n      and status::text = 'submitted';\r\n\r\n    if not found then\r\n      raise exception 'Another agent claimed this intake first.';\r\n    end if;\r\n\r\n    insert into public.cs_intake_events (\r\n      submission_id,\r\n      actor_id,\r\n      event_type,\r\n      detail\r\n    )\r\n    values (\r\n      p_submission_id,\r\n      v_me.id,\r\n      'ringcentral_claimed',\r\n      jsonb_build_object(\r\n        'rotation_version', v_state.version,\r\n        'intake_channel', 'ringcentral'\r\n      )\r\n    );\r\n  else\r\n    insert into public.cs_intake_events (\r\n      submission_id,\r\n      actor_id,\r\n      event_type,\r\n      detail\r\n    )\r\n    values (\r\n      p_submission_id,\r\n      v_me.id,\r\n      'ringcentral_claim_recovered',\r\n      jsonb_build_object(\r\n        'rotation_version', v_state.version,\r\n        'reason', 'Recovered from the previous claim-only workflow'\r\n      )\r\n    );\r\n  end if;\r\n\r\n  v_work_item_id := public.cs_intake_convert(p_submission_id);\r\n\r\n  update public.work_items\r\n  set assignment_method = 'ringcentral_turn',\r\n      received_through = 'RingCentral / Customer Service intake',\r\n      accepted_at = coalesce(accepted_at, now()),\r\n      note = concat_ws(\r\n        E'\\n',\r\n        nullif(note, ''),\r\n        'Claimed from the Customer Service Intake Queue during the RingCentral turn.'\r\n      ),\r\n      updated_at = now()\r\n  where id = v_work_item_id\r\n    and assigned_profile_id = v_me.id;\r\n\r\n  if not found then\r\n    raise exception 'The intake converted, but its active Work Desk task could not be linked.';\r\n  end if;\r\n\r\n  insert into public.work_item_events (\r\n    source_work_item_id,\r\n    event_type,\r\n    actor_profile_id,\r\n    assigned_profile_id,\r\n    details\r\n  )\r\n  values (\r\n    v_work_item_id,\r\n    'ringcentral_intake_claim_completed',\r\n    v_me.id,\r\n    v_me.id,\r\n    jsonb_build_object(\r\n      'intake_id', p_submission_id,\r\n      'quote_kind', v_row.quote_kind,\r\n      'line_of_business', v_row.line_of_business::text,\r\n      'rotation_version_before', v_state.version,\r\n      'recovered_existing_claim', v_was_already_claimed\r\n    )\r\n  );\r\n\r\n  v_next := public.next_eligible_profile(\r\n    'ringcentral'::public.rotation_kind,\r\n    v_me.ringcentral_position\r\n  );\r\n\r\n  -- If no other eligible agent is found, wrap back to the same agent.\r\n  if v_next is null then\r\n    v_next := v_me.id;\r\n  end if;\r\n\r\n  update public.rotation_state\r\n  set current_profile_id = v_next,\r\n      version = version + 1,\r\n      updated_at = now(),\r\n      updated_by = v_me.id\r\n  where kind::text = 'ringcentral';\r\n\r\n  insert into public.turn_events (\r\n    rotation,\r\n    action,\r\n    actor_profile_id,\r\n    previous_profile_id,\r\n    next_profile_id,\r\n    work_item_id,\r\n    reason\r\n  )\r\n  values (\r\n    'ringcentral',\r\n    'claim',\r\n    v_me.id,\r\n    v_me.id,\r\n    v_next,\r\n    v_work_item_id,\r\n    case\r\n      when v_was_already_claimed then 'Customer Service intake claim recovered and converted'\r\n      else 'Customer Service intake claimed and converted'\r\n    end\r\n  );\r\n\r\n  return v_work_item_id;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "cs_intake_convert(p_submission_id uuid)",
+        "def": "CREATE OR REPLACE FUNCTION public.cs_intake_convert(p_submission_id uuid)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_row public.cs_intake_submissions%rowtype;\r\n  v_work_item_id uuid;\r\n  v_customer_name text;\r\n  v_agent_name text;\r\n  v_details jsonb;\r\nbegin\r\n  select * into v_row\r\n  from public.cs_intake_submissions\r\n  where id = p_submission_id\r\n  for update;\r\n\r\n  if not found then raise exception 'Intake not found.'; end if;\r\n\r\n  -- Idempotency: if already converted with a linked work_item, return it.\r\n  if v_row.status::text = 'converted' and v_row.work_item_id is not null then\r\n    return v_row.work_item_id;\r\n  end if;\r\n\r\n  if v_row.status::text <> 'claimed' or v_row.claimed_by is null then\r\n    raise exception 'Claim or assign this intake first.';\r\n  end if;\r\n\r\n  -- Allow: managers, sales_supervisors, or the agent who claimed it\r\n  if not public.can_manage_sales() and v_row.claimed_by <> auth.uid() then\r\n    raise exception 'This intake belongs to another Sales Agent.';\r\n  end if;\r\n\r\n  v_customer_name := coalesce(nullif(trim(v_row.business_name), ''), trim(v_row.insured_first_name || ' ' || v_row.insured_last_name));\r\n\r\n  -- Build details in a flat structure matching IntakeDataDisplay component props.\r\n  v_details := jsonb_build_object(\r\n    'intake_id', v_row.id,\r\n    'csr_profile_id', v_row.created_by,\r\n    'line_of_business', v_row.line_of_business::text,\r\n    'quote_kind', v_row.quote_kind,\r\n    'desired_coverage', v_row.desired_coverage,\r\n    'business_name', v_row.business_name,\r\n    'dot_number', v_row.dot_number,\r\n    'business_type', v_row.business_type,\r\n    'years_in_business', v_row.years_in_business,\r\n    'operating_radius_miles', v_row.operating_radius_miles,\r\n    'insured_first_name', v_row.insured_first_name,\r\n    'insured_last_name', v_row.insured_last_name,\r\n    'insured_dob', v_row.insured_dob,\r\n    'insured_phone_primary', v_row.insured_phone_primary,\r\n    'insured_email', v_row.insured_email,\r\n    'addr_street', v_row.addr_street,\r\n    'addr_city', v_row.addr_city,\r\n    'addr_state', v_row.addr_state,\r\n    'addr_zip', v_row.addr_zip,\r\n    'current_carrier', v_row.current_carrier,\r\n    'current_policy_number', v_row.current_policy_number,\r\n    'current_premium', v_row.current_premium,\r\n    'current_expiration', v_row.current_expiration,\r\n    'csr_notes', v_row.csr_notes,\r\n    'drivers', (select coalesce(jsonb_agg(\r\n      jsonb_build_object(\r\n        'first_name', d.first_name,\r\n        'last_name', d.last_name,\r\n        'dob', d.dob,\r\n        'license_number', d.license_number,\r\n        'license_state', d.license_state,\r\n        'years_licensed', d.years_licensed,\r\n        'sr22_required', d.sr22_required\r\n      ) order by d.position\r\n    ), '[]'::jsonb) from public.cs_intake_drivers d where d.submission_id = v_row.id),\r\n    'vehicles', (select coalesce(jsonb_agg(\r\n      jsonb_build_object(\r\n        'year', v.year,\r\n        'make', v.make,\r\n        'model', v.model,\r\n        'vin', v.vin,\r\n        'usage', v.usage,\r\n        'annual_mileage', v.annual_mileage\r\n      ) order by v.position\r\n    ), '[]'::jsonb) from public.cs_intake_vehicles v where v.submission_id = v_row.id)\r\n  );\r\n\r\n  if v_row.quote_kind = 'requote' then\r\n    insert into public.work_items (\r\n      customer_name, dealer_id, salesperson_id, work_type,\r\n      original_owner_profile_id, assigned_profile_id, assignment_method,\r\n      status, note, received_through, created_by, assigned_at\r\n    ) values (\r\n      v_customer_name, v_row.dealer_id, v_row.salesperson_id, 'requote',\r\n      v_row.claimed_by, v_row.claimed_by, 'manual_quote',\r\n      'active', 'Created from Customer Service structured intake', 'cs_intake', v_row.claimed_by, now()\r\n    ) returning id into v_work_item_id;\r\n  else\r\n    insert into public.work_items (\r\n      customer_name, dealer_id, salesperson_id, work_type,\r\n      original_owner_profile_id, assigned_profile_id, assignment_method,\r\n      status, note, received_through, created_by, assigned_at\r\n    ) values (\r\n      v_customer_name, v_row.dealer_id, v_row.salesperson_id, 'new_quote',\r\n      v_row.claimed_by, v_row.claimed_by, 'manual_quote',\r\n      'active', 'Created from Customer Service structured intake', 'cs_intake', v_row.claimed_by, now()\r\n    ) returning id into v_work_item_id;\r\n  end if;\r\n\r\n  insert into public.work_item_events (\r\n    source_work_item_id, event_type, actor_profile_id, assigned_profile_id, details\r\n  ) values (\r\n    v_work_item_id, 'created_from_cs_intake', auth.uid(), v_row.claimed_by, v_details\r\n  );\r\n\r\n  update public.cs_intake_submissions\r\n  set status = 'converted', work_item_id = v_work_item_id, converted_at = now(), updated_at = now()\r\n  where id = p_submission_id;\r\n\r\n  insert into public.cs_intake_events (submission_id, actor_id, event_type, detail)\r\n  values (p_submission_id, auth.uid(), 'converted', jsonb_build_object('work_item_id', v_work_item_id, 'sales_owner', v_row.claimed_by));\r\n\r\n  if v_row.source_renewal_id is not null then\r\n    update public.renewal_records\r\n    set requote_work_item_id = v_work_item_id,\r\n        requote_intake_id = p_submission_id,\r\n        status = 'requote_sent',\r\n        requote_sent_at = coalesce(requote_sent_at, now()),\r\n        updated_at = now()\r\n    where id = v_row.source_renewal_id;\r\n\r\n    insert into public.renewal_events (record_id, actor_id, event_type, detail)\r\n    values (v_row.source_renewal_id, auth.uid(), 'requote_quote_created', jsonb_build_object('intake_id', p_submission_id, 'work_item_id', v_work_item_id));\r\n  end if;\r\n\r\n  select display_name into v_agent_name from public.profiles where id = v_row.claimed_by;\r\n  insert into public.user_notifications (recipient_profile_id, notification_type, title, message, entity_type, entity_id)\r\n  values (v_row.created_by, 'assignment', 'Intake converted to a quote', coalesce(v_agent_name, 'Sales') || ' created the quote. Your intake credit was preserved.', 'work_item', v_work_item_id);\r\n\r\n  return v_work_item_id;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "cs_intake_manager_assign(p_submission_id uuid, p_agent_id uuid)",
+        "def": "CREATE OR REPLACE FUNCTION public.cs_intake_manager_assign(p_submission_id uuid, p_agent_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_creator uuid;\r\n  v_name text;\r\nbegin\r\n  -- Managers, super_admins, sales_supervisors, and CS supervisors can assign\r\n  if not public.can_manage_sales() and not public.can_manage_customer_service() then\r\n    raise exception 'Manager or Supervisor access required.';\r\n  end if;\r\n\r\n  -- Target must be an active user who handles sales quotes\r\n  if not exists (\r\n    select 1 from public.profiles\r\n    where id = p_agent_id\r\n      and is_active\r\n      and role::text in ('agent', 'sales_supervisor')\r\n  ) then\r\n    raise exception 'Choose an active Sales Agent or Sales Supervisor.';\r\n  end if;\r\n\r\n  update public.cs_intake_submissions\r\n  set status = 'claimed',\r\n      claimed_by = p_agent_id,\r\n      claimed_at = now(),\r\n      intake_channel = 'manual',\r\n      updated_at = now()\r\n  where id = p_submission_id\r\n    and status::text = 'submitted'\r\n  returning created_by into v_creator;\r\n\r\n  if not found then\r\n    raise exception 'This intake is no longer available for assignment.';\r\n  end if;\r\n\r\n  select display_name into v_name from public.profiles where id = p_agent_id;\r\n\r\n  insert into public.cs_intake_events (submission_id, actor_id, event_type, detail)\r\n  values (\r\n    p_submission_id,\r\n    auth.uid(),\r\n    'manager_assigned',\r\n    jsonb_build_object(\r\n      'assigned_to', p_agent_id,\r\n      'assigned_name', v_name,\r\n      'intake_channel', 'manual'\r\n    )\r\n  );\r\n\r\n  insert into public.user_notifications (recipient_profile_id, notification_type, title, message, entity_type, entity_id)\r\n  values (p_agent_id, 'assignment', 'Quote intake assigned to you', 'A Manager assigned a Customer Service intake. Review it and create the quote.', 'cs_intake', p_submission_id);\r\n\r\n  insert into public.user_notifications (recipient_profile_id, notification_type, title, message, entity_type, entity_id)\r\n  values (v_creator, 'assignment', 'Your intake was assigned', 'Sales Agent ' || coalesce(v_name, '') || ' received your quote intake.', 'cs_intake', p_submission_id);\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "log_manual_quote(p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_received_through text, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.log_manual_quote(p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_received_through text, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n  if p_work_type not in ('new_quote', 'requote') then raise exception 'Manual quote must be a new quote or requote'; end if;\r\n  if nullif(trim(p_received_through), '') is null then raise exception 'Input method is required'; end if;\r\n  if nullif(trim(p_customer_name), '') is null then raise exception 'Customer name is required'; end if;\r\n\r\n  select * into v_me from public.profiles where id = auth.uid() and is_active;\r\n  if not found then raise exception 'Active profile not found'; end if;\r\n\r\n  insert into public.work_items(customer_name, dealer_id, work_type, assigned_profile_id, assignment_method, status, note, received_through, created_by, accepted_at)\r\n  values (trim(p_customer_name), p_dealer_id, p_work_type, v_me.id, 'manual_quote', 'active', nullif(btrim(p_note), ''), trim(p_received_through), v_me.id, now())\r\n  returning * into v_item;\r\n\r\n  perform public.add_quote_note_if_present(v_item.id, v_me.id, p_note);\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "log_manual_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_received_through text, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.log_manual_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_received_through text, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  if p_dealer_id is not null then\r\n    perform public.validate_dealer_salesperson(p_dealer_id, p_salesperson_id, true);\r\n  elsif p_salesperson_id is not null then\r\n    raise exception 'A salesperson cannot be selected without a source';\r\n  end if;\r\n\r\n  select * into v_item\r\n  from public.log_manual_quote(\r\n    p_customer_name,\r\n    p_dealer_id,\r\n    p_work_type,\r\n    p_received_through,\r\n    p_note\r\n  );\r\n\r\n  update public.work_items\r\n  set salesperson_id = p_salesperson_id\r\n  where id = v_item.id\r\n  returning * into v_item;\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "log_manual_workload(p_mode text, p_related_quote_source_work_item_id uuid, p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.log_manual_workload(p_mode text, p_related_quote_source_work_item_id uuid DEFAULT NULL::uuid, p_customer_name text DEFAULT NULL::text, p_dealer_id uuid DEFAULT NULL::uuid, p_salesperson_id uuid DEFAULT NULL::uuid, p_work_type work_type DEFAULT 'change'::work_type, p_original_owner_profile_id uuid DEFAULT NULL::uuid, p_change_type text DEFAULT NULL::text, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_item public.work_items%rowtype;\r\n  v_customer_name text;\r\n  v_dealer_id uuid;\r\n  v_salesperson_id uuid;\r\n  v_owner_id uuid;\r\n  v_quote_assigned_id uuid;\r\n  v_source_id uuid;\r\n  v_outcome public.quote_outcomes%rowtype;\r\nbegin\r\n  select * into v_me\r\n  from public.profiles\r\n  where id = auth.uid()\r\n    and role = 'agent'\r\n    and is_active;\r\n  if not found then\r\n    raise exception 'Active agent permission required';\r\n  end if;\r\n\r\n  if p_work_type not in ('activation', 'change') then\r\n    raise exception 'Manual Workload accepts only Activations or Changes';\r\n  end if;\r\n\r\n  if p_mode = 'linked' then\r\n    if p_related_quote_source_work_item_id is null then\r\n      raise exception 'Select the existing quote this workload belongs to';\r\n    end if;\r\n\r\n    select q.customer_name,\r\n           q.dealer_id,\r\n           q.salesperson_id,\r\n           q.original_owner_profile_id,\r\n           q.assigned_profile_id\r\n      into v_customer_name,\r\n           v_dealer_id,\r\n           v_salesperson_id,\r\n           v_owner_id,\r\n           v_quote_assigned_id\r\n    from (\r\n      select p.customer_name,\r\n             p.dealer_id,\r\n             p.salesperson_id,\r\n             p.original_owner_profile_id,\r\n             p.assigned_profile_id,\r\n             p.price_sent_at as stage_at\r\n      from public.pending_pricing_quotes p\r\n      where p.source_work_item_id = p_related_quote_source_work_item_id\r\n      union all\r\n      select o.customer_name,\r\n             o.dealer_id,\r\n             o.salesperson_id,\r\n             o.original_owner_profile_id,\r\n             o.assigned_profile_id,\r\n             o.finalized_at as stage_at\r\n      from public.quote_outcomes o\r\n      where o.source_work_item_id = p_related_quote_source_work_item_id\r\n        and o.decision = 'sold'\r\n    ) q\r\n    order by q.stage_at desc\r\n    limit 1;\r\n\r\n    if v_customer_name is null then\r\n      raise exception 'Only Sold or Pending Pricing quotes can be selected for Manual Workload';\r\n    end if;\r\n    v_source_id := p_related_quote_source_work_item_id;\r\n  elsif p_mode = 'new' then\r\n    v_customer_name := nullif(btrim(p_customer_name), '');\r\n    if v_customer_name is null then\r\n      raise exception 'Customer name is required';\r\n    end if;\r\n    v_dealer_id := p_dealer_id;\r\n    v_salesperson_id := p_salesperson_id;\r\n    v_owner_id := coalesce(p_original_owner_profile_id, v_me.id);\r\n    v_quote_assigned_id := v_owner_id;\r\n\r\n    if v_dealer_id is not null then\r\n      perform public.validate_dealer_salesperson(v_dealer_id, v_salesperson_id, true);\r\n    elsif v_salesperson_id is not null then\r\n      raise exception 'A salesperson cannot be selected without a source';\r\n    end if;\r\n  else\r\n    raise exception 'Manual Workload mode must be linked or new';\r\n  end if;\r\n\r\n  insert into public.work_items(\r\n    customer_name,\r\n    dealer_id,\r\n    salesperson_id,\r\n    work_type,\r\n    original_owner_profile_id,\r\n    assigned_profile_id,\r\n    assignment_method,\r\n    status,\r\n    change_type,\r\n    note,\r\n    received_through,\r\n    created_by,\r\n    assigned_at,\r\n    accepted_at,\r\n    related_quote_source_work_item_id\r\n  ) values (\r\n    v_customer_name,\r\n    v_dealer_id,\r\n    v_salesperson_id,\r\n    p_work_type,\r\n    coalesce(v_owner_id, v_quote_assigned_id, v_me.id),\r\n    v_me.id,\r\n    'manual_workload'::public.assignment_method,\r\n    'active',\r\n    nullif(btrim(p_change_type), ''),\r\n    nullif(btrim(p_note), ''),\r\n    'Manual workload',\r\n    v_me.id,\r\n    now(),\r\n    now(),\r\n    case when p_mode = 'linked' then v_source_id else null end\r\n  ) returning * into v_item;\r\n\r\n  v_source_id := coalesce(v_source_id, v_item.id);\r\n\r\n  insert into public.work_item_events(\r\n    source_work_item_id,\r\n    event_type,\r\n    actor_profile_id,\r\n    assigned_profile_id,\r\n    details,\r\n    created_at\r\n  ) values (\r\n    v_source_id,\r\n    case when p_work_type = 'activation' then 'activation' else 'change' end,\r\n    v_me.id,\r\n    coalesce(v_quote_assigned_id, v_owner_id, v_me.id),\r\n    jsonb_build_object(\r\n      'service_work_item_id', v_item.id,\r\n      'source', 'manual_workload',\r\n      'change_type', nullif(btrim(p_change_type), ''),\r\n      'note', nullif(btrim(p_note), '')\r\n    ),\r\n    now()\r\n  );\r\n\r\n  if p_mode = 'linked' then\r\n    perform public.add_quote_note_if_present(v_source_id, v_me.id, p_note);\r\n    if p_work_type = 'activation' then\r\n      perform public.finalize_quote_as_sold_from_activation(v_source_id, v_me.id);\r\n    end if;\r\n  elsif p_work_type = 'activation' then\r\n    insert into public.quote_outcomes(\r\n      source_work_item_id,\r\n      customer_name,\r\n      dealer_id,\r\n      salesperson_id,\r\n      work_type,\r\n      original_owner_profile_id,\r\n      assigned_profile_id,\r\n      assignment_method,\r\n      received_through,\r\n      quote_created_at,\r\n      assigned_at,\r\n      accepted_at,\r\n      decision,\r\n      finalized_at\r\n    ) values (\r\n      v_item.id,\r\n      v_customer_name,\r\n      v_dealer_id,\r\n      v_salesperson_id,\r\n      'new_quote',\r\n      coalesce(v_owner_id, v_me.id),\r\n      coalesce(v_owner_id, v_me.id),\r\n      'manual_workload'::public.assignment_method,\r\n      'Old / Not in System',\r\n      v_item.created_at,\r\n      v_item.assigned_at,\r\n      v_item.accepted_at,\r\n      'sold',\r\n      now()\r\n    ) returning * into v_outcome;\r\n\r\n    if nullif(btrim(p_note), '') is not null then\r\n      insert into public.quote_notes(source_work_item_id, author_profile_id, note)\r\n      values (v_item.id, v_me.id, btrim(p_note));\r\n    end if;\r\n  end if;\r\n\r\n  insert into public.audit_log(\r\n    actor_profile_id,\r\n    action,\r\n    entity_type,\r\n    entity_id,\r\n    new_value,\r\n    reason\r\n  ) values (\r\n    v_me.id,\r\n    'manual_workload_logged',\r\n    'work_item',\r\n    v_item.id,\r\n    to_jsonb(v_item),\r\n    'Logged without moving the Additional Workload rotation'\r\n  );\r\n\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "log_payment_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.log_payment_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_note text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  if p_dealer_id is not null then\r\n    perform public.validate_dealer_salesperson(p_dealer_id, p_salesperson_id, true);\r\n  elsif p_salesperson_id is not null then\r\n    raise exception 'A salesperson cannot be selected without a source';\r\n  end if;\r\n\r\n  select * into v_item\r\n  from public.log_payment(p_customer_name, p_dealer_id, p_note);\r\n\r\n  update public.work_items\r\n  set salesperson_id = p_salesperson_id\r\n  where id = v_item.id\r\n  returning * into v_item;\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "manager_create_and_assign_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_received_through text, p_assigned_profile_id uuid, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.manager_create_and_assign_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_received_through text, p_assigned_profile_id uuid, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  if p_dealer_id is not null then\r\n    perform public.validate_dealer_salesperson(p_dealer_id, p_salesperson_id, true);\r\n  elsif p_salesperson_id is not null then\r\n    raise exception 'A salesperson cannot be selected without a source';\r\n  end if;\r\n\r\n  select * into v_item\r\n  from public.manager_create_and_assign_quote(\r\n    p_customer_name,\r\n    p_dealer_id,\r\n    p_work_type,\r\n    p_received_through,\r\n    p_assigned_profile_id,\r\n    p_note\r\n  );\r\n\r\n  update public.work_items\r\n  set salesperson_id = p_salesperson_id\r\n  where id = v_item.id\r\n  returning * into v_item;\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "start_quote_take_timer(p_rotation rotation_kind, p_received_at timestamp with time zone, p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.start_quote_take_timer(p_rotation rotation_kind, p_received_at timestamp with time zone, p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text DEFAULT NULL::text)\n RETURNS quote_take_timers\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_current public.profiles%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_timer public.quote_take_timers%rowtype;\r\n  v_remaining integer;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n  if p_rotation not in ('whatsapp', 'ringcentral') then raise exception 'Rescue timers are available only for quote queues'; end if;\r\n  if p_received_at is null then raise exception 'Quote received time is required'; end if;\r\n  if p_received_at > now() + interval '30 seconds' then raise exception 'Quote received time cannot be in the future'; end if;\r\n  if now() - p_received_at > interval '24 hours' then raise exception 'The quote received time must be within the last 24 hours'; end if;\r\n  if nullif(btrim(p_customer_name), '') is null then raise exception 'Customer name is required'; end if;\r\n  if p_rotation = 'whatsapp' and p_work_type <> 'new_quote' then raise exception 'WhatsApp accepts new quotes only'; end if;\r\n  if p_rotation = 'ringcentral' and p_work_type not in ('new_quote', 'requote') then raise exception 'RingCentral accepts new quotes or requotes'; end if;\r\n\r\n  perform public.ensure_daily_availability_reset();\r\n\r\n  select * into v_me\r\n  from public.profiles\r\n  where id = auth.uid() and role = 'agent' and is_active\r\n  for update;\r\n  if not found then raise exception 'Active agent profile not found'; end if;\r\n  if v_me.availability <> 'available' then raise exception 'Set your status to Available before starting a rescue timer'; end if;\r\n  if p_rotation = 'whatsapp' and not v_me.whatsapp_active then raise exception 'You are paused from the WhatsApp queue'; end if;\r\n  if p_rotation = 'ringcentral' and not v_me.ringcentral_active then raise exception 'You are paused from the RingCentral queue'; end if;\r\n\r\n  select * into v_state\r\n  from public.rotation_state\r\n  where kind = p_rotation\r\n  for update;\r\n  if not found or v_state.current_profile_id is null then raise exception 'This queue has no current agent'; end if;\r\n  if v_state.current_profile_id = v_me.id then raise exception 'You already own this turn. Use the normal quote action'; end if;\r\n\r\n  select * into v_current\r\n  from public.profiles\r\n  where id = v_state.current_profile_id and role = 'agent' and is_active;\r\n  if not found then raise exception 'The current queue agent is invalid. Ask management to review Queue Health'; end if;\r\n\r\n  if exists (\r\n    select 1 from public.quote_take_timers\r\n    where rotation = p_rotation and status = 'active'\r\n  ) then\r\n    raise exception 'A rescue timer is already active for this queue';\r\n  end if;\r\n\r\n  insert into public.quote_take_timers(\r\n    rotation, current_profile_id, started_by_profile_id,\r\n    received_at, deadline_at, customer_name, dealer_id, work_type, note\r\n  ) values (\r\n    p_rotation, v_current.id, v_me.id,\r\n    p_received_at, p_received_at + interval '3 minutes',\r\n    trim(p_customer_name), p_dealer_id, p_work_type, nullif(btrim(p_note), '')\r\n  ) returning * into v_timer;\r\n\r\n  v_remaining := greatest(0, ceil(extract(epoch from (v_timer.deadline_at - now())))::integer);\r\n\r\n  insert into public.user_notifications(\r\n    recipient_profile_id, notification_type, title, message, entity_type, entity_id\r\n  ) values (\r\n    v_current.id,\r\n    'turn',\r\n    'Rescue timer started',\r\n    case\r\n      when v_remaining <= 0 then format('%s started a rescue timer for %s. The 3-minute response period has already expired.', v_me.display_name, v_timer.customer_name)\r\n      else format('%s started a rescue timer for %s. You have %s remaining to take your turn.', v_me.display_name, v_timer.customer_name, make_interval(secs => v_remaining)::text)\r\n    end,\r\n    'quote_take_timer',\r\n    v_timer.id\r\n  );\r\n\r\n  insert into public.audit_log(actor_profile_id, action, entity_type, entity_id, new_value, reason)\r\n  values (\r\n    v_me.id,\r\n    'start_quote_take_timer',\r\n    'quote_take_timer',\r\n    v_timer.id,\r\n    jsonb_build_object(\r\n      'rotation', p_rotation,\r\n      'current_profile_id', v_current.id,\r\n      'received_at', p_received_at,\r\n      'deadline_at', v_timer.deadline_at,\r\n      'customer_name', v_timer.customer_name\r\n    ),\r\n    nullif(btrim(p_note), '')\r\n  );\r\n\r\n  return v_timer;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "start_quote_take_timer_v094(p_rotation rotation_kind, p_received_at timestamp with time zone, p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.start_quote_take_timer_v094(p_rotation rotation_kind, p_received_at timestamp with time zone, p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_note text DEFAULT NULL::text)\n RETURNS quote_take_timers\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_timer public.quote_take_timers%rowtype;\r\nbegin\r\n  if p_rotation::text <> 'whatsapp' then\r\n    raise exception 'The rescue timer is available only for WhatsApp quotes.';\r\n  end if;\r\n\r\n  perform public.validate_dealer_salesperson(\r\n    p_dealer_id,\r\n    p_salesperson_id,\r\n    true\r\n  );\r\n\r\n  select * into v_timer\r\n  from public.start_quote_take_timer(\r\n    p_rotation,\r\n    p_received_at,\r\n    p_customer_name,\r\n    p_dealer_id,\r\n    p_work_type,\r\n    p_note\r\n  );\r\n\r\n  update public.quote_take_timers\r\n  set salesperson_id = p_salesperson_id\r\n  where id = v_timer.id\r\n  returning * into v_timer;\r\n\r\n  return v_timer;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "steal_timed_quote(p_timer_id uuid)",
+        "def": "CREATE OR REPLACE FUNCTION public.steal_timed_quote(p_timer_id uuid)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_timer public.quote_take_timers%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_current public.profiles%rowtype;\r\n  v_me public.profiles%rowtype;\r\n  v_item public.work_items%rowtype;\r\n  v_next uuid;\r\n  v_position integer;\r\n  v_elapsed integer;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n\r\n  select * into v_timer\r\n  from public.quote_take_timers\r\n  where id = p_timer_id\r\n  for update;\r\n  if not found or v_timer.status <> 'active' then raise exception 'This rescue timer is no longer active'; end if;\r\n  if v_timer.deadline_at > now() then raise exception 'The current agent still has time remaining'; end if;\r\n  if v_timer.current_profile_id = auth.uid() then raise exception 'You own this turn. Use Take Timed Quote instead'; end if;\r\n\r\n  select * into v_me\r\n  from public.profiles\r\n  where id = auth.uid() and role = 'agent' and is_active\r\n  for update;\r\n  if not found then raise exception 'Active agent profile not found'; end if;\r\n  if v_me.availability <> 'available' then raise exception 'Set your status to Available before stealing a quote'; end if;\r\n  if v_timer.rotation = 'whatsapp' and not v_me.whatsapp_active then raise exception 'You are paused from the WhatsApp queue'; end if;\r\n  if v_timer.rotation = 'ringcentral' and not v_me.ringcentral_active then raise exception 'You are paused from the RingCentral queue'; end if;\r\n\r\n  select * into v_state\r\n  from public.rotation_state\r\n  where kind = v_timer.rotation\r\n  for update;\r\n  if v_state.current_profile_id is distinct from v_timer.current_profile_id then raise exception 'The queue moved and this timer is no longer valid'; end if;\r\n\r\n  select * into v_current\r\n  from public.profiles\r\n  where id = v_timer.current_profile_id and role = 'agent' and is_active;\r\n  if not found then raise exception 'The missed agent profile is invalid'; end if;\r\n\r\n  insert into public.work_items(\r\n    customer_name, dealer_id, work_type, assigned_profile_id, assignment_method,\r\n    status, note, received_through, created_by, assigned_at, accepted_at\r\n  ) values (\r\n    v_timer.customer_name, v_timer.dealer_id, v_timer.work_type, v_me.id,\r\n    case when v_timer.rotation = 'whatsapp' then 'whatsapp_turn'::public.assignment_method else 'ringcentral_turn'::public.assignment_method end,\r\n    'active', v_timer.note,\r\n    case when v_timer.rotation = 'whatsapp' then 'WhatsApp dealership' else 'RingCentral' end,\r\n    v_me.id, now(), now()\r\n  ) returning * into v_item;\r\n\r\n  v_elapsed := greatest(0, floor(extract(epoch from (now() - v_timer.received_at)))::integer);\r\n\r\n  update public.quote_take_timers\r\n  set status = 'stolen', claimed_by_profile_id = v_me.id,\r\n      source_work_item_id = v_item.id, completed_at = now()\r\n  where id = v_timer.id;\r\n\r\n  insert into public.quote_take_events(\r\n    source_work_item_id, rotation, received_at, taken_at,\r\n    taker_profile_id, skipped_profile_ids, elapsed_seconds\r\n  ) values (\r\n    v_item.id, v_timer.rotation, v_timer.received_at, now(),\r\n    v_me.id, array[v_current.id]::uuid[], v_elapsed\r\n  );\r\n\r\n  perform public.add_quote_note_if_present(v_item.id, v_me.id, v_timer.note);\r\n\r\n  insert into public.work_item_events(source_work_item_id, event_type, actor_profile_id, assigned_profile_id, details, created_at)\r\n  values (\r\n    v_item.id, 'taken', v_me.id, v_me.id,\r\n    jsonb_build_object(\r\n      'timer_id', v_timer.id,\r\n      'rotation', v_timer.rotation,\r\n      'received_at', v_timer.received_at,\r\n      'elapsed_seconds', v_elapsed,\r\n      'missed_profile_id', v_current.id,\r\n      'skipped_profile_ids', to_jsonb(array[v_current.id]::uuid[])\r\n    ),\r\n    now()\r\n  );\r\n\r\n  -- Preserve queue order: advance from the employee whose turn expired.\r\n  v_position := case when v_timer.rotation = 'whatsapp' then v_current.whatsapp_position else v_current.ringcentral_position end;\r\n  v_next := public.next_eligible_profile(v_timer.rotation, v_position);\r\n\r\n  update public.rotation_state\r\n  set current_profile_id = v_next, version = version + 1,\r\n      updated_at = now(), updated_by = v_me.id\r\n  where kind = v_timer.rotation;\r\n\r\n  insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, work_item_id, reason)\r\n  values (\r\n    v_timer.rotation, 'claim', v_me.id, v_current.id, v_next, v_item.id,\r\n    format('Quote stolen after %s seconds; missed current agent %s', v_elapsed, v_current.display_name)\r\n  );\r\n\r\n  insert into public.user_notifications(\r\n    recipient_profile_id, notification_type, title, message, entity_type, entity_id\r\n  ) values (\r\n    v_current.id,\r\n    'turn',\r\n    'Quote was stolen',\r\n    format('%s took %s after your 3-minute response period expired. Your turn was consumed and the regular queue order was preserved.', v_me.display_name, v_timer.customer_name),\r\n    'work_item',\r\n    v_item.id\r\n  );\r\n\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "take_quote_turn(p_rotation rotation_kind, p_received_at timestamp with time zone, p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.take_quote_turn(p_rotation rotation_kind, p_received_at timestamp with time zone, p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_state public.rotation_state%rowtype;\r\n  v_current public.profiles%rowtype;\r\n  v_queue_ids uuid[];\r\n  v_taker_index integer;\r\n  v_allowed_index integer;\r\n  v_elapsed_seconds integer;\r\n  v_skipped_ids uuid[] := '{}'::uuid[];\r\n  v_next uuid;\r\n  v_item public.work_items%rowtype;\r\n  v_rotation_position integer;\r\n  v_current_position integer;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n  if p_rotation not in ('whatsapp', 'ringcentral') then raise exception 'Take is only available for quote rotations'; end if;\r\n  if p_received_at is null then raise exception 'Quote received time is required'; end if;\r\n  if p_received_at > now() + interval '30 seconds' then raise exception 'Quote received time cannot be in the future'; end if;\r\n  if now() - p_received_at > interval '24 hours' then raise exception 'Take can only be used for quotes received within the last 24 hours'; end if;\r\n  if nullif(btrim(p_customer_name), '') is null then raise exception 'Customer name is required'; end if;\r\n  if p_rotation = 'whatsapp' and p_work_type <> 'new_quote' then raise exception 'WhatsApp Take only accepts new quotes'; end if;\r\n  if p_rotation = 'ringcentral' and p_work_type not in ('new_quote', 'requote') then raise exception 'RingCentral Take accepts new quotes or requotes'; end if;\r\n\r\n  perform public.ensure_daily_availability_reset();\r\n\r\n  select * into v_me from public.profiles where id = auth.uid() and is_active for update;\r\n  if not found then raise exception 'Active profile not found'; end if;\r\n  if v_me.availability <> 'available' then raise exception 'Set your status to Available before using Take'; end if;\r\n  if p_rotation = 'whatsapp' and not v_me.whatsapp_active then raise exception 'You are paused from the WhatsApp queue'; end if;\r\n  if p_rotation = 'ringcentral' and not v_me.ringcentral_active then raise exception 'You are paused from the RingCentral queue'; end if;\r\n\r\n  select * into v_state from public.rotation_state where kind = p_rotation for update;\r\n  if not found then raise exception 'Queue is not initialized'; end if;\r\n  if v_state.current_profile_id is null then raise exception 'No agent has started this queue today. Click Available first'; end if;\r\n\r\n  select * into v_current from public.profiles where id = v_state.current_profile_id and is_active;\r\n  if not found then raise exception 'Current queue agent is invalid. Refresh and try again'; end if;\r\n\r\n  v_current_position := case when p_rotation = 'whatsapp' then v_current.whatsapp_position else v_current.ringcentral_position end;\r\n\r\n  select array_agg(q.id order by q.sort_group, q.queue_position)\r\n  into v_queue_ids\r\n  from (\r\n    select\r\n      p.id,\r\n      case when p_rotation = 'whatsapp' then p.whatsapp_position else p.ringcentral_position end as queue_position,\r\n      case when (case when p_rotation = 'whatsapp' then p.whatsapp_position else p.ringcentral_position end) >= v_current_position then 0 else 1 end as sort_group\r\n    from public.profiles p\r\n    where p.role = 'agent'\r\n      and p.is_active\r\n      and p.availability = 'available'\r\n      and case when p_rotation = 'whatsapp' then p.whatsapp_active else p.ringcentral_active end\r\n  ) q;\r\n\r\n  if coalesce(array_length(v_queue_ids, 1), 0) = 0 then raise exception 'No available eligible agents are in this queue'; end if;\r\n\r\n  v_taker_index := array_position(v_queue_ids, v_me.id);\r\n  if v_taker_index is null then raise exception 'You are not currently eligible to take this queue'; end if;\r\n  if v_taker_index = 1 then raise exception 'You already own this turn. Use the normal queue action instead'; end if;\r\n\r\n  v_elapsed_seconds := greatest(0, floor(extract(epoch from (now() - p_received_at)))::integer);\r\n  v_allowed_index := least(array_length(v_queue_ids, 1), floor(v_elapsed_seconds / 180.0)::integer + 1);\r\n\r\n  if v_taker_index > v_allowed_index then\r\n    raise exception 'Not enough time has passed. Your 3-minute queue window has not opened yet';\r\n  end if;\r\n\r\n  if v_taker_index > 1 then\r\n    v_skipped_ids := v_queue_ids[1:v_taker_index - 1];\r\n  end if;\r\n\r\n  insert into public.work_items(\r\n    customer_name, dealer_id, work_type, assigned_profile_id, assignment_method,\r\n    status, note, received_through, created_by, accepted_at\r\n  ) values (\r\n    trim(p_customer_name), p_dealer_id, p_work_type, v_me.id,\r\n    case when p_rotation = 'whatsapp' then 'whatsapp_turn' else 'ringcentral_turn' end,\r\n    'active', nullif(btrim(p_note), ''),\r\n    case when p_rotation = 'whatsapp' then 'WhatsApp dealership' else 'RingCentral' end,\r\n    v_me.id, now()\r\n  ) returning * into v_item;\r\n\r\n  insert into public.quote_take_events(\r\n    source_work_item_id, rotation, received_at, taken_at,\r\n    taker_profile_id, skipped_profile_ids, elapsed_seconds\r\n  ) values (\r\n    v_item.id, p_rotation, p_received_at, now(),\r\n    v_me.id, coalesce(v_skipped_ids, '{}'::uuid[]), v_elapsed_seconds\r\n  );\r\n\r\n  perform public.add_quote_note_if_present(v_item.id, v_me.id, p_note);\r\n\r\n  insert into public.work_item_events(source_work_item_id, event_type, actor_profile_id, assigned_profile_id, details, created_at)\r\n  values (\r\n    v_item.id,\r\n    'taken',\r\n    v_me.id,\r\n    v_me.id,\r\n    jsonb_build_object(\r\n      'rotation', p_rotation,\r\n      'received_at', p_received_at,\r\n      'elapsed_seconds', v_elapsed_seconds,\r\n      'skipped_profile_ids', to_jsonb(coalesce(v_skipped_ids, '{}'::uuid[]))\r\n    ),\r\n    now()\r\n  );\r\n\r\n  v_rotation_position := case when p_rotation = 'whatsapp' then v_me.whatsapp_position else v_me.ringcentral_position end;\r\n  v_next := public.next_eligible_profile(p_rotation, v_rotation_position);\r\n\r\n  update public.rotation_state\r\n  set current_profile_id = coalesce(v_next, v_me.id),\r\n      version = version + 1,\r\n      updated_at = now(),\r\n      updated_by = v_me.id\r\n  where kind = p_rotation;\r\n\r\n  insert into public.turn_events(rotation, action, actor_profile_id, previous_profile_id, next_profile_id, work_item_id, reason)\r\n  values (\r\n    p_rotation,\r\n    'claim',\r\n    v_me.id,\r\n    v_state.current_profile_id,\r\n    coalesce(v_next, v_me.id),\r\n    v_item.id,\r\n    format('Take action after %s seconds; skipped %s eligible agent(s)', v_elapsed_seconds, greatest(v_taker_index - 1, 0))\r\n  );\r\n\r\n  return v_item;\r\nend;\r\n$function$\n"
+      }
+    ]
+  },
+  "migrations": {
+    "ok": false,
+    "error": "HTTP 400: {\"message\":\"Failed to run sql query: ERROR:  42P01: relation \\\"supabase_migrations.schema_migrations\\\" does not exist\\nLINE 3:     from supabase_migrations.schema_migrations\\n                 ^\\n\"}"
+  },
+  "rotation_state": {
+    "ok": true,
+    "rowCount": 3,
+    "rows": [
+      {
+        "kind": "whatsapp",
+        "current_profile_id": null,
+        "display_name": null,
+        "role": null,
+        "is_active": null,
+        "availability": null,
+        "whatsapp_active": null,
+        "ringcentral_active": null,
+        "workload_active": null,
+        "whatsapp_position": null,
+        "ringcentral_position": null,
+        "workload_position": null,
+        "version": 873,
+        "updated_at": "2026-07-31 00:30:30.399646+00",
+        "updated_by": "87fa5a57-a654-4f7f-a7c5-5738f8f2c70d"
+      },
+      {
+        "kind": "ringcentral",
+        "current_profile_id": null,
+        "display_name": null,
+        "role": null,
+        "is_active": null,
+        "availability": null,
+        "whatsapp_active": null,
+        "ringcentral_active": null,
+        "workload_active": null,
+        "whatsapp_position": null,
+        "ringcentral_position": null,
+        "workload_position": null,
+        "version": 401,
+        "updated_at": "2026-07-31 00:30:30.399646+00",
+        "updated_by": "87fa5a57-a654-4f7f-a7c5-5738f8f2c70d"
+      },
+      {
+        "kind": "workload",
+        "current_profile_id": null,
+        "display_name": null,
+        "role": null,
+        "is_active": null,
+        "availability": null,
+        "whatsapp_active": null,
+        "ringcentral_active": null,
+        "workload_active": null,
+        "whatsapp_position": null,
+        "ringcentral_position": null,
+        "workload_position": null,
+        "version": 344,
+        "updated_at": "2026-07-31 01:02:38.345647+00",
+        "updated_by": "0c60998d-16c2-45ef-ab5f-85befc8a991e"
+      }
+    ]
+  },
+  "profiles": {
+    "ok": true,
+    "rowCount": 17,
+    "rows": [
+      {
+        "id": "70a20c34-29ea-458f-8876-65109ca3ffe5",
+        "display_name": "Berenice Bollate",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": true,
+        "whatsapp_position": 2,
+        "ringcentral_active": true,
+        "ringcentral_position": 2,
+        "workload_active": true,
+        "workload_position": 2
+      },
+      {
+        "id": "26f9339c-0289-4c93-b31e-326181281a1a",
+        "display_name": "Mauricio Plaza",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": true,
+        "whatsapp_position": 3,
+        "ringcentral_active": true,
+        "ringcentral_position": 3,
+        "workload_active": true,
+        "workload_position": 3
+      },
+      {
+        "id": "2e1ff749-1ed0-4810-9270-bb0ab5157a99",
+        "display_name": "Galo Alfaro",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": true,
+        "whatsapp_position": 4,
+        "ringcentral_active": true,
+        "ringcentral_position": 4,
+        "workload_active": true,
+        "workload_position": 4
+      },
+      {
+        "id": "0c60998d-16c2-45ef-ab5f-85befc8a991e",
+        "display_name": "Estefania Bayas",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": true,
+        "whatsapp_position": 5,
+        "ringcentral_active": true,
+        "ringcentral_position": 5,
+        "workload_active": true,
+        "workload_position": 5
+      },
+      {
+        "id": "d7ba1899-f2ec-4b52-91b1-dd87db70ef4d",
+        "display_name": "Pablo Teran",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": true,
+        "whatsapp_position": 6,
+        "ringcentral_active": true,
+        "ringcentral_position": 6,
+        "workload_active": true,
+        "workload_position": 6
+      },
+      {
+        "id": "a20bf314-b300-466b-b280-71fceccd79a4",
+        "display_name": "Elvin Argueta",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": true,
+        "whatsapp_position": 7,
+        "ringcentral_active": true,
+        "ringcentral_position": 7,
+        "workload_active": true,
+        "workload_position": 7
+      },
+      {
+        "id": "87fa5a57-a654-4f7f-a7c5-5738f8f2c70d",
+        "display_name": "Miguel Leiva",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": true,
+        "whatsapp_position": 8,
+        "ringcentral_active": true,
+        "ringcentral_position": 8,
+        "workload_active": true,
+        "workload_position": 8
+      },
+      {
+        "id": "6eaf2adf-bf0b-4694-a532-711c694b3897",
+        "display_name": "Maria Zumarraga",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": true,
+        "whatsapp_position": 9,
+        "ringcentral_active": true,
+        "ringcentral_position": 9,
+        "workload_active": true,
+        "workload_position": 9
+      },
+      {
+        "id": "38dc0842-e29d-44b2-8166-720ef98c8d55",
+        "display_name": "Maria Trujillo",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": true,
+        "whatsapp_position": 10,
+        "ringcentral_active": true,
+        "ringcentral_position": 10,
+        "workload_active": true,
+        "workload_position": 10
+      },
+      {
+        "id": "a0a2c3c5-96c0-48a7-bedf-271bc3c9ab80",
+        "display_name": "Juliana Abrego",
+        "role": "agent",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": true,
+        "whatsapp_position": 11,
+        "ringcentral_active": true,
+        "ringcentral_position": 11,
+        "workload_active": true,
+        "workload_position": 11
+      },
+      {
+        "id": "5608dfc2-e63c-4f0d-beb4-12b41458aa50",
+        "display_name": "Osmary MacGregor",
+        "role": "manager",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": false,
+        "whatsapp_position": 15,
+        "ringcentral_active": false,
+        "ringcentral_position": 15,
+        "workload_active": false,
+        "workload_position": 15
+      },
+      {
+        "id": "93a4df46-32cb-46d6-a30d-6eb4f060ab32",
+        "display_name": "Andrea Rodriguez",
+        "role": "manager",
+        "is_active": false,
+        "availability": "unavailable",
+        "whatsapp_active": false,
+        "whatsapp_position": 16,
+        "ringcentral_active": false,
+        "ringcentral_position": 16,
+        "workload_active": false,
+        "workload_position": 16
+      },
+      {
+        "id": "a3fda208-532c-4095-bcef-31af4ce2569a",
+        "display_name": "Andrea Rodriguez",
+        "role": "manager",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": false,
+        "whatsapp_position": 17,
+        "ringcentral_active": false,
+        "ringcentral_position": 17,
+        "workload_active": false,
+        "workload_position": 17
+      },
+      {
+        "id": "6c9d19b4-b680-44a9-9f66-d3628a19a5db",
+        "display_name": "Daniel Perez",
+        "role": "manager",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": false,
+        "whatsapp_position": 22,
+        "ringcentral_active": false,
+        "ringcentral_position": 22,
+        "workload_active": false,
+        "workload_position": 22
+      },
+      {
+        "id": "540258c2-6da5-42b6-86b4-a05219eb52f5",
+        "display_name": "Micaela Delgado",
+        "role": "sales_supervisor",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": false,
+        "whatsapp_position": 14,
+        "ringcentral_active": false,
+        "ringcentral_position": 14,
+        "workload_active": false,
+        "workload_position": 14
+      },
+      {
+        "id": "61228550-f7ac-4bd8-8885-b97800e17433",
+        "display_name": "Oscar Landaverde",
+        "role": "super_admin",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": false,
+        "whatsapp_position": 1,
+        "ringcentral_active": false,
+        "ringcentral_position": 1,
+        "workload_active": false,
+        "workload_position": 1
+      },
+      {
+        "id": "f900a291-6ba8-4adf-a334-131b9871398c",
+        "display_name": "Jason Toro",
+        "role": "super_admin",
+        "is_active": true,
+        "availability": "unavailable",
+        "whatsapp_active": false,
+        "whatsapp_position": 12,
+        "ringcentral_active": false,
+        "ringcentral_position": 12,
+        "workload_active": false,
+        "workload_position": 12
+      }
+    ]
+  },
+  "invariant_violations": {
+    "ok": true,
+    "rowCount": 3,
+    "rows": [
+      {
+        "rotation": "whatsapp",
+        "current_profile_id": null,
+        "current_name": null,
+        "current_role": null,
+        "eligible_count": 0,
+        "verdict": "OK: legitimately empty"
+      },
+      {
+        "rotation": "ringcentral",
+        "current_profile_id": null,
+        "current_name": null,
+        "current_role": null,
+        "eligible_count": 0,
+        "verdict": "OK: legitimately empty"
+      },
+      {
+        "rotation": "workload",
+        "current_profile_id": null,
+        "current_name": null,
+        "current_role": null,
+        "eligible_count": 0,
+        "verdict": "OK: legitimately empty"
+      }
+    ]
+  },
+  "position_hygiene": {
+    "ok": true,
+    "rowCount": 0,
+    "rows": []
+  },
+  "turn_events": {
+    "ok": true,
+    "rowCount": 120,
+    "rows": [
+      {
+        "created_at": "2026-07-31 01:02:38.345647+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "previous": "Estefania Bayas",
+        "next": null,
+        "went_null": true,
+        "work_item_id": null,
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-31 00:31:13.672016+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-31 00:30:30.399646+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": null,
+        "went_null": true,
+        "work_item_id": null,
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-31 00:30:30.399646+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": null,
+        "went_null": true,
+        "work_item_id": null,
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-31 00:30:07.29219+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "previous": "Pablo Teran",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-30 23:57:56.265866+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Pablo Teran",
+        "previous": "Pablo Teran",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": "7a9bf742-5fcd-47bd-b845-0db6ccba0dc8",
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 23:07:31.128713+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Estefania Bayas",
+        "previous": "Estefania Bayas",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 22:56:21.139847+00",
+        "rotation": "workload",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Miguel Leiva",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 22:56:20.80415+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 22:55:29.163555+00",
+        "rotation": "workload",
+        "action": "claim",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": "e81ec136-5224-4146-a8e1-f6847558b261",
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 22:54:46.053979+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Miguel Leiva",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 22:16:30.586628+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Pablo Teran",
+        "previous": "Pablo Teran",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 22:02:42.907101+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Estefania Bayas",
+        "previous": "Estefania Bayas",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 22:02:26.314076+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Andrea Rodriguez",
+        "previous": "Pablo Teran",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 21:47:49.378362+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 21:33:08.169396+00",
+        "rotation": "workload",
+        "action": "claim",
+        "actor": "Pablo Teran",
+        "previous": "Pablo Teran",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": "8fd6d75c-983a-4657-ad90-f376fdb5e782",
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 21:31:58.357309+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Berenice Bollate",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 21:31:52.788904+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": null,
+        "next": "Berenice Bollate",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 21:30:01.979046+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Galo Alfaro",
+        "previous": "Galo Alfaro",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-30 21:30:01.979046+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Galo Alfaro",
+        "previous": "Galo Alfaro",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-30 21:29:50.296203+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Juliana Abrego",
+        "previous": "Juliana Abrego",
+        "next": null,
+        "went_null": true,
+        "work_item_id": null,
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-30 21:06:23.83608+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Trujillo",
+        "previous": "Maria Trujillo",
+        "next": "Juliana Abrego",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:55:04.071859+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:40:01.971335+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Elvin Argueta",
+        "previous": "Elvin Argueta",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:28:05.588605+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Pablo Teran",
+        "previous": "Pablo Teran",
+        "next": "Elvin Argueta",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 20:27:08.668477+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Osmary MacGregor",
+        "previous": "Elvin Argueta",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 20:15:16.405377+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Pablo Teran",
+        "next": "Elvin Argueta",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 20:12:45.328916+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Estefania Bayas",
+        "previous": "Estefania Bayas",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:57:14.893881+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Galo Alfaro",
+        "previous": "Galo Alfaro",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:51:34.932454+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Galo Alfaro",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:46:37.523965+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Berenice Bollate",
+        "previous": "Berenice Bollate",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:38:46.881969+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": null,
+        "next": "Berenice Bollate",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 19:32:04.701779+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Juliana Abrego",
+        "previous": "Juliana Abrego",
+        "next": null,
+        "went_null": true,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:28:48.138645+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Trujillo",
+        "previous": "Maria Trujillo",
+        "next": "Juliana Abrego",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:22:39.32294+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 19:06:22.059357+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Current agent responded to rescue timer"
+      },
+      {
+        "created_at": "2026-07-30 19:01:35.351619+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Elvin Argueta",
+        "previous": "Elvin Argueta",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-30 18:37:41.009355+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Pablo Teran",
+        "previous": "Pablo Teran",
+        "next": "Elvin Argueta",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 18:21:23.532641+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Estefania Bayas",
+        "previous": "Estefania Bayas",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 18:14:46.869423+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Galo Alfaro",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-30 18:12:56.119479+00",
+        "rotation": "workload",
+        "action": "claim",
+        "actor": "Berenice Bollate",
+        "previous": "Berenice Bollate",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": "f2349444-9f8c-470f-89c3-7b819c5b1c54",
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 18:03:41.918312+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Galo Alfaro",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 18:03:23.317851+00",
+        "rotation": "workload",
+        "action": "manual_change",
+        "actor": "Osmary MacGregor",
+        "previous": null,
+        "next": "Berenice Bollate",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 18:01:13.571987+00",
+        "rotation": "workload",
+        "action": "claim",
+        "actor": "Juliana Abrego",
+        "previous": "Juliana Abrego",
+        "next": null,
+        "went_null": true,
+        "work_item_id": "c41514ce-9688-4a6d-b672-460d48cf133a",
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 18:00:37.197713+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Estefania Bayas",
+        "next": "Galo Alfaro",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 17:59:38.25048+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Galo Alfaro",
+        "previous": "Galo Alfaro",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 17:58:14.914342+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Galo Alfaro",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 17:56:32.186547+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Berenice Bollate",
+        "previous": "Berenice Bollate",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 17:50:20.358055+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Berenice Bollate",
+        "previous": null,
+        "next": "Berenice Bollate",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Empty queue resumed when an eligible agent became available"
+      },
+      {
+        "created_at": "2026-07-30 17:41:19.04174+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Juliana Abrego",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-30 17:24:16.718253+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Juliana Abrego",
+        "previous": "Juliana Abrego",
+        "next": null,
+        "went_null": true,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 17:01:20.547109+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Trujillo",
+        "previous": "Maria Trujillo",
+        "next": "Juliana Abrego",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 16:33:19.751824+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 16:30:45.750335+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 16:28:40.400354+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Elvin Argueta",
+        "previous": "Elvin Argueta",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 16:27:49.419667+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Estefania Bayas",
+        "previous": "Estefania Bayas",
+        "next": "Elvin Argueta",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 15:49:51.928951+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Galo Alfaro",
+        "previous": "Galo Alfaro",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 15:49:03.131798+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Osmary MacGregor",
+        "previous": "Estefania Bayas",
+        "next": "Galo Alfaro",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 15:48:50.076048+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Osmary MacGregor",
+        "previous": "Mauricio Plaza",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 15:48:17.132596+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Osmary MacGregor",
+        "previous": "Galo Alfaro",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 15:47:58.643651+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Osmary MacGregor",
+        "previous": "Estefania Bayas",
+        "next": "Galo Alfaro",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 15:46:13.031988+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "previous": null,
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Empty queue resumed when an eligible agent became available"
+      },
+      {
+        "created_at": "2026-07-30 15:30:36.388888+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Juliana Abrego",
+        "previous": "Juliana Abrego",
+        "next": null,
+        "went_null": true,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 15:01:39.192893+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Trujillo",
+        "previous": "Maria Trujillo",
+        "next": "Juliana Abrego",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 14:29:03.164501+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 14:00:48.627335+00",
+        "rotation": "workload",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Miguel Leiva",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 13:58:25.140977+00",
+        "rotation": "workload",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Berenice Bollate",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 13:58:20.468823+00",
+        "rotation": "ringcentral",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Berenice Bollate",
+        "next": "Galo Alfaro",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 13:58:09.260875+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Berenice Bollate",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-30 01:03:04.839089+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": null,
+        "went_null": true,
+        "work_item_id": null,
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-30 01:03:04.839089+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": null,
+        "went_null": true,
+        "work_item_id": null,
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-30 01:03:04.839089+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": null,
+        "went_null": true,
+        "work_item_id": null,
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-30 01:01:02.36148+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "previous": "Estefania Bayas",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-30 01:01:02.36148+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "previous": "Estefania Bayas",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-30 00:30:15.857465+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-30 00:30:15.857465+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-30 00:29:27.234301+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "previous": "Pablo Teran",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-30 00:06:55.676022+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 22:20:39.426597+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Pablo Teran",
+        "previous": "Pablo Teran",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 22:18:41.805335+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Estefania Bayas",
+        "previous": "Estefania Bayas",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 22:09:08.608659+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 22:07:57.705966+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-29 21:31:25.170692+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 21:30:41.355301+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Elvin Argueta",
+        "previous": "Elvin Argueta",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-29 21:28:39.459717+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Pablo Teran",
+        "previous": "Pablo Teran",
+        "next": "Elvin Argueta",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 21:27:53.104249+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Galo Alfaro",
+        "previous": "Galo Alfaro",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 21:20:07.991762+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Galo Alfaro",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 21:11:56.420143+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Trujillo",
+        "previous": "Maria Trujillo",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 21:08:46.353208+00",
+        "rotation": "ringcentral",
+        "action": "claim",
+        "actor": "Galo Alfaro",
+        "previous": "Galo Alfaro",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 21:06:50.195499+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Osmary MacGregor",
+        "previous": "Mauricio Plaza",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-29 20:58:55.41962+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Trujillo",
+        "previous": "Maria Trujillo",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Current agent responded to rescue timer"
+      },
+      {
+        "created_at": "2026-07-29 20:42:15.156942+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 20:40:51.142531+00",
+        "rotation": "workload",
+        "action": "claim",
+        "actor": "Maria Trujillo",
+        "previous": "Maria Trujillo",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": "98984d0d-d9f4-4730-beae-0dcc2914c808",
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 20:34:15.666215+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Elvin Argueta",
+        "previous": "Elvin Argueta",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 20:31:00.94179+00",
+        "rotation": "ringcentral",
+        "action": "claim",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Galo Alfaro",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 20:26:46.548922+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Estefania Bayas",
+        "previous": "Estefania Bayas",
+        "next": "Elvin Argueta",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 20:23:29.453738+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Galo Alfaro",
+        "previous": "Galo Alfaro",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 20:19:16.350442+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Galo Alfaro",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 20:17:30.582011+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Trujillo",
+        "previous": "Maria Trujillo",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 20:08:32.197476+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Osmary MacGregor",
+        "previous": "Mauricio Plaza",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-29 20:06:16.407328+00",
+        "rotation": "workload",
+        "action": "claim",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": "e2ed459b-aa61-4f66-b878-d4ea9bb74fa7",
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 19:54:15.601097+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Trujillo",
+        "previous": "Maria Trujillo",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 19:51:57.313694+00",
+        "rotation": "whatsapp",
+        "action": "pass",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Current workload"
+      },
+      {
+        "created_at": "2026-07-29 19:50:50.086096+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Osmary MacGregor",
+        "previous": "Miguel Leiva",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-29 19:49:26.434537+00",
+        "rotation": "whatsapp",
+        "action": "manual_change",
+        "actor": "Osmary MacGregor",
+        "previous": "Maria Trujillo",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-29 19:48:15.605332+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Mauricio Plaza",
+        "previous": "Maria Zumarraga",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Quote stolen after 195 seconds; missed current agent Maria Zumarraga"
+      },
+      {
+        "created_at": "2026-07-29 19:45:51.201496+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Agent became unavailable"
+      },
+      {
+        "created_at": "2026-07-29 19:45:12.159026+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Pablo Teran",
+        "previous": "Pablo Teran",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 19:34:50.468814+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Estefania Bayas",
+        "previous": "Estefania Bayas",
+        "next": "Pablo Teran",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 19:33:18.587513+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Galo Alfaro",
+        "previous": "Galo Alfaro",
+        "next": "Estefania Bayas",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 19:32:16.2734+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Mauricio Plaza",
+        "previous": "Mauricio Plaza",
+        "next": "Galo Alfaro",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 19:30:51.523506+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Trujillo",
+        "previous": "Maria Trujillo",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 19:10:24.26283+00",
+        "rotation": "ringcentral",
+        "action": "claim",
+        "actor": "Maria Trujillo",
+        "previous": "Maria Trujillo",
+        "next": "Mauricio Plaza",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 19:05:41.094541+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 18:48:06.995107+00",
+        "rotation": "ringcentral",
+        "action": "claim",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 18:46:37.510125+00",
+        "rotation": "ringcentral",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Maria Trujillo",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      },
+      {
+        "created_at": "2026-07-29 18:35:57.536224+00",
+        "rotation": "ringcentral",
+        "action": "claim",
+        "actor": "Maria Zumarraga",
+        "previous": "Maria Zumarraga",
+        "next": "Maria Trujillo",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Customer Service intake claimed and converted"
+      },
+      {
+        "created_at": "2026-07-29 18:35:22.255356+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 18:24:36.43772+00",
+        "rotation": "ringcentral",
+        "action": "claim",
+        "actor": "Miguel Leiva",
+        "previous": "Miguel Leiva",
+        "next": "Maria Zumarraga",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-29 18:23:20.293927+00",
+        "rotation": "ringcentral",
+        "action": "manual_change",
+        "actor": "Oscar Landaverde",
+        "previous": "Maria Zumarraga",
+        "next": "Miguel Leiva",
+        "went_null": false,
+        "work_item_id": null,
+        "reason": "Manager changed rotation from Overview"
+      }
+    ]
+  },
+  "null_transitions": {
+    "ok": true,
+    "rowCount": 59,
+    "rows": [
+      {
+        "created_at": "2026-07-31 01:02:38.345647+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-31 00:30:30.399646+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Miguel Leiva",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-31 00:30:30.399646+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Miguel Leiva",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-30 21:29:50.296203+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Juliana Abrego",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-30 19:32:04.701779+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Juliana Abrego",
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 18:01:13.571987+00",
+        "rotation": "workload",
+        "action": "claim",
+        "actor": "Juliana Abrego",
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 17:24:16.718253+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Juliana Abrego",
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 15:30:36.388888+00",
+        "rotation": "whatsapp",
+        "action": "claim",
+        "actor": "Juliana Abrego",
+        "reason": null
+      },
+      {
+        "created_at": "2026-07-30 01:03:04.839089+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Miguel Leiva",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-30 01:03:04.839089+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Miguel Leiva",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-30 01:03:04.839089+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Miguel Leiva",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-28 01:13:49.851396+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-28 01:13:49.851396+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-28 01:13:49.851396+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-26 23:56:14.56591+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Maria Zumarraga",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-26 23:56:14.56591+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Maria Zumarraga",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-26 23:56:14.56591+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Maria Zumarraga",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-26 17:15:38.560877+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Maria Zumarraga",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-26 17:15:38.560877+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Maria Zumarraga",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-26 17:15:38.560877+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Maria Zumarraga",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-26 01:01:42.924072+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-26 01:01:42.924072+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-26 01:01:42.924072+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-25 01:14:24.176707+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-25 01:14:24.176707+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-25 01:14:24.176707+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Estefania Bayas",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-23 01:00:07.091113+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-23 01:00:07.091113+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-23 01:00:07.091113+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-22 00:58:55.418489+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-22 00:58:55.418489+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-22 00:58:55.418489+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-22 00:58:11.083545+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-22 00:58:11.083545+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-22 00:58:11.083545+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-22 00:58:07.117258+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-22 00:58:07.117258+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-22 00:58:07.117258+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Mauricio Plaza",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-18 13:55:24.823772+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Maria Trujillo",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-18 13:55:24.823772+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Maria Trujillo",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-18 13:55:24.823772+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Maria Trujillo",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-18 13:55:18.68993+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Maria Trujillo",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-18 13:55:18.68993+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Maria Trujillo",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-18 13:55:18.68993+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Maria Trujillo",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-18 02:25:11.853427+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-18 02:25:11.853427+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-18 02:25:11.853427+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-17 06:19:58.198629+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Berenice Bollate",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-17 06:19:58.198629+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Berenice Bollate",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-17 06:19:58.198629+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Berenice Bollate",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-16 01:29:46.529579+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-16 01:29:46.529579+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-16 01:29:46.529579+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-16 01:05:50.240973+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-16 01:05:50.240973+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-16 01:05:50.240973+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-14 01:02:10.869629+00",
+        "rotation": "ringcentral",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-14 01:02:10.869629+00",
+        "rotation": "workload",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      },
+      {
+        "created_at": "2026-07-14 01:02:10.869629+00",
+        "rotation": "whatsapp",
+        "action": "auto_skip",
+        "actor": "Pablo Teran",
+        "reason": "Agent became unavailable and no eligible agent is currently available"
+      }
+    ]
+  },
+  "duplicate_turn_events": {
+    "ok": true,
+    "rowCount": 0,
+    "rows": []
+  },
+  "stuck_intakes": {
+    "ok": true,
+    "rowCount": 0,
+    "rows": []
+  },
+  "intake_tables": {
+    "ok": true,
+    "rowCount": 11,
+    "rows": [
+      {
+        "table_name": "cs_intake_drivers",
+        "approx_rows": -1
+      },
+      {
+        "table_name": "cs_intake_events",
+        "approx_rows": 14
+      },
+      {
+        "table_name": "cs_intake_submissions",
+        "approx_rows": 11
+      },
+      {
+        "table_name": "cs_intake_vehicles",
+        "approx_rows": -1
+      },
+      {
+        "table_name": "customer_intakes",
+        "approx_rows": -1
+      },
+      {
+        "table_name": "daily_rotation_starts",
+        "approx_rows": 51
+      },
+      {
+        "table_name": "intake_history_events",
+        "approx_rows": -1
+      },
+      {
+        "table_name": "quote_take_events",
+        "approx_rows": -1
+      },
+      {
+        "table_name": "quote_take_timers",
+        "approx_rows": 16
+      },
+      {
+        "table_name": "rotation_state",
+        "approx_rows": 3
+      },
+      {
+        "table_name": "turn_events",
+        "approx_rows": 1467
+      }
+    ]
+  },
+  "realtime": {
+    "ok": true,
+    "rowCount": 14,
+    "rows": [
+      {
+        "schemaname": "public",
+        "tablename": "dealers"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "notifications"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "pending_pricing_quotes"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "profiles"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "quote_notes"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "quote_outcomes"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "quote_take_events"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "quote_take_timers"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "rotation_state"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "turn_events"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "user_notifications"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "work_desk_settings"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "work_item_events"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "work_items"
+      }
+    ]
+  },
+  "rotation_kinds": {
+    "ok": true,
+    "rowCount": 3,
+    "rows": [
+      {
+        "kind": "whatsapp"
+      },
+      {
+        "kind": "ringcentral"
+      },
+      {
+        "kind": "workload"
+      }
+    ]
+  }
+}
