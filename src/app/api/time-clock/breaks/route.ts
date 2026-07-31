@@ -52,6 +52,9 @@ export async function POST(request: Request) {
   // Update clock entry status
   await supabase.from("time_clock_entries").update({ clock_status: "lunch" }).eq("id", activeEntry.id);
 
+  // Sync Work Desk availability — put agent on break in the rotation queue
+  await supabase.rpc("set_my_availability", { p_status: "break" });
+
   return Response.json({ break: data }, { status: 201 });
 }
 
@@ -112,6 +115,9 @@ export async function PATCH(request: Request) {
       .update({ clock_status: "available" })
       .eq("id", activeEntry.id);
   }
+
+  // Sync Work Desk availability — restore agent to available in the rotation queue
+  await supabase.rpc("set_my_availability", { p_status: "available" });
 
   return Response.json({ success: true, duration_minutes: durationMinutes });
 }
