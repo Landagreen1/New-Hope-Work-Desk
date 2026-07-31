@@ -1,0 +1,215 @@
+{
+  "capturedAt": "2026-07-31T03:23:05.802Z",
+  "before": {
+    "profiles_ct": 39,
+    "profiles_md5": "c717bd7281ce81157f2799a4e4b1436a",
+    "rotation_md5": "e821fcbccad48dd89d7cef218bd07986",
+    "turn_events_ct": 1515,
+    "work_items_ct": 309,
+    "intakes_ct": 12
+  },
+  "after": {
+    "profiles_ct": 39,
+    "profiles_md5": "c717bd7281ce81157f2799a4e4b1436a",
+    "rotation_md5": "e821fcbccad48dd89d7cef218bd07986",
+    "turn_events_ct": 1515,
+    "work_items_ct": 309,
+    "intakes_ct": 12
+  },
+  "rollbackClean": true,
+  "functionsPersisted": 0,
+  "results": [
+    {
+      "scenario": "S1_beyond_highest_wraps",
+      "expected": "A1",
+      "actual": "A1",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S1_fixture_three_eligible",
+      "expected": "3",
+      "actual": "3",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S1_from_1_gives_A2",
+      "expected": "A2",
+      "actual": "A2",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S1_from_2_gives_A3",
+      "expected": "A3",
+      "actual": "A3",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S1_full_cycle_closes",
+      "expected": "A1",
+      "actual": "A1",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S1_gap_from_5_gives_A3",
+      "expected": "A3",
+      "actual": "A3",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S1_never_null_pos_0_to_20",
+      "expected": "0 null results",
+      "actual": "0 null results",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S1_null_after_gives_lowest",
+      "expected": "A1",
+      "actual": "A1",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S1_WRAPAROUND_from_10_gives_A1",
+      "expected": "A1",
+      "actual": "A1",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S10_deterministic_repeat",
+      "expected": "identical across 3 calls",
+      "actual": "aaaaaaaa-0000-4000-8000-000000000001 / aaaaaaaa-0000-4000-8000-000000000001 / aaaaaaaa-0000-4000-8000-000000000001",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S11_helpers_installed",
+      "expected": "5 helpers",
+      "actual": "5: advance_rotation, ensure_rotation_valid, is_rotation_eligible, rotation_empty_reason, rotation_position_of",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S11_position_NOT_in_where",
+      "expected": "false (must not be in WHERE)",
+      "actual": "false",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S11_wraparound_in_order_by",
+      "expected": "true",
+      "actual": "true",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S12_duplicate_positions_prevented",
+      "expected": "3 partial unique indexes",
+      "actual": "3: profiles_ringcentral_position_unique, profiles_whatsapp_position_unique, profiles_workload_position_unique",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S13_empty_reason_not_generic",
+      "expected": "not \"No agent available\"",
+      "actual": "All 10 WhatsApp agents are unavailable or on break.",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S13_empty_reason_specific",
+      "expected": "mentions the queue name",
+      "actual": "All 10 Customer Service Intake Queue agents are unavailable or on break.",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S2_two_agents_from_1",
+      "expected": "A2",
+      "actual": "A2",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S2_two_agents_wrap_from_2",
+      "expected": "A1",
+      "actual": "A1",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S3_one_agent_never_null",
+      "expected": "0 null results",
+      "actual": "0 null results",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S3_one_agent_self_loop",
+      "expected": "A1",
+      "actual": "A1",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S4_all_unavailable_is_null",
+      "expected": "NULL",
+      "actual": "NULL",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S5_recovery_after_empty",
+      "expected": "A2",
+      "actual": "A2",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S6_null_position_never_selected",
+      "expected": "0 selections",
+      "actual": "0 selections of the null-position agent",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S6_null_position_only_is_null",
+      "expected": "NULL",
+      "actual": "NULL",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S7_agent_selected_despite_lower_supervisor",
+      "expected": "RealAgent",
+      "actual": "RealAgent",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S7_non_agents_never_selected",
+      "expected": "RealAgent for all positions",
+      "actual": "0 non-agent selections",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S8_inactive_never_selected",
+      "expected": "Active",
+      "actual": "Active",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S8_inactive_wrap_still_skips",
+      "expected": "Active",
+      "actual": "Active",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S9_each_rotation_wraps_to_its_own",
+      "expected": "each self-loops",
+      "actual": "wa=WaOnly rc=RcOnly wl=WlOnly",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S9_ringcentral_picks_RcOnly",
+      "expected": "RcOnly",
+      "actual": "RcOnly",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S9_whatsapp_picks_WaOnly",
+      "expected": "WaOnly",
+      "actual": "WaOnly",
+      "result": "PASS"
+    },
+    {
+      "scenario": "S9_workload_picks_WlOnly",
+      "expected": "WlOnly",
+      "actual": "WlOnly",
+      "result": "PASS"
+    }
+  ]
+}

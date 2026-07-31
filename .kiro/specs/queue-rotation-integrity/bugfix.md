@@ -4,8 +4,15 @@ Branch: `fix/queue-rotation-integrity`
 Baseline commit: `09b9901` (`fix(queue): comprehensive queue system fixes v1.8.6`)
 Audit performed: 2026-07-31, against the live Supabase project via the Management API (read-only).
 
-> **Status: Phase 1–3 complete (audit, state machine, root cause). Phase 4 implementation not started.**
-> No production data was written. No migration has been applied.
+> **Status: FIXED AND DEPLOYED.** `v1.8.7-fix-rotation-integrity.sql` applied to production
+> 2026-07-31 ~03:50 UTC. Verified by a 10/10 post-deploy replay of the original incident and a
+> zero-violation live invariant audit. See `evidence-report.md`.
+>
+> **Two findings below were later corrected** — read `evidence-report.md` §3 before relying on §3 here:
+> 1. The `_v094` drift is **not** a functional root cause. Those RPCs are thin wrappers that delegate
+>    to the unsuffixed functions, so `v1.8.5` did reach the UI path.
+> 2. Duplicate rotation positions are **already impossible** — three partial unique indexes prevent
+>    them for active agents. The non-determinism risk was theoretical, not live.
 
 ---
 
@@ -217,8 +224,11 @@ atomic claim → convert → assign → advance → audit sequence, but the API 
 
 - **No `position IS NOT NULL` guard.** A `NULL` position sorts last but remains selectable, so an agent
   with no valid position can become the current agent. Breaks invariant 4.
-- **No deterministic tiebreaker.** Duplicate positions produce an unspecified `ORDER BY`, so the winner
-  can change between calls. Breaks the deterministic-ordering requirement.
+- **No deterministic tiebreaker.** Duplicate positions produce an unspecified `ORDER BY`.
+  **CORRECTED:** this is not reachable in practice. Three partial unique indexes
+  (`profiles_<rotation>_position_unique ... WHERE role='agent' AND is_active`) already prevent duplicate
+  positions for active agents. The `p.id` tiebreaker was still added because it is free and makes the
+  ordering total, but it addresses a theoretical concern rather than an observed one.
 - **`role = 'agent'` only.** `v1.8.6-fix-queue-system-comprehensive.sql` made `sales_supervisor` a
   legitimate intake claimer, but the rotation selector cannot return one. A `sales_supervisor` holding a
   turn is treated as unusable by `set_my_availability`'s `v_current_usable` check, which repeats the same

@@ -1,0 +1,192 @@
+{
+  "intake_volume": {
+    "ok": true,
+    "rows": [
+      {
+        "tbl": "cs_intake_submissions",
+        "total": 12,
+        "last_30d": 12,
+        "newest": "2026-07-30 21:21:01.677574+00"
+      },
+      {
+        "tbl": "customer_intakes",
+        "total": 0,
+        "last_30d": 0,
+        "newest": null
+      }
+    ]
+  },
+  "cs_status_breakdown": {
+    "ok": true,
+    "rows": [
+      {
+        "status": "converted",
+        "intake_channel": "ringcentral",
+        "n": 8,
+        "newest_submitted": "2026-07-30 21:21:04.455884+00"
+      },
+      {
+        "status": "draft",
+        "intake_channel": "ringcentral",
+        "n": 4,
+        "newest_submitted": null
+      }
+    ]
+  },
+  "customer_intakes_breakdown": {
+    "ok": true,
+    "rows": []
+  },
+  "cs_rc_claim_usage": {
+    "ok": true,
+    "rows": [
+      {
+        "event_type": "converted",
+        "n": 1,
+        "first_at": "2026-07-20 13:59:48.983782+00",
+        "last_at": "2026-07-20 13:59:48.983782+00"
+      },
+      {
+        "event_type": "ringcentral_claimed",
+        "n": 1,
+        "first_at": "2026-07-20 13:59:48.983782+00",
+        "last_at": "2026-07-20 13:59:48.983782+00"
+      },
+      {
+        "event_type": "submitted",
+        "n": 1,
+        "first_at": "2026-07-20 13:37:43.521258+00",
+        "last_at": "2026-07-20 13:37:43.521258+00"
+      }
+    ]
+  },
+  "manual_fns": {
+    "ok": true,
+    "rows": [
+      {
+        "sig": "assign_customer_intake(p_intake_id uuid, p_agent_id uuid, p_reason text)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      },
+      {
+        "sig": "cs_intake_claim(p_submission_id uuid)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      },
+      {
+        "sig": "cs_intake_convert(p_submission_id uuid)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      },
+      {
+        "sig": "cs_intake_manager_assign(p_submission_id uuid, p_agent_id uuid)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      },
+      {
+        "sig": "log_manual_quote(p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_received_through text, p_note text)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      },
+      {
+        "sig": "log_manual_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_received_through text, p_note text)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      },
+      {
+        "sig": "log_manual_workload(p_mode text, p_related_quote_source_work_item_id uuid, p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text, p_note text)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      },
+      {
+        "sig": "log_payment_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_note text)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      },
+      {
+        "sig": "log_whatsapp_update(p_customer_name text, p_dealer_id uuid, p_original_owner_profile_id uuid, p_note text)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      },
+      {
+        "sig": "manager_create_and_assign_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_received_through text, p_assigned_profile_id uuid, p_note text)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      },
+      {
+        "sig": "workload_reassign(p_work_item_id uuid, p_profile_id uuid, p_reason text)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      },
+      {
+        "sig": "workload_void(p_work_item_id uuid, p_reason text)",
+        "touches_rotation_state": false,
+        "writes_turn_events": false,
+        "reads_current_agent": false
+      }
+    ]
+  },
+  "manual_bodies": {
+    "ok": true,
+    "rows": [
+      {
+        "sig": "log_manual_quote(p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_received_through text, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.log_manual_quote(p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_received_through text, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_me public.profiles%rowtype;\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  if not public.is_agent() then raise exception 'Agent permission required'; end if;\r\n  if p_work_type not in ('new_quote', 'requote') then raise exception 'Manual quote must be a new quote or requote'; end if;\r\n  if nullif(trim(p_received_through), '') is null then raise exception 'Input method is required'; end if;\r\n  if nullif(trim(p_customer_name), '') is null then raise exception 'Customer name is required'; end if;\r\n\r\n  select * into v_me from public.profiles where id = auth.uid() and is_active;\r\n  if not found then raise exception 'Active profile not found'; end if;\r\n\r\n  insert into public.work_items(customer_name, dealer_id, work_type, assigned_profile_id, assignment_method, status, note, received_through, created_by, accepted_at)\r\n  values (trim(p_customer_name), p_dealer_id, p_work_type, v_me.id, 'manual_quote', 'active', nullif(btrim(p_note), ''), trim(p_received_through), v_me.id, now())\r\n  returning * into v_item;\r\n\r\n  perform public.add_quote_note_if_present(v_item.id, v_me.id, p_note);\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "log_manual_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_received_through text, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.log_manual_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_received_through text, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  if p_dealer_id is not null then\r\n    perform public.validate_dealer_salesperson(p_dealer_id, p_salesperson_id, true);\r\n  elsif p_salesperson_id is not null then\r\n    raise exception 'A salesperson cannot be selected without a source';\r\n  end if;\r\n\r\n  select * into v_item\r\n  from public.log_manual_quote(\r\n    p_customer_name,\r\n    p_dealer_id,\r\n    p_work_type,\r\n    p_received_through,\r\n    p_note\r\n  );\r\n\r\n  update public.work_items\r\n  set salesperson_id = p_salesperson_id\r\n  where id = v_item.id\r\n  returning * into v_item;\r\n  return v_item;\r\nend;\r\n$function$\n"
+      },
+      {
+        "sig": "manager_create_and_assign_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_received_through text, p_assigned_profile_id uuid, p_note text)",
+        "def": "CREATE OR REPLACE FUNCTION public.manager_create_and_assign_quote_v094(p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_received_through text, p_assigned_profile_id uuid, p_note text DEFAULT NULL::text)\n RETURNS work_items\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_item public.work_items%rowtype;\r\nbegin\r\n  if p_dealer_id is not null then\r\n    perform public.validate_dealer_salesperson(p_dealer_id, p_salesperson_id, true);\r\n  elsif p_salesperson_id is not null then\r\n    raise exception 'A salesperson cannot be selected without a source';\r\n  end if;\r\n\r\n  select * into v_item\r\n  from public.manager_create_and_assign_quote(\r\n    p_customer_name,\r\n    p_dealer_id,\r\n    p_work_type,\r\n    p_received_through,\r\n    p_assigned_profile_id,\r\n    p_note\r\n  );\r\n\r\n  update public.work_items\r\n  set salesperson_id = p_salesperson_id\r\n  where id = v_item.id\r\n  returning * into v_item;\r\n  return v_item;\r\nend;\r\n$function$\n"
+      }
+    ]
+  },
+  "provenance": {
+    "ok": true,
+    "rows": [
+      {
+        "assignment_method": "workload_turn",
+        "received_through": "Legacy / Existing business",
+        "n": 148,
+        "newest": "2026-07-30 22:55:29.163555+00"
+      },
+      {
+        "assignment_method": "manual_workload",
+        "received_through": "Manual workload",
+        "n": 92,
+        "newest": "2026-07-30 22:29:50.412933+00"
+      },
+      {
+        "assignment_method": "payment_log",
+        "received_through": "Payment",
+        "n": 35,
+        "newest": "2026-07-30 16:20:46.394966+00"
+      },
+      {
+        "assignment_method": "workload_turn",
+        "received_through": "Linked quote",
+        "n": 33,
+        "newest": "2026-07-28 22:35:55.146125+00"
+      },
+      {
+        "assignment_method": "whatsapp_turn",
+        "received_through": "WhatsApp dealership",
+        "n": 1,
+        "newest": "2026-07-30 23:57:56.265866+00"
+      }
+    ]
+  }
+}

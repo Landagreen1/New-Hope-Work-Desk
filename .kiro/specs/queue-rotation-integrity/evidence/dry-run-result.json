@@ -1,0 +1,61 @@
+{
+  "capturedAt": "2026-07-31T02:57:22.394Z",
+  "migration": "v1.8.7-fix-rotation-integrity.sql",
+  "mode": "dry-run (commit replaced by rollback)",
+  "verdict": "PASS",
+  "httpStatus": 201,
+  "response": "[]",
+  "rollbackConfirmedUnchanged": true,
+  "functionsBefore": [
+    {
+      "proname": "claim_timed_quote",
+      "body_md5": "c48b156607214be9842a7f4cdd3b53ef"
+    },
+    {
+      "proname": "manager_set_rotation_eligibility",
+      "body_md5": "62e4d62f0b0abae3136a09ebf91f9aa7"
+    },
+    {
+      "proname": "next_eligible_profile",
+      "body_md5": "b4d0a57a38ddff08a662b600035bdbeb"
+    },
+    {
+      "proname": "pass_my_turn",
+      "body_md5": "42ab312c806098411ca81fefe705093b"
+    },
+    {
+      "proname": "set_my_availability",
+      "body_md5": "715d2b08aa56e574b5a6a031f63eed89"
+    },
+    {
+      "proname": "steal_timed_quote",
+      "body_md5": "2be53b6dd82b5d20b50c35fbb8a03cff"
+    }
+  ],
+  "functionsAfter": [
+    {
+      "proname": "claim_timed_quote",
+      "body_md5": "c48b156607214be9842a7f4cdd3b53ef"
+    },
+    {
+      "proname": "manager_set_rotation_eligibility",
+      "body_md5": "62e4d62f0b0abae3136a09ebf91f9aa7"
+    },
+    {
+      "proname": "next_eligible_profile",
+      "body_md5": "b4d0a57a38ddff08a662b600035bdbeb"
+    },
+    {
+      "proname": "pass_my_turn",
+      "body_md5": "42ab312c806098411ca81fefe705093b"
+    },
+    {
+      "proname": "set_my_availability",
+      "body_md5": "715d2b08aa56e574b5a6a031f63eed89"
+    },
+    {
+      "proname": "steal_timed_quote",
+      "body_md5": "2be53b6dd82b5d20b50c35fbb8a03cff"
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "capturedAt": "2026-07-31T03:29:55.955Z",
+  "probes": {
+    "P1_selector_matrix": [
+      {
+        "probe": "P1_selector_matrix",
+        "subject": "ringcentral",
+        "detail": "eligible=0  null_results=20 of 20 probes"
+      },
+      {
+        "probe": "P1_selector_matrix",
+        "subject": "whatsapp",
+        "detail": "eligible=0  null_results=20 of 20 probes"
+      },
+      {
+        "probe": "P1_selector_matrix",
+        "subject": "workload",
+        "detail": "eligible=0  null_results=20 of 20 probes"
+      }
+    ],
+    "P10_helpers_installed": [
+      {
+        "probe": "P10_helpers_installed",
+        "subject": "functions",
+        "detail": "advance_rotation, ensure_rotation_valid, is_rotation_eligible, rotation_empty_reason, rotation_position_of"
+      }
+    ],
+    "P2_resolution": [
+      {
+        "probe": "P2_resolution",
+        "subject": "ringcentral",
+        "detail": "1-><<NULL>>  2-><<NULL>>  3-><<NULL>>  4-><<NULL>>  5-><<NULL>>  6-><<NULL>>  7-><<NULL>>  8-><<NULL>>  9-><<NULL>>  10-><<NULL>>  11-><<NULL>>  12-><<NULL>>"
+      },
+      {
+        "probe": "P2_resolution",
+        "subject": "whatsapp",
+        "detail": "1-><<NULL>>  2-><<NULL>>  3-><<NULL>>  4-><<NULL>>  5-><<NULL>>  6-><<NULL>>  7-><<NULL>>  8-><<NULL>>  9-><<NULL>>  10-><<NULL>>  11-><<NULL>>  12-><<NULL>>"
+      },
+      {
+        "probe": "P2_resolution",
+        "subject": "workload",
+        "detail": "1-><<NULL>>  2-><<NULL>>  3-><<NULL>>  4-><<NULL>>  5-><<NULL>>  6-><<NULL>>  7-><<NULL>>  8-><<NULL>>  9-><<NULL>>  10-><<NULL>>  11-><<NULL>>  12-><<NULL>>"
+      }
+    ],
+    "P5_null_after_position": [
+      {
+        "probe": "P5_null_after_position",
+        "subject": "ringcentral",
+        "detail": "<<NULL>>"
+      },
+      {
+        "probe": "P5_null_after_position",
+        "subject": "whatsapp",
+        "detail": "<<NULL>>"
+      },
+      {
+        "probe": "P5_null_after_position",
+        "subject": "workload",
+        "detail": "<<NULL>>"
+      }
+    ],
+    "P6_null_position_excluded": [
+      {
+        "probe": "P6_null_position_excluded",
+        "subject": "all rotations",
+        "detail": "0 agents with a null position were marked eligible (must be 0)"
+      }
+    ],
+    "P7_agent_only": [
+      {
+        "probe": "P7_agent_only",
+        "subject": "all rotations",
+        "detail": "0 non-agent profiles were marked eligible (must be 0)"
+      }
+    ],
+    "P8_empty_reason": [
+      {
+        "probe": "P8_empty_reason",
+        "subject": "ringcentral",
+        "detail": "All 10 Customer Service Intake Queue agents are unavailable or on break."
+      },
+      {
+        "probe": "P8_empty_reason",
+        "subject": "whatsapp",
+        "detail": "All 10 WhatsApp agents are unavailable or on break."
+      },
+      {
+        "probe": "P8_empty_reason",
+        "subject": "workload",
+        "detail": "All 10 Additional Workload agents are unavailable or on break."
+      }
+    ],
+    "P9_shape": [
+      {
+        "probe": "P9_shape",
+        "subject": "next_eligible_profile",
+        "detail": "wraparound_in_order_by=t  null_position_guard=t  position_in_where=f"
+      }
+    ]
+  }
+}

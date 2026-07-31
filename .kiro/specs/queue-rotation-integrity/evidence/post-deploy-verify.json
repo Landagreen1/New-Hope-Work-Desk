@@ -1,0 +1,94 @@
+{
+  "at": "2026-07-31T03:45:20.000Z",
+  "low": {
+    "display_name": "Estefania Bayas",
+    "id": "0c60998d-16c2-45ef-ab5f-85befc8a991e",
+    "whatsapp_position": 5
+  },
+  "high": {
+    "display_name": "Miguel Leiva",
+    "id": "87fa5a57-a654-4f7f-a7c5-5738f8f2c70d",
+    "whatsapp_position": 8
+  },
+  "before": {
+    "profiles_ct": 39,
+    "work_items_ct": 309,
+    "turn_events_ct": 1515,
+    "intakes_ct": 12,
+    "audit_ct": 1728,
+    "avail_md5": "e065cfe8fabfc625ca5b3d96dc3b6052",
+    "rotation_md5": "e821fcbccad48dd89d7cef218bd07986"
+  },
+  "after": {
+    "profiles_ct": 39,
+    "work_items_ct": 309,
+    "turn_events_ct": 1515,
+    "intakes_ct": 12,
+    "audit_ct": 1728,
+    "avail_md5": "e065cfe8fabfc625ca5b3d96dc3b6052",
+    "rotation_md5": "e821fcbccad48dd89d7cef218bd07986"
+  },
+  "rollbackClean": true,
+  "results": [
+    {
+      "check_name": "ensure_valid_idempotent",
+      "expected": "version unchanged",
+      "actual": "v877 -> v877",
+      "result": "PASS"
+    },
+    {
+      "check_name": "INCIDENT_advance_from_pos8",
+      "expected": "Estefania Bayas, not NULL",
+      "actual": "Estefania Bayas",
+      "result": "PASS"
+    },
+    {
+      "check_name": "INCIDENT_selector_from_pos8",
+      "expected": "Estefania Bayas (wraps)",
+      "actual": "Estefania Bayas",
+      "result": "PASS"
+    },
+    {
+      "check_name": "null_when_truly_empty",
+      "expected": "NULL",
+      "actual": "NULL",
+      "result": "PASS"
+    },
+    {
+      "check_name": "one_turn_event_written",
+      "expected": "1",
+      "actual": "1",
+      "result": "PASS"
+    },
+    {
+      "check_name": "recovers_from_null",
+      "expected": "Estefania Bayas",
+      "actual": "Estefania Bayas",
+      "result": "PASS"
+    },
+    {
+      "check_name": "repairs_ineligible_pointer",
+      "expected": "Estefania Bayas",
+      "actual": "Estefania Bayas",
+      "result": "PASS"
+    },
+    {
+      "check_name": "rotations_independent",
+      "expected": "rc+wl unchanged",
+      "actual": "rc=null wl=null",
+      "result": "PASS"
+    },
+    {
+      "check_name": "self_loop_keeps_agent",
+      "expected": "Estefania Bayas",
+      "actual": "Estefania Bayas",
+      "result": "PASS"
+    },
+    {
+      "check_name": "setup_two_eligible",
+      "expected": "2",
+      "actual": "2",
+      "result": "PASS"
+    }
+  ]
+}

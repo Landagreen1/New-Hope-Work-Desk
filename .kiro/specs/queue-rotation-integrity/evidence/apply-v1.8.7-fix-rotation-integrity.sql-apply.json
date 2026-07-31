@@ -1,0 +1,28 @@
+{
+  "at": "2026-07-31T03:42:27.676Z",
+  "file": "supabase/migrations/v1.8.7-fix-rotation-integrity.sql",
+  "mode": "apply",
+  "verdict": "SUCCESS",
+  "httpStatus": 201,
+  "response": "[]",
+  "before": {
+    "profiles_ct": 39,
+    "work_items_ct": 309,
+    "turn_events_ct": 1515,
+    "take_events_ct": 11,
+    "intakes_ct": 12,
+    "outcomes_ct": 998,
+    "audit_ct": 1728,
+    "rotation_md5": "e821fcbccad48dd89d7cef218bd07986"
+  },
+  "after": {
+    "profiles_ct": 39,
+    "work_items_ct": 309,
+    "turn_events_ct": 1515,
+    "take_events_ct": 11,
+    "intakes_ct": 12,
+    "outcomes_ct": 998,
+    "audit_ct": 1728,
+    "rotation_md5": "e821fcbccad48dd89d7cef218bd07986"
+  }
+}
