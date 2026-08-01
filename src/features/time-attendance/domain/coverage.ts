@@ -52,7 +52,7 @@
 // date reads the same on every screen), 19.4 (coverage derives from published
 // schedules and approved absences only).
 
-import type { Department } from '../types';
+import type { Department, TimeSlot } from '../types';
 import type { RecordSubjectIndex } from './attendance';
 import type { DailyAttendanceRecord, DerivedStatus, Threshold } from './types';
 import { consecutiveDates } from './work-date';
@@ -118,6 +118,152 @@ export function classifyCoverage(available: number, threshold: Threshold | null)
   if (available === threshold.minimumStaff) return 'at_minimum';
   if (available <= threshold.warningThreshold) return 'warning';
   return 'healthy';
+}
+
+// ─── The bands a threshold pair describes ────────────────────────────────────
+//
+// `classifyCoverage` reads a pair and answers for one headcount. The threshold
+// editor has the opposite problem: an administrator typing a pair needs to see
+// what that pair will mean for every headcount, because `warning_threshold` is
+// the top edge of the Warning band rather than a second minimum and nothing on a
+// form says so. Both readings come from this module, so what the editor shows and
+// what the coverage panel later assigns cannot disagree.
+
+/** The largest headcount a threshold may state. */
+export const MAX_REQUIRED_STAFF = 999;
+
+/**
+ * The slot one threshold pair applies to: a department, a day of week, and a
+ * time slot.
+ *
+ * `dayOfWeek` is `staffing_thresholds.day_of_week`, where 0 is Sunday.
+ *
+ * The lookup over these three is exact. A `full_day` row is not a default for
+ * `morning`, because inferring one slot's requirement from another's would invent
+ * a staffing rule the organisation has not stated — so a slot is a triple and
+ * never a department alone.
+ */
+export interface ThresholdSlot {
+  department: Department;
+  dayOfWeek: number;
+  timeSlot: TimeSlot;
+}
+
+/**
+ * A slot as one comparable string.
+ *
+ * The loader's lookup table, the editor's draft, and the write path's
+ * duplicate check all key on this, so the three cannot disagree about when two
+ * references mean the same slot.
+ */
+export function slotKey(slot: ThresholdSlot): string {
+  return `${slot.department}:${slot.dayOfWeek}:${slot.timeSlot}`;
+}
+
+/**
+ * A slot in its stored vocabulary, for a message about one.
+ *
+ * The raw column values rather than display labels: this is what an API refusal
+ * names, and a refusal that renamed `full_day` to "Full day" would be describing
+ * something the caller did not send. A screen has its own labels.
+ */
+export function describeSlot(slot: ThresholdSlot): string {
+  return `${slot.department}, day ${slot.dayOfWeek}, ${slot.timeSlot}`;
+}
+
+/**
+ * One stretch of headcounts that classify to the same status.
+ *
+ * `from` is inclusive. `to` is inclusive as well, and null means unbounded above
+ * — the Healthy band has no top. Every band a pair produces is non-empty: an
+ * empty one is omitted rather than rendered as a range nothing can fall in.
+ */
+export interface CoverageBand {
+  status: CoverageStatus;
+  from: number;
+  to: number | null;
+}
+
+/**
+ * The bands a threshold pair describes, worst first.
+ *
+ * The edges follow from `classifyCoverage` and are not a second statement of the
+ * rule: Critical is every headcount below the minimum, At Minimum is the minimum
+ * exactly, Warning runs from one above the minimum to the warning threshold, and
+ * Healthy is everything above that.
+ *
+ * Two bands can be empty and are then omitted:
+ *
+ * - Critical, when `minimumStaff` is zero — a headcount cannot fall below none.
+ * - Warning, when `warningThreshold` equals `minimumStaff` — there is no room
+ *   between the minimum and the top of the band. A pair with the warning value
+ *   *below* the minimum is refused before it can be stored (`rejectThreshold`),
+ *   so the only way to reach an empty Warning band is to make the two equal,
+ *   which is a legible choice: no warning band, straight from at-minimum to
+ *   healthy.
+ *
+ * Requirements: 6.9, 6.10, 6.11, 6.12
+ */
+export function coverageBands(threshold: Threshold): CoverageBand[] {
+  const { minimumStaff, warningThreshold } = threshold;
+  const bands: CoverageBand[] = [];
+
+  if (minimumStaff > 0) bands.push({ status: 'critical', from: 0, to: minimumStaff - 1 });
+  bands.push({ status: 'at_minimum', from: minimumStaff, to: minimumStaff });
+  if (warningThreshold > minimumStaff) {
+    bands.push({ status: 'warning', from: minimumStaff + 1, to: warningThreshold });
+  }
+  bands.push({ status: 'healthy', from: Math.max(minimumStaff, warningThreshold) + 1, to: null });
+
+  return bands;
+}
+
+/** Why a threshold pair cannot be stored. */
+export type ThresholdRejection =
+  | 'not_whole'
+  | 'negative'
+  | 'above_maximum'
+  | 'unreachable_warning_band';
+
+/**
+ * What each rejection is, in words a form can display.
+ *
+ * The reason names the pair's own vocabulary rather than a column, because the
+ * administrator is looking at two labelled fields and not at a table.
+ */
+export const THRESHOLD_REJECTION_REASON: Readonly<Record<ThresholdRejection, string>> = {
+  not_whole: 'Minimum staff and warning threshold must each be a whole number of people.',
+  negative: 'Minimum staff and warning threshold cannot be negative.',
+  above_maximum: `Minimum staff and warning threshold cannot exceed ${MAX_REQUIRED_STAFF}.`,
+  unreachable_warning_band:
+    'The warning threshold is the top of the Warning band, so it cannot be below minimum staff. ' +
+    'Set it to minimum staff for no Warning band, or higher to open one.',
+};
+
+/**
+ * Why this pair cannot be stored, or null when it can.
+ *
+ * `classifyCoverage` tolerates a warning value below the minimum — it collapses
+ * the Warning band and the ordered comparison still holds — so this is not a
+ * correctness guard for the derivation. It is a guard against storing a rule
+ * that can never fire: a pair whose Warning band is unreachable states a warning
+ * level the coverage panel will never show, which is a configuration mistake
+ * rather than a policy. The v1.9.5 seed migration refuses the same shape in its
+ * post-condition block, so the two agree about what a coherent pair is.
+ *
+ * Requirements: 2.5, 6.3, 6.11
+ */
+export function rejectThreshold(threshold: Threshold): ThresholdRejection | null {
+  const { minimumStaff, warningThreshold } = threshold;
+
+  if (!Number.isInteger(minimumStaff) || !Number.isInteger(warningThreshold)) return 'not_whole';
+  if (minimumStaff < 0 || warningThreshold < 0) return 'negative';
+  if (minimumStaff > MAX_REQUIRED_STAFF || warningThreshold > MAX_REQUIRED_STAFF) {
+    return 'above_maximum';
+  }
+  if (warningThreshold < minimumStaff) return 'unreachable_warning_band';
+
+  return null;
 }
 
 // ─── Interval partition ──────────────────────────────────────────────────────

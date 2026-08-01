@@ -48,6 +48,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { describeSlot, slotKey, type ThresholdSlot } from '../domain/coverage';
 import { workDateOf } from '../domain/work-date';
 import type { AttendancePolicy, Threshold } from '../domain/types';
 import type { BreakType, Department, TimeSlot } from '../types';
@@ -85,8 +86,16 @@ export const DEFAULT_ATTENDANCE_POLICY: AttendancePolicy = {
  */
 export const KNOWN_BREAK_TYPES: readonly BreakType[] = ['lunch', 'short', 'personal'];
 
-/** The departments `staffing_thresholds.department` may name. */
-const KNOWN_DEPARTMENTS: readonly Department[] = [
+/**
+ * The departments `staffing_thresholds.department` may name.
+ *
+ * Exported for the same reason as `KNOWN_BREAK_TYPES`: the threshold editor's
+ * write path accepts exactly the names this module will read back, so a row the
+ * editor could store and `buildStaffingThresholdTable` would then drop — a
+ * requirement configured against nothing — cannot be written. These are also the
+ * only four values the v1.2.0 check constraint admits.
+ */
+export const KNOWN_DEPARTMENTS: readonly Department[] = [
   'sales',
   'customer_service',
   'commercial',
@@ -94,7 +103,10 @@ const KNOWN_DEPARTMENTS: readonly Department[] = [
 ];
 
 /** The slots `staffing_thresholds.time_slot` may name. */
-const KNOWN_TIME_SLOTS: readonly TimeSlot[] = ['morning', 'afternoon', 'full_day'];
+export const KNOWN_TIME_SLOTS: readonly TimeSlot[] = ['morning', 'afternoon', 'full_day'];
+
+/** The days `staffing_thresholds.day_of_week` may name. 0 is Sunday. */
+export const KNOWN_DAYS_OF_WEEK: readonly number[] = [0, 1, 2, 3, 4, 5, 6];
 
 /** A fixed instant, used only to ask whether a zone identifier is usable. */
 const TIME_ZONE_PROBE = new Date(0);
@@ -255,8 +267,15 @@ export function toAttendancePolicy(row: AttendancePolicyRow | null | undefined):
   };
 }
 
+/**
+ * The lookup key for one slot.
+ *
+ * Delegates to `slotKey` in the domain layer, so the loader's table, the editor's
+ * draft, and the write path's duplicate check are keyed the same way rather than
+ * by three functions that happen to agree today.
+ */
 function thresholdKey(department: Department, dayOfWeek: number, timeSlot: TimeSlot): string {
-  return `${department}:${dayOfWeek}:${timeSlot}`;
+  return slotKey({ department, dayOfWeek, timeSlot });
 }
 
 /**
@@ -539,4 +558,288 @@ function toPolicySnapshot(
     policy: toAttendancePolicy(row),
     updatedAt: typeof row?.updated_at === 'string' ? row.updated_at : null,
   };
+}
+
+// ─── The staffing-threshold editor ───────────────────────────────────────────
+//
+// The Workforce screen's threshold editor (Requirement 2, criterion 3;
+// Requirement 6, criterion 3). `staffing_thresholds` states the minimum and
+// warning headcount per department, day of week, and time slot, and until now the
+// module could only read it — the figures arrived through the v1.9.5 seed and
+// nothing could change them afterwards.
+//
+// The write lives here beside `buildStaffingThresholdTable` for the reason the
+// policy editor lives beside `toAttendancePolicy`: the column names, the accepted
+// departments, the accepted slots, and the day-of-week range are already written
+// once in this file, and an editor that mapped the same five columns a second time
+// is how a stored requirement and a displayed requirement come to disagree.
+//
+// ## An absent row is a statement, so the editor can make one
+//
+// `thresholdFor` answers null for an unconfigured slot, which reports required
+// staffing as unconfigured and Coverage_Status Healthy (Requirement 6,
+// criterion 4). That is the honest encoding of "no staffing requirement here",
+// and it is what Saturday and Sunday carry on purpose — see the header of
+// `v1.9.5-staffing-thresholds-seed.sql`, which explains at length why a
+// zero-valued weekend row would raise a warning against a requirement of nobody.
+//
+// So the editor has to be able to say both things. A `ThresholdEdit` is therefore
+// either a pair to store or a `clear`, and the two are different statements: a
+// stored pair of `0 / 0` means "this slot requires nobody and warns at nobody",
+// while a cleared slot means "this slot has no requirement at all". The editor
+// never writes the first when the administrator meant the second.
+
+/**
+ * Stated when the thresholds could not be read for the editor.
+ *
+ * `loadStaffingThresholds` swallows a read failure and answers with an empty
+ * table, because a screen deriving coverage has to render something. This read
+ * propagates it, because the editor's next act is a write: showing an empty table
+ * as though nothing were configured would invite an administrator to re-enter
+ * sixty slots that are already stored.
+ */
+export const THRESHOLDS_UNREADABLE_MESSAGE =
+  'The staffing thresholds could not be read, so they cannot be edited right now. Retrying may succeed.';
+
+/** Stated when the thresholds could not be written. */
+export const THRESHOLDS_UNWRITABLE_MESSAGE =
+  'The staffing thresholds could not be saved. Nothing was changed.';
+
+/**
+ * Stated when the edits landed and the read-back did not.
+ *
+ * Distinct from both of the above on purpose: telling the administrator that
+ * nothing was changed would be false, and telling them the thresholds cannot be
+ * edited would send them to re-enter a change that is already stored.
+ */
+export const THRESHOLDS_SAVED_UNREADABLE_MESSAGE =
+  'The staffing thresholds were saved but could not be read back, so the figures below may be stale. Reload to see what is stored.';
+
+/** The `staffing_thresholds` columns the editor reads and writes. */
+const THRESHOLD_COLUMNS =
+  'department, day_of_week, time_slot, minimum_staff, warning_threshold, updated_at';
+
+/** The conflict target, from `unique_threshold_per_slot` in v1.2.0. */
+const THRESHOLD_CONFLICT_TARGET = 'department,day_of_week,time_slot';
+
+/**
+ * The slot identity, from the domain layer.
+ *
+ * Re-exported rather than restated so the route and the editor reach one
+ * definition of "the same slot".
+ */
+export { describeSlot, slotKey, type ThresholdSlot };
+
+/**
+ * One configured slot, as the editor displays it.
+ *
+ * Only configured slots appear. An unconfigured slot is absent rather than
+ * present with null figures, so the shape says the same thing the table does and
+ * the editor cannot mistake "no requirement" for "a requirement of none".
+ */
+export interface StaffingThresholdEntry extends ThresholdSlot, Threshold {
+  /** `staffing_thresholds.updated_at`, or null when it could not be read. */
+  updatedAt: string | null;
+}
+
+/** Every configured slot, as the editor reads them. */
+export interface StaffingThresholdSnapshot {
+  entries: StaffingThresholdEntry[];
+}
+
+/** A pair to store for one slot. */
+export interface ThresholdAssignment extends ThresholdSlot, Threshold {
+  clear?: false;
+}
+
+/** A slot to return to unconfigured. */
+export interface ThresholdClear extends ThresholdSlot {
+  clear: true;
+}
+
+/**
+ * One edit: store a pair, or clear the slot back to unconfigured.
+ *
+ * A discriminated union rather than a pair of optional figures, so "store zero"
+ * and "store nothing" cannot be written the same way by accident.
+ */
+export type ThresholdEdit = ThresholdAssignment | ThresholdClear;
+
+/** Whether an edit clears its slot. */
+export function isThresholdClear(edit: ThresholdEdit): edit is ThresholdClear {
+  return edit.clear === true;
+}
+
+/** The `staffing_thresholds` rows an assignment set upserts. */
+export function thresholdUpsertRows(
+  assignments: readonly ThresholdAssignment[],
+): Record<string, string | number>[] {
+  return assignments.map((assignment) => ({
+    department: assignment.department,
+    day_of_week: assignment.dayOfWeek,
+    time_slot: assignment.timeSlot,
+    minimum_staff: assignment.minimumStaff,
+    warning_threshold: assignment.warningThreshold,
+    updated_at: new Date().toISOString(),
+  }));
+}
+
+/**
+ * The PostgREST filter that matches exactly the slots being cleared.
+ *
+ * One `or` of `and` groups rather than three `in` filters: `in` on each column
+ * would match the cross product of the three lists and delete slots nobody asked
+ * to clear. Every value interpolated here has already been checked against a
+ * closed set — `KNOWN_DEPARTMENTS`, `KNOWN_TIME_SLOTS`, and a whole number
+ * between 0 and 6 — so no caller-supplied text reaches the filter.
+ *
+ * Empty when there is nothing to clear, which the caller reads as "issue no
+ * delete at all" rather than as a filter matching everything.
+ */
+export function thresholdClearFilter(clears: readonly ThresholdSlot[]): string {
+  return clears
+    .map(
+      (slot) =>
+        `and(department.eq.${slot.department},day_of_week.eq.${slot.dayOfWeek},time_slot.eq.${slot.timeSlot})`,
+    )
+    .join(',');
+}
+
+/** A row as one entry of the snapshot, or null when it names a slot no caller asks about. */
+function toThresholdEntry(
+  row: StaffingThresholdRow & { updated_at?: unknown },
+): StaffingThresholdEntry | null {
+  const department = readDepartment(row.department);
+  const dayOfWeek = readDayOfWeek(row.day_of_week);
+  const timeSlot = readTimeSlot(row.time_slot);
+  const minimumStaff = readMinutes(row.minimum_staff);
+  const warningThreshold = readMinutes(row.warning_threshold);
+
+  if (
+    department === null ||
+    dayOfWeek === null ||
+    timeSlot === null ||
+    minimumStaff === null ||
+    warningThreshold === null
+  ) {
+    return null;
+  }
+
+  return {
+    department,
+    dayOfWeek,
+    timeSlot,
+    minimumStaff,
+    warningThreshold,
+    updatedAt: typeof row.updated_at === 'string' ? row.updated_at : null,
+  };
+}
+
+/**
+ * The stored slots, ordered department, then day of week, then slot.
+ *
+ * Ordered here rather than in the query so the editor's grid is filled from a
+ * deterministic list whichever order the database returned. Rows that cannot be
+ * read are dropped for the same reason `buildStaffingThresholdTable` drops them:
+ * they describe no slot a caller will ask about.
+ */
+export function toThresholdSnapshot(
+  rows: readonly (StaffingThresholdRow & { updated_at?: unknown })[] | null | undefined,
+): StaffingThresholdSnapshot {
+  const entries = (rows ?? [])
+    .map(toThresholdEntry)
+    .filter((entry): entry is StaffingThresholdEntry => entry !== null)
+    .sort(
+      (a, b) =>
+        KNOWN_DEPARTMENTS.indexOf(a.department) - KNOWN_DEPARTMENTS.indexOf(b.department) ||
+        a.dayOfWeek - b.dayOfWeek ||
+        KNOWN_TIME_SLOTS.indexOf(a.timeSlot) - KNOWN_TIME_SLOTS.indexOf(b.timeSlot),
+    );
+
+  return { entries };
+}
+
+/**
+ * Every configured slot, with a read failure reported rather than absorbed.
+ *
+ * One query for the whole table. It holds at most four departments times seven
+ * days times three slots, so there is nothing to page and no reason to read a
+ * slot at a time (Requirement 20, criteria 1 and 2).
+ *
+ * Requirements: 2.3, 6.3, 22.16
+ */
+export async function loadThresholdSnapshot(
+  supabase: PolicyClient,
+): Promise<StaffingThresholdSnapshot> {
+  const { data, error } = await supabase.from('staffing_thresholds').select(THRESHOLD_COLUMNS);
+
+  if (error) {
+    console.error('[time-attendance] staffing threshold read failed', error);
+    throw new PolicyServiceError('read_failed', THRESHOLDS_UNREADABLE_MESSAGE);
+  }
+
+  return toThresholdSnapshot(data as (StaffingThresholdRow & { updated_at?: unknown })[] | null);
+}
+
+/**
+ * Apply a set of edits and answer with what the table then holds.
+ *
+ * Two statements at most, whatever the size of the edited set: one upsert for
+ * every pair being stored and one delete for every slot being cleared. Not one
+ * request per slot, and not one statement per slot — the editor covers 84 cells
+ * and a per-cell round trip is what Requirement 20, criteria 1 and 2 rule out.
+ *
+ * The upsert resolves against `unique_threshold_per_slot`, so an edit to a slot
+ * that already has a row replaces its figures and an edit to one that does not
+ * inserts it. `staffing_thresholds` carries no `updated_by` column, so who made
+ * the change is not recorded on the row; the write is reserved to `super_admin`
+ * by `staffing_thresholds_admin_all`, and a threshold change is not one of the
+ * five events Requirement 16, criterion 1 asks the Attendance_Audit_Log to record
+ * — that list names an employee and a work date, which a configuration change
+ * does not.
+ *
+ * The whole table is read back afterwards rather than the changed rows alone, so
+ * what the editor displays is what the database now holds, including the slots
+ * that a clear removed and that therefore have nothing to return.
+ *
+ * Requirements: 2.3, 6.3, 6.4, 20.1, 20.2, 21.6, 21.12, 22.16
+ */
+export async function saveStaffingThresholds(
+  supabase: PolicyClient,
+  edits: readonly ThresholdEdit[],
+): Promise<StaffingThresholdSnapshot> {
+  const clears = edits.filter(isThresholdClear);
+  const assignments = edits.filter(
+    (edit): edit is ThresholdAssignment => !isThresholdClear(edit),
+  );
+
+  if (assignments.length > 0) {
+    const { error } = await supabase
+      .from('staffing_thresholds')
+      .upsert(thresholdUpsertRows(assignments), { onConflict: THRESHOLD_CONFLICT_TARGET });
+
+    if (error) {
+      console.error('[time-attendance] staffing threshold write failed', error);
+      throw new PolicyServiceError('write_failed', THRESHOLDS_UNWRITABLE_MESSAGE);
+    }
+  }
+
+  if (clears.length > 0) {
+    const { error } = await supabase
+      .from('staffing_thresholds')
+      .delete()
+      .or(thresholdClearFilter(clears));
+
+    if (error) {
+      console.error('[time-attendance] staffing threshold clear failed', error);
+      throw new PolicyServiceError('write_failed', THRESHOLDS_UNWRITABLE_MESSAGE);
+    }
+  }
+
+  try {
+    return await loadThresholdSnapshot(supabase);
+  } catch {
+    // The edits are committed. Reporting the read as a failed save would be false.
+    throw new PolicyServiceError('read_failed', THRESHOLDS_SAVED_UNREADABLE_MESSAGE);
+  }
 }

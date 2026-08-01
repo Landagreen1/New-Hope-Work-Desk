@@ -1,8 +1,8 @@
 'use client';
 
 // src/features/time-attendance/WorkforceAdmin.tsx
-// Workforce configuration: pay rates, time-off balances, clock-entry edits, and
-// the attendance policy.
+// Workforce configuration: pay rates, time-off balances, clock-entry edits, the
+// attendance policy, and the staffing thresholds.
 //
 // A preserved screen. Requirement 2, criterion 3 keeps its pay-rate, PTO-balance,
 // and clock-entry editing exactly as they were, and Requirement 2, criterion 5
@@ -21,6 +21,11 @@
 //      tolerance the Status Rule Matrix refers to and, until now, nothing could
 //      change it. It is edited here because this is the screen that already owns
 //      the configuration an administrator sets once and rarely revisits.
+//   2a. **The staffing-threshold editor is new, for the same reason.**
+//      `staffing_thresholds` states the minimum and warning headcount every
+//      Coverage_Status is classified against (Requirement 6, criterion 3). The
+//      v1.9.5 seed put the first sixty slots in place and nothing could change
+//      them afterwards except re-running a seed that overwrites all sixty.
 //   3. **The duplicated time-off approval table is gone.** It read a `requests`
 //      field that `/api/pto` no longer answers with and decided through a
 //      `PATCH /api/pto` that no longer exists, so it listed nothing and its
@@ -34,7 +39,8 @@
 // also what gives a failed read the reason and the retry control it never had
 // (Requirement 22, criteria 14 through 16).
 //
-// Requirements: 2.3, 2.5, 20.1, 20.5, 20.6, 21.6, 22.12, 22.14, 22.15, 22.16
+// Requirements: 2.3, 2.5, 6.3, 6.4, 20.1, 20.2, 20.5, 20.6, 21.6, 22.12, 22.14,
+// 22.15, 22.16
 
 import {
   AlertCircle,
@@ -47,6 +53,8 @@ import {
   RotateCcw,
   Save,
   SlidersHorizontal,
+  Undo2,
+  Users,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -57,7 +65,13 @@ import type { ProfileLite } from '../nhwd-shared/types';
 import DatePicker from '../nhwd-shared/DatePicker';
 import DateTimePicker from '../nhwd-shared/DateTimePicker';
 import { ui } from '../nhwd-shared/ui';
-import type { AttendancePolicySnapshot } from './server/policy';
+import {
+  DEPARTMENT_ORDER,
+  MAX_REQUIRED_STAFF,
+  slotKey,
+  type ThresholdSlot,
+} from './domain/coverage';
+import type { AttendancePolicySnapshot, StaffingThresholdSnapshot } from './server/policy';
 import {
   asApiFailure,
   attendanceJson,
@@ -65,9 +79,30 @@ import {
   type ApiFailure,
 } from './shared/api-failure';
 import { AsyncStateBlock } from './shared/AsyncStateBlock';
-import { formatInstantDate, formatTimeOfDay, formatTimeZoneName } from './shared/format';
+import {
+  NO_VALUE,
+  formatInstantDate,
+  formatTimeOfDay,
+  formatTimeZoneName,
+} from './shared/format';
+import { StatusPill } from './shared/StatusPill';
+import {
+  CLEARED,
+  EDITOR_DAYS_OF_WEEK,
+  EDITOR_TIME_SLOTS,
+  TIME_SLOT_DESCRIPTIONS,
+  WEEKDAY_LABELS,
+  cellBands,
+  cellValue,
+  draftEdits,
+  isCleared,
+  slotLabel,
+  storedByKey,
+  type DraftCell,
+  type ThresholdDraft,
+} from './shared/threshold-draft';
 import { useAsyncResource } from './shared/useAsyncResource';
-import type { BreakType } from './types';
+import { DEPARTMENT_LABELS, type BreakType, type Department } from './types';
 
 // ─── The shapes the endpoints answer with ────────────────────────────────────
 
@@ -156,13 +191,14 @@ const UNCONFIGURED_BALANCE = {
   personal_used: 0,
 } as const;
 
-type Section = 'pay' | 'timeoff' | 'clock' | 'policy';
+type Section = 'pay' | 'timeoff' | 'clock' | 'policy' | 'thresholds';
 
 const SECTIONS: readonly { id: Section; label: string; icon: typeof DollarSign }[] = [
   { id: 'pay', label: 'Pay Rates', icon: DollarSign },
   { id: 'timeoff', label: 'Time Off', icon: PalmtreeIcon },
   { id: 'clock', label: 'Clock Edits', icon: Clock },
   { id: 'policy', label: 'Attendance Policy', icon: SlidersHorizontal },
+  { id: 'thresholds', label: 'Staffing Thresholds', icon: Users },
 ];
 
 interface WorkforceAdminProps {
@@ -182,7 +218,8 @@ export default function WorkforceAdmin({ initialProfile }: WorkforceAdminProps) 
     return (
       <div className={ui.info} role="status">
         Workforce configuration — pay rates, time-off balances, clock-entry edits,
-        and the attendance policy — is reserved to a super admin.
+        the attendance policy, and the staffing thresholds — is reserved to a super
+        admin.
       </div>
     );
   }
@@ -213,6 +250,7 @@ export default function WorkforceAdmin({ initialProfile }: WorkforceAdminProps) 
       {section === 'timeoff' && <PTOBalancesSection />}
       {section === 'clock' && <ClockEditSection />}
       {section === 'policy' && <AttendancePolicySection />}
+      {section === 'thresholds' && <StaffingThresholdSection />}
     </div>
   );
 }
@@ -922,6 +960,519 @@ function AttendancePolicySection() {
                     {formatTimeOfDay(snapshot.updatedAt, timeZone)}.
                   </>
                 )}
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Staffing thresholds ──────────────────────────────────────────────────────
+
+/**
+ * One department's slots, in the order the grid shows them.
+ *
+ * Built once per department rather than inline in the render, so the save's
+ * `order` argument and the rows on screen are the same list and a refusal names
+ * the first cell a reader would look at.
+ */
+function departmentSlots(department: Department): ThresholdSlot[] {
+  return EDITOR_DAYS_OF_WEEK.flatMap((dayOfWeek) =>
+    EDITOR_TIME_SLOTS.map((timeSlot) => ({ department, dayOfWeek, timeSlot })),
+  );
+}
+
+/** Every slot the editor can address, all four departments, in display order. */
+const ALL_SLOTS: readonly ThresholdSlot[] = DEPARTMENT_ORDER.flatMap(departmentSlots);
+
+/**
+ * One cell of the grid: the two figures, the bands they mean, and the controls
+ * that set or clear the slot.
+ *
+ * The three states a cell can be in are told apart in words, not only by an empty
+ * box:
+ *
+ *   * **Unconfigured** — no stored row and no draft. Says "no requirement", which
+ *     is what an absent row means to the coverage rules, and is not the same as a
+ *     stored zero.
+ *   * **Configured** — a pair, with the four bands it produces listed beneath so
+ *     the administrator can see that the warning figure is the top of the Warning
+ *     band rather than a second minimum.
+ *   * **Marked to clear** — a stored row the administrator has asked to remove,
+ *     shown as a pending change with an Undo rather than as an empty pair.
+ *
+ * Requirements: 6.4, 6.9, 6.10, 6.11, 6.12, 22.6, 22.7, 22.12
+ */
+function ThresholdCell({
+  slot,
+  cell,
+  isStored,
+  hasDraft,
+  label,
+  disabled,
+  onEdit,
+  onClear,
+  onUndo,
+}: {
+  slot: ThresholdSlot;
+  cell: DraftCell | null;
+  isStored: boolean;
+  hasDraft: boolean;
+  label: string;
+  disabled: boolean;
+  onEdit: (slot: ThresholdSlot, field: 'minimum' | 'warning', text: string) => void;
+  onClear: (slot: ThresholdSlot) => void;
+  onUndo: (slot: ThresholdSlot) => void;
+}) {
+  const key = slotKey(slot);
+  const bands = cellBands(cell);
+
+  /** Drop this cell's draft, so it shows the stored row again. */
+  const undo = (
+    <button
+      type="button"
+      onClick={() => onUndo(slot)}
+      disabled={disabled}
+      aria-label={`Undo the change to ${label}`}
+      className={ui.btnSecondary + ' !px-2.5 !py-1 !text-[11px]'}
+    >
+      <Undo2 className="h-3 w-3" aria-hidden="true" />
+      Undo
+    </button>
+  );
+
+  if (isCleared(cell)) {
+    return (
+      <div className="space-y-2">
+        <p className="text-[11px] font-black uppercase tracking-wider text-amber-800">
+          Will be cleared
+        </p>
+        <p className="text-[11px] font-semibold text-slate-500">
+          Saving removes this slot&apos;s row, so it states no requirement and reads
+          Healthy.
+        </p>
+        {undo}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <div>
+          <label
+            className="block text-[10px] font-black uppercase tracking-wider text-slate-400"
+            htmlFor={`threshold-min-${key}`}
+          >
+            Minimum
+          </label>
+          <input
+            id={`threshold-min-${key}`}
+            type="number"
+            inputMode="numeric"
+            min="0"
+            max={MAX_REQUIRED_STAFF}
+            step="1"
+            value={cell === null ? '' : cell.minimum}
+            onChange={(event) => onEdit(slot, 'minimum', event.target.value)}
+            disabled={disabled}
+            aria-label={`Minimum staff for ${label}`}
+            placeholder={NO_VALUE}
+            className="mt-1 w-[4.5rem] rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#7890bc] focus:ring-2 focus:ring-[#eef3fb]"
+          />
+        </div>
+        <div>
+          <label
+            className="block text-[10px] font-black uppercase tracking-wider text-slate-400"
+            htmlFor={`threshold-warn-${key}`}
+          >
+            Warn to
+          </label>
+          <input
+            id={`threshold-warn-${key}`}
+            type="number"
+            inputMode="numeric"
+            min="0"
+            max={MAX_REQUIRED_STAFF}
+            step="1"
+            value={cell === null ? '' : cell.warning}
+            onChange={(event) => onEdit(slot, 'warning', event.target.value)}
+            disabled={disabled}
+            aria-label={`Warn to, the top of the Warning band, for ${label}`}
+            placeholder={NO_VALUE}
+            className="mt-1 w-[4.5rem] rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#7890bc] focus:ring-2 focus:ring-[#eef3fb]"
+          />
+        </div>
+      </div>
+
+      {cell === null ? (
+        <p className="text-[11px] font-semibold text-slate-500">
+          Unconfigured — no staffing requirement, so coverage reads Healthy.
+        </p>
+      ) : bands === null ? (
+        <p className="text-[11px] font-semibold text-amber-800">
+          Fill both figures, with the warning at or above the minimum.
+        </p>
+      ) : (
+        <ul className="space-y-0.5">
+          {bands.map((band) => (
+            <li key={band.status} className="flex items-center gap-1.5">
+              <StatusPill status={band.status} />
+              <span className="text-[11px] font-bold text-slate-600">{band.range}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-wrap gap-1.5">
+        {isStored && (
+          <button
+            type="button"
+            onClick={() => onClear(slot)}
+            disabled={disabled}
+            aria-label={`Clear ${label} back to no requirement`}
+            className={ui.btnSecondary + ' !px-2.5 !py-1 !text-[11px]'}
+          >
+            <X className="h-3 w-3" aria-hidden="true" />
+            Clear
+          </button>
+        )}
+        {hasDraft && undo}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The staffing-threshold editor.
+ *
+ * `staffing_thresholds` states the minimum and warning headcount per department,
+ * day of week, and time slot, and it is what every Coverage_Status is classified
+ * against (Requirement 6, criterion 3). The v1.9.5 seed put the first figures in
+ * place; this is how they change afterwards without re-running a seed that
+ * overwrites all sixty slots.
+ *
+ * ## Three things the form has to make plain
+ *
+ * 1. **The warning figure is the top of a band, not a second minimum.** Every
+ *    configured cell lists the bands its pair produces, read from
+ *    `coverageBands`, so what the form shows and what `classifyCoverage` will
+ *    later assign are one statement.
+ * 2. **An empty slot is not a zero.** An absent row reports required staffing as
+ *    unconfigured and Coverage_Status Healthy (criterion 4); a stored `0 / 0`
+ *    requires nobody and warns at nobody, which reads as At Minimum the moment
+ *    the department is empty. The cell says which state it is in, and Clear
+ *    removes a row rather than zeroing it.
+ * 3. **The three slots are separate.** The lookup is exact, so a `full_day` figure
+ *    is not a fallback for `morning`. Each column carries the reading that
+ *    compares against it.
+ *
+ * ## Why the draft spans every department
+ *
+ * The department selector narrows what is on screen; it does not narrow the
+ * draft. One Save therefore sends every changed cell in every department in one
+ * request (Requirement 20, criteria 1 and 2), and an administrator who edits sales
+ * and then commercial cannot lose the first set by switching tabs.
+ *
+ * Requirements: 2.3, 2.5, 6.3, 6.4, 20.1, 20.2, 21.6, 22.12, 22.14, 22.15, 22.16
+ */
+function StaffingThresholdSection() {
+  const [department, setDepartment] = useState<Department>(DEPARTMENT_ORDER[0]);
+  const [draft, setDraft] = useState<ThresholdDraft>({});
+  const [saving, setSaving] = useState(false);
+  const [saveFailure, setSaveFailure] = useState<ApiFailure | null>(null);
+  const [invalid, setInvalid] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  // One request for the whole table: four departments times seven days times three
+  // slots is 84 rows at most, so there is nothing to page (Requirement 20,
+  // criteria 1 and 2).
+  const thresholds = useAsyncResource<StaffingThresholdSnapshot>(
+    (signal) =>
+      attendanceJson<StaffingThresholdSnapshot>('/api/attendance/thresholds', { signal }),
+    { subject: 'staffing thresholds', isEmpty: () => false },
+  );
+
+  const snapshot = thresholds.data;
+  const setThresholdData = thresholds.setData;
+  const stored = useMemo(() => storedByKey(snapshot?.entries ?? []), [snapshot]);
+
+  const labelOf = useCallback(
+    (slot: ThresholdSlot) => slotLabel(slot, DEPARTMENT_LABELS[slot.department]),
+    [],
+  );
+
+  /** Any change clears whatever the last save said: a stale message is worse than none. */
+  const forget = useCallback(() => {
+    setSaved(false);
+    setInvalid(null);
+    setSaveFailure(null);
+  }, []);
+
+  const editCell = useCallback(
+    (slot: ThresholdSlot, field: 'minimum' | 'warning', text: string) => {
+      forget();
+      setDraft((current) => {
+        const key = slotKey(slot);
+        const held = current[key];
+        // A first keystroke on a stored slot starts from the stored figures, so
+        // typing in one box does not blank the other.
+        const row = stored.get(key);
+        const base =
+          held !== undefined && !isCleared(held)
+            ? held
+            : row === undefined
+              ? { minimum: '', warning: '' }
+              : { minimum: String(row.minimumStaff), warning: String(row.warningThreshold) };
+
+        return { ...current, [key]: { ...base, [field]: text } };
+      });
+    },
+    [forget, stored],
+  );
+
+  const clearCell = useCallback(
+    (slot: ThresholdSlot) => {
+      forget();
+      setDraft((current) => ({ ...current, [slotKey(slot)]: CLEARED }));
+    },
+    [forget],
+  );
+
+  /** Drop the draft for one slot, so the cell shows what is stored again. */
+  const undoCell = useCallback(
+    (slot: ThresholdSlot) => {
+      forget();
+      setDraft((current) => {
+        const next = { ...current };
+        delete next[slotKey(slot)];
+        return next;
+      });
+    },
+    [forget],
+  );
+
+  const discard = useCallback(() => {
+    forget();
+    setDraft({});
+  }, [forget]);
+
+  const patch = useMemo(
+    () => (snapshot === null ? null : draftEdits(draft, stored, ALL_SLOTS, labelOf)),
+    [draft, labelOf, snapshot, stored],
+  );
+
+  const patchInvalid = patch !== null && 'invalid' in patch;
+  const changedCount = patch !== null && 'slots' in patch ? patch.slots.length : 0;
+  const drafted = Object.keys(draft).length > 0;
+
+  const save = useCallback(() => {
+    if (patch === null || saving) return;
+
+    if ('invalid' in patch) {
+      setInvalid(patch.invalid);
+      return;
+    }
+    // Nothing to send: every drafted cell matches what is stored. Dropping the
+    // draft snaps the form back rather than leaving a Save that does nothing.
+    if (patch.slots.length === 0) {
+      discard();
+      return;
+    }
+
+    setSaving(true);
+    forget();
+
+    void (async () => {
+      try {
+        const committed = await attendanceJson<StaffingThresholdSnapshot>(
+          '/api/attendance/thresholds',
+          jsonRequest('PATCH', { slots: patch.slots }),
+        );
+        // What the server committed, not what the form submitted.
+        setThresholdData(committed);
+        setDraft({});
+        setSaved(true);
+      } catch (error) {
+        setSaveFailure(asApiFailure(error));
+      } finally {
+        setSaving(false);
+      }
+    })();
+  }, [discard, forget, patch, saving, setThresholdData]);
+
+  return (
+    <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="border-b border-slate-100 p-5">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Workforce</p>
+        <h3 className="mt-1 text-xl font-black">Staffing Thresholds</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          The minimum and warning headcount every coverage status is compared
+          against, per department, day of week, and time slot. A change applies to
+          every screen the next time it reads.
+        </p>
+      </div>
+
+      <div className="space-y-4 p-5">
+        <AsyncStateBlock
+          status={thresholds.status}
+          failure={thresholds.failure}
+          message={thresholds.emptyMessage}
+          onRetry={thresholds.retry}
+          pending={thresholds.pending}
+          subject="staffing thresholds"
+        />
+
+        <div className={ui.info}>
+          <p>
+            <strong>Warn to</strong> is the top of the Warning band, not a second
+            minimum. Below the minimum is Critical, exactly the minimum is At
+            Minimum, above the minimum up to and including the warning figure is
+            Warning, and anything higher is Healthy. Each cell lists the bands its
+            figures produce.
+          </p>
+          <p className="mt-2">
+            A slot with no figures has <strong>no requirement</strong> and reports
+            Healthy — which is not the same as storing zero, since a minimum of zero
+            reads as At Minimum the moment nobody is available. Saturday and Sunday
+            are left unconfigured on purpose. The three time slots are looked up
+            exactly, so a full-day figure is not a fallback for the morning.
+          </p>
+        </div>
+
+        {saveFailure !== null && (
+          <div className={ui.error} role="alert">
+            <AlertCircle className="mr-2 inline h-4 w-4" aria-hidden="true" />
+            {saveFailure.reason}
+          </div>
+        )}
+
+        {invalid !== null && (
+          <div className={ui.error} role="alert">
+            <AlertCircle className="mr-2 inline h-4 w-4" aria-hidden="true" />
+            {invalid}
+          </div>
+        )}
+
+        {saved && (
+          <div className={ui.success} role="status">
+            <Check className="mr-2 inline h-4 w-4" aria-hidden="true" />
+            Staffing thresholds saved.
+          </div>
+        )}
+
+        {snapshot !== null && (
+          <>
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label="Department to configure"
+            >
+              {DEPARTMENT_ORDER.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setDepartment(option)}
+                  aria-pressed={department === option}
+                  className={`rounded-xl px-3.5 py-2 text-xs font-black transition ${
+                    department === option
+                      ? 'bg-[#223f7a] text-white shadow-sm'
+                      : 'border border-[#c9d5e9] bg-white text-[#223f7a] hover:bg-[#f3f6fb]'
+                  }`}
+                >
+                  {DEPARTMENT_LABELS[option]}
+                </button>
+              ))}
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className={ui.table}>
+                <caption className="px-4 py-2 text-left text-xs font-semibold text-slate-500">
+                  {DEPARTMENT_LABELS[department]} staffing requirement per day of week
+                  and time slot. Department comes from each employee&apos;s role, so a
+                  role change moves that headcount to another department.
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col" className={ui.th}>
+                      Day
+                    </th>
+                    {EDITOR_TIME_SLOTS.map((timeSlot) => (
+                      <th key={timeSlot} scope="col" className={ui.th}>
+                        {TIME_SLOT_DESCRIPTIONS[timeSlot].label}
+                        <span className="mt-1 block text-[10px] font-semibold normal-case tracking-normal text-slate-400">
+                          {TIME_SLOT_DESCRIPTIONS[timeSlot].help}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {EDITOR_DAYS_OF_WEEK.map((dayOfWeek) => (
+                    <tr key={dayOfWeek}>
+                      <th
+                        scope="row"
+                        className={`${ui.td} whitespace-nowrap text-sm font-black text-slate-900`}
+                      >
+                        {WEEKDAY_LABELS[dayOfWeek]}
+                      </th>
+                      {EDITOR_TIME_SLOTS.map((timeSlot) => {
+                        const slot: ThresholdSlot = { department, dayOfWeek, timeSlot };
+                        return (
+                          <td key={timeSlot} className={ui.td}>
+                            <ThresholdCell
+                              slot={slot}
+                              cell={cellValue(slot, draft, stored)}
+                              isStored={stored.has(slotKey(slot))}
+                              hasDraft={draft[slotKey(slot)] !== undefined}
+                              label={labelOf(slot)}
+                              disabled={saving}
+                              onEdit={editCell}
+                              onClear={clearCell}
+                              onUndo={undoCell}
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={save}
+                disabled={saving || !drafted}
+                className={ui.btnPrimary}
+              >
+                {saving ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                )}
+                {saving ? 'Saving' : 'Save thresholds'}
+              </button>
+              <button
+                type="button"
+                onClick={discard}
+                disabled={saving || !drafted}
+                className={ui.btnSecondary}
+              >
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                Discard changes
+              </button>
+              <p className="text-xs font-semibold text-slate-500">
+                {!drafted
+                  ? `${snapshot.entries.length} of ${ALL_SLOTS.length} slots configured across all four departments.`
+                  : patchInvalid
+                    ? 'One edited slot is not yet legible. Save reports which one.'
+                    : changedCount === 0
+                      ? 'The edited slots already match what is stored.'
+                      : `${changedCount} ${changedCount === 1 ? 'slot' : 'slots'} will change, across every department, in one request.`}
               </p>
             </div>
           </>
