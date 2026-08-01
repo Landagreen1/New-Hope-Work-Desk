@@ -37,18 +37,20 @@ import { asApiFailure, attendanceJson, jsonRequest, type ApiFailure } from './ap
 /**
  * The request each clock action sends.
  *
- * The four actions map onto the two existing clock routes, whose contract this
- * redesign leaves alone: a POST opens something and a PATCH closes it. Neither
- * body carries a status or a break type, so the routes' own defaults apply —
- * `available` for a session and `lunch` for a break. Requirement 4 gives one
- * primary action and one secondary, not a choice of break type, so naming a type
- * here would be a policy the requirements do not grant.
+ * The actions map onto the two existing clock routes, whose contract this
+ * redesign leaves alone: a POST opens something and a PATCH closes it.
+ *
+ * `start_lunch` sends `break_type: 'lunch'` — an unpaid break, deducted from
+ * worked hours. `start_break` sends `break_type: 'short'` — a paid break, NOT
+ * deducted from worked hours. The `/api/time-clock/breaks` route already accepts
+ * both types and the attendance policy classifies them accordingly.
  *
  * Requirements: 4.8, 4.9, 4.10
  */
 export const CLOCK_ACTION_REQUEST: Record<ClockAction, { url: string; init: RequestInit }> = {
   clock_in: { url: '/api/time-clock', init: jsonRequest('POST', {}) },
-  start_break: { url: '/api/time-clock/breaks', init: jsonRequest('POST', {}) },
+  start_lunch: { url: '/api/time-clock/breaks', init: jsonRequest('POST', { break_type: 'lunch' }) },
+  start_break: { url: '/api/time-clock/breaks', init: jsonRequest('POST', { break_type: 'short' }) },
   end_break: { url: '/api/time-clock/breaks', init: { method: 'PATCH' } },
   clock_out: { url: '/api/time-clock', init: jsonRequest('PATCH', { action: 'clock_out' }) },
 };

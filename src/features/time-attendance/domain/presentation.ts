@@ -277,14 +277,18 @@ export function hasUnendedBreak(record: DailyAttendanceRecord): boolean {
 /**
  * The clock actions My Day and the Team Today header control can offer.
  *
+ * `start_lunch` begins an unpaid break (deducted from worked hours).
+ * `start_break` begins a paid break (NOT deducted from worked hours).
+ *
  * Requirements: 4.8, 4.9, 4.10
  */
-export type ClockAction = 'clock_in' | 'start_break' | 'end_break' | 'clock_out';
+export type ClockAction = 'clock_in' | 'start_lunch' | 'start_break' | 'end_break' | 'clock_out';
 
 /** Button text per action. The one place these are worded. */
 export const CLOCK_ACTION_LABELS: Record<ClockAction, string> = {
   clock_in: 'Clock In',
-  start_break: 'Start Break',
+  start_lunch: 'Lunch',
+  start_break: 'Break',
   end_break: 'End Break',
   clock_out: 'Clock Out',
 };
@@ -297,16 +301,14 @@ export const CLOCK_ACTION_LABELS: Record<ClockAction, string> = {
  * structural rather than a rule a component has to remember. The three states of
  * criteria 8 through 10 partition the space:
  *
- * | state                                     | primary       | criterion |
- * | ----------------------------------------- | ------------- | --------- |
- * | no open session                           | `clock_in`    | 8         |
- * | open session, unended break on it         | `end_break`   | 10        |
- * | open session, no unended break            | `start_break` | 9         |
+ * | state                                     | primary        | criterion |
+ * | ----------------------------------------- | -------------- | --------- |
+ * | no open session                           | `clock_in`     | 8         |
+ * | open session, unended break on it         | `end_break`    | 10        |
+ * | open session, no unended break            | `start_lunch`  | 9         |
  *
- * The first test is a boolean and the second splits its complement, so exactly
- * one branch is reachable for any record and there is no fourth case to forget.
- * `clock_out` is never primary: criterion 9 places it as the secondary action of
- * the middle state, which is `secondaryClockActions`.
+ * Lunch is the primary break action because it is the most common. The paid
+ * break (`start_break`) and `clock_out` appear as secondary actions.
  *
  * A day carrying a completed session and nothing open reports `clock_in`, which
  * is what criterion 8 says — it asks about an open session, not about whether the
@@ -317,23 +319,23 @@ export const CLOCK_ACTION_LABELS: Record<ClockAction, string> = {
  */
 export function primaryClockAction(record: DailyAttendanceRecord): ClockAction {
   if (!record.hasOpenSession) return 'clock_in';
-  return hasUnendedBreak(record) ? 'end_break' : 'start_break';
+  return hasUnendedBreak(record) ? 'end_break' : 'start_lunch';
 }
 
 /**
- * The actions offered beside the primary one: `['clock_out']` while a session is
- * open with no unended break, and nothing otherwise.
+ * The actions offered beside the primary one: `['start_break', 'clock_out']`
+ * while a session is open with no unended break (primary is Lunch), and nothing
+ * otherwise.
  *
- * Requirement 4, criterion 9 pairs Clock Out with Start Break in that one state,
- * and no other criterion offers it. While a break is running the break has to be
- * ended first, so offering Clock Out there would either lose the break's end or
- * need a second rule about what happens to it — which is why the empty list is
- * the answer in every other state rather than a convenience.
+ * Lunch is primary, and Break (paid) plus Clock Out sit beside it as secondary.
+ * While a break is running it has to be ended first, so offering other actions
+ * there would either lose the break's end or need a second rule about what
+ * happens to it — which is why the empty list is the answer in every other state.
  *
  * Requirements: 4.9, 4.11, 22.4
  */
 export function secondaryClockActions(record: DailyAttendanceRecord): ClockAction[] {
-  return primaryClockAction(record) === 'start_break' ? ['clock_out'] : [];
+  return primaryClockAction(record) === 'start_lunch' ? ['start_break', 'clock_out'] : [];
 }
 
 // ─── Exception Queue row actions ─────────────────────────────────────────────
