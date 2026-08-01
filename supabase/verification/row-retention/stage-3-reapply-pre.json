@@ -1,0 +1,15 @@
+{
+  "label": "stage-3-reapply-pre",
+  "capturedAt": "2026-07-31T15:21:17.502Z",
+  "project": "kfbgftkjvtynfdwgcgeb.supabase.co",
+  "tables": {
+    "time_clock_entries": 47,
+    "time_clock_breaks": 27,
+    "employee_schedules": 924,
+    "pto_requests": 3,
+    "pto_balances": 2,
+    "payroll_periods": 0,
+    "payroll_summaries": 0,
+    "audit_log": 1738
+  }
+}

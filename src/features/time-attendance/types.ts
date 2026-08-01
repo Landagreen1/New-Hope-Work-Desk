@@ -4,8 +4,43 @@ export type ClockStatus = 'available' | 'lunch' | 'unavailable';
 export type BreakType = 'lunch' | 'short' | 'personal';
 export type ShiftType = 'regular' | 'overtime' | 'half_day' | 'training' | 'on_call';
 export type ScheduleStatus = 'scheduled' | 'published' | 'completed' | 'missed' | 'cancelled';
-export type PTOType = 'vacation' | 'birthday';
-export type PTOStatus = 'pending' | 'approved' | 'denied' | 'cancelled';
+
+/**
+ * The request types the `pto_requests.pto_type` check constraint accepts.
+ *
+ * Exactly the five values the constraint names, so a type that compiles is a
+ * type the database stores. `birthday` is deliberately absent: it was declared
+ * here and rejected by the constraint, and since the composer builds its type
+ * selector from `PTO_TYPE_LABELS`, offering it let the UI submit a value the
+ * database refused. `personal` covers the case until Open Question 4 resolves;
+ * adding `birthday` back is a constraint change plus one entry in each of the
+ * two maps in `domain/pto.ts`.
+ *
+ * Requirements: 10.20
+ */
+export type PTOType = 'vacation' | 'sick' | 'personal' | 'bereavement' | 'unpaid';
+
+/**
+ * The statuses a `pto_requests` row can hold.
+ *
+ * The four legacy statuses plus the three the eight decision options require.
+ * `waitlisted`, `information_requested`, and `partially_approved` become valid
+ * in the database when migration v1.9.3 extends the status check constraint
+ * (task 12.1); until then nothing writes them, and the union naming them ahead
+ * of the constraint is the same forward-only ordering v1.9.1's partial
+ * approved-overlap index used.
+ *
+ * Requirements: 10.2, 10.4, 10.5, 10.6, 10.7
+ */
+export type PTOStatus =
+  | 'pending'
+  | 'approved'
+  | 'denied'
+  | 'cancelled'
+  | 'waitlisted'
+  | 'information_requested'
+  | 'partially_approved';
+
 export type PaymentTemplate = 'monthly' | 'biweekly' | 'semi_monthly';
 export type PayType = 'hourly' | 'salary';
 export type PayrollPeriodStatus = 'open' | 'locked' | 'processed' | 'paid';
@@ -182,9 +217,18 @@ export const CLOCK_STATUS_STYLES: Record<ClockStatus, { bg: string; text: string
   unavailable: { bg: 'bg-slate-200', text: 'text-slate-700', label: 'Unavailable', dot: 'bg-slate-400' },
 };
 
+/**
+ * The label for each accepted request type.
+ *
+ * The type selector is built from this map, so it offers exactly the values the
+ * check constraint accepts and nothing else (Requirement 10, criterion 20).
+ */
 export const PTO_TYPE_LABELS: Record<PTOType, string> = {
   vacation: 'Vacation',
-  birthday: 'Birthday Day',
+  sick: 'Sick Leave',
+  personal: 'Personal',
+  bereavement: 'Bereavement',
+  unpaid: 'Unpaid Leave',
 };
 
 export const PTO_STATUS_STYLES: Record<PTOStatus, { bg: string; text: string; label: string }> = {
@@ -192,6 +236,9 @@ export const PTO_STATUS_STYLES: Record<PTOStatus, { bg: string; text: string; la
   approved: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'Approved' },
   denied: { bg: 'bg-rose-100', text: 'text-rose-800', label: 'Denied' },
   cancelled: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Cancelled' },
+  waitlisted: { bg: 'bg-sky-100', text: 'text-sky-800', label: 'Waitlisted' },
+  information_requested: { bg: 'bg-violet-100', text: 'text-violet-800', label: 'Info Requested' },
+  partially_approved: { bg: 'bg-teal-100', text: 'text-teal-800', label: 'Partially Approved' },
 };
 
 export const SHIFT_TYPE_LABELS: Record<ShiftType, string> = {

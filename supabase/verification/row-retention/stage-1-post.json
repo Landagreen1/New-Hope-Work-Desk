@@ -1,0 +1,15 @@
+{
+  "label": "stage-1-post",
+  "capturedAt": "2026-07-31T05:46:11.788Z",
+  "project": "kfbgftkjvtynfdwgcgeb.supabase.co",
+  "tables": {
+    "time_clock_entries": 27,
+    "time_clock_breaks": 25,
+    "employee_schedules": 924,
+    "pto_requests": 3,
+    "pto_balances": 2,
+    "payroll_periods": 0,
+    "payroll_summaries": 0,
+    "audit_log": 1728
+  }
+}

@@ -9,11 +9,22 @@ import DatePicker from '../nhwd-shared/DatePicker';
 import TimePicker from '../nhwd-shared/TimePicker';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
+import { formatScheduledTimeOfDay, formatTimeZoneName } from './shared/format';
 import type { EmployeeSchedule } from './types';
 import { SHIFT_TYPE_LABELS } from './types';
 
 interface ScheduleManagerProps {
   initialProfile: ProfileLite;
+  /**
+   * `attendance_policy.business_timezone`: the zone `shift_start` and `shift_end`
+   * are written in, and so the zone a stored shift time has to be read in before
+   * it can be shown on an employee's own clock (Requirement 3, criterion 7).
+   *
+   * Optional because the workspace takes it off `/api/attendance/day` and that
+   * read may still be outstanding on first render. Until it arrives, and for an
+   * employee whose zone is the business zone, times show exactly as stored.
+   */
+  businessTimeZone?: string;
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -44,37 +55,17 @@ function formatShortDate(d: Date): string {
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 // ─── Timezone Conversion ──────────────────────────────────────────────────────
-
-// Schedules are stored in US Eastern time. Convert for display based on employee timezone.
-// US Eastern (EDT summer): UTC-4
-// Ecuador (America/Guayaquil): UTC-5 → 1 hour behind EDT
-// Honduras (America/Tegucigalpa): UTC-6 → 2 hours behind EDT
-
-function getTimezoneOffset(timezone?: string): number {
-  // Returns hours to subtract from stored time for display
-  if (!timezone) return 0;
-  if (timezone === 'America/Guayaquil') return -1; // Ecuador is 1h behind US EDT
-  if (timezone === 'America/Tegucigalpa') return -2; // Honduras is 2h behind US EDT
-  return 0; // America/New_York — no conversion needed
-}
-
-function convertTimeForDisplay(timeStr: string, timezone?: string): string {
-  const offset = getTimezoneOffset(timezone);
-  if (offset === 0) return timeStr.slice(0, 5);
-  
-  const [hours, minutes] = timeStr.slice(0, 5).split(':').map(Number);
-  let newHours = hours + offset;
-  if (newHours < 0) newHours += 24;
-  if (newHours >= 24) newHours -= 24;
-  return `${String(newHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-}
-
-function getTimezoneLabel(timezone?: string): string {
-  if (!timezone) return '';
-  if (timezone === 'America/Guayaquil') return 'ECT';
-  if (timezone === 'America/Tegucigalpa') return 'CST';
-  return 'ET';
-}
+//
+// There is none here any more. A stored shift time is placed on an employee's
+// clock by `formatScheduledTimeOfDay`, which composes the module's two zone
+// conversions from `domain/work-date.ts`, and the zone is named by
+// `formatTimeZoneName`. Both live in `shared/format.ts`, which is the one place
+// the module spells a time (Requirement 19, criterion 9).
+//
+// What was here was a table of hour offsets — minus one for Guayaquil, minus two
+// for Tegucigalpa — applied against a fixed Eastern Daylight Time baseline. It
+// ignored daylight saving in all three zones, so it was wrong for roughly half
+// the year, and it silently answered zero for any zone not in its table.
 
 // ─── Schedule Templates ───────────────────────────────────────────────────────
 
@@ -148,7 +139,7 @@ const TEMPLATES: ScheduleTemplate[] = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ScheduleManager({ initialProfile }: ScheduleManagerProps) {
+export default function ScheduleManager({ initialProfile, businessTimeZone }: ScheduleManagerProps) {
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [schedules, setSchedules] = useState<EmployeeSchedule[]>([]);
   const [profiles, setProfiles] = useState<Array<{ id: string; display_name: string; initials: string }>>([]);
@@ -244,37 +235,42 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
     } catch (err) { setError(err instanceof Error ? err.message : 'Delete failed.'); }
   };
 
+  /**
+   * Apply the selected template to the selected employees, as one request.
+   *
+   * Requirement 20, criterion 7: the whole set goes in a single POST. It used to
+   * be one request per employee per shift — thirty employees on a six-day
+   * template was 180 requests, fired at once and settled individually, so a
+   * partial application was the normal outcome of any interruption. One request
+   * is one upsert: every row lands or none does.
+   */
   const handleApplyTemplate = async () => {
-    if (!templateProfiles.length) return;
-    setApplyingTemplate(true); setError(null);
     const template = TEMPLATES.find(t => t.id === templateId);
-    if (!template) return;
+    if (!templateProfiles.length || !template) return;
 
+    const rows = templateProfiles.flatMap(profileId =>
+      template.shifts.map(shift => ({
+        profile_id: profileId,
+        schedule_date: formatDate(addDays(weekStart, shift.dayOfWeek)),
+        shift_start: shift.start,
+        shift_end: shift.end,
+        shift_type: 'regular',
+      })),
+    );
+
+    setApplyingTemplate(true); setError(null);
     try {
-      const promises: Promise<Response>[] = [];
-      for (const profileId of templateProfiles) {
-        for (const shift of template.shifts) {
-          const date = formatDate(addDays(weekStart, shift.dayOfWeek));
-          promises.push(
-            fetch('/api/schedules', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                profile_id: profileId,
-                schedule_date: date,
-                shift_start: shift.start,
-                shift_end: shift.end,
-                shift_type: 'regular',
-              }),
-            })
-          );
-        }
-      }
-      const results = await Promise.allSettled(promises);
-      const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok)).length;
+      const res = await fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rows),
+      });
+      if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Template apply failed.'); }
+      const applied = (await res.json().catch(() => ({}))) as { created?: number };
+      const count = typeof applied.created === 'number' ? applied.created : rows.length;
       setShowTemplate(false);
       setTemplateProfiles([]);
-      setNotice(failed ? `Template applied with ${failed} conflicts (existing shifts skipped).` : 'Template applied successfully.');
+      setNotice(`Template applied: ${count} shift${count !== 1 ? 's' : ''} scheduled.`);
       await fetchSchedules();
     } catch (err) { setError(err instanceof Error ? err.message : 'Template apply failed.'); }
     finally { setApplyingTemplate(false); }
@@ -312,11 +308,14 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
         id,
         display_name: profile?.display_name ?? fromSchedule?.profiles?.display_name ?? 'Unknown',
         initials: profile?.initials ?? fromSchedule?.profiles?.initials ?? '??',
-        timezone: (fromSchedule?.profiles as { timezone?: string } | undefined)?.timezone ?? 'America/New_York',
+        // `profiles.timezone`, carried on the joined schedule row. An employee with
+        // no shift this week has no row to carry it, and the business zone is the
+        // right answer there: it is the zone the grid's own times are stored in.
+        timezone: fromSchedule?.profiles?.timezone ?? businessTimeZone,
       };
     });
     return list.sort((a, b) => a.display_name.localeCompare(b.display_name));
-  }, [schedules, profiles, canAdminister]);
+  }, [schedules, profiles, canAdminister, businessTimeZone]);
 
   // Count per day
   const dailyCounts = useMemo(() => {
@@ -413,12 +412,12 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-black text-slate-800 truncate">{emp.display_name}</p>
-                    <p className="text-[9px] font-bold text-slate-400">{getTimezoneLabel(emp.timezone)}</p>
+                    <p className="text-[9px] font-bold text-slate-400">{formatTimeZoneName(emp.timezone)}</p>
                   </div>
                 </div>
 
                 {/* Day cells */}
-                {weekDates.map((date, i) => {
+                {weekDates.map((date) => {
                   const dateStr = formatDate(date);
                   const isToday = dateStr === todayStr;
                   const shifts = scheduleGrid[dateStr]?.[emp.id] ?? [];
@@ -435,7 +434,9 @@ export default function ScheduleManager({ initialProfile }: ScheduleManagerProps
                               className="group relative rounded-lg bg-gradient-to-r from-[#223f7a]/10 to-[#223f7a]/5 border border-[#223f7a]/15 px-2 py-1.5"
                             >
                               <p className="text-[11px] font-black text-[#223f7a]">
-                                {convertTimeForDisplay(s.shift_start, emp.timezone)} – {convertTimeForDisplay(s.shift_end, emp.timezone)}
+                                {formatScheduledTimeOfDay(s.schedule_date, s.shift_start, businessTimeZone, emp.timezone)}
+                                {' – '}
+                                {formatScheduledTimeOfDay(s.schedule_date, s.shift_end, businessTimeZone, emp.timezone)}
                               </p>
                               <p className="text-[9px] font-bold text-slate-500">{SHIFT_TYPE_LABELS[s.shift_type]}</p>
                               {canAdminister && (

@@ -4,6 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 /**
+ * Postgres unique-violation SQLSTATE. Raised here by the partial unique index
+ * `uniq_time_clock_open_entry` (migration v1.9.1) when a second open clock
+ * entry is inserted for one profile.
+ */
+const UNIQUE_VIOLATION = "23505";
+
+/**
  * GET /api/time-clock
  * Get current user's clock entries (or all for managers).
  * Query params: ?profile_id=...&date=YYYY-MM-DD&range=week|month
@@ -80,6 +87,13 @@ export async function GET(request: Request) {
 /**
  * POST /api/time-clock
  * Clock in. Body: { status?: 'available' | 'lunch' | 'unavailable' }
+ *
+ * The one-open-entry rule is enforced by `uniq_time_clock_open_entry`, not by a
+ * select-then-insert check: two concurrent clock-ins can both pass a select and
+ * both insert. The insert that loses the race reads the existing open entry and
+ * returns it as a success with `already_open: true`, because the caller's intent
+ * — to be clocked in — is satisfied (Requirement 4.21). A failure that is not
+ * that race is still reported as a failure (Requirement 4.20).
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -87,18 +101,6 @@ export async function POST(request: Request) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
-
-  // Check if already clocked in
-  const { data: activeEntry } = await supabase
-    .from("time_clock_entries")
-    .select("id")
-    .eq("profile_id", user.id)
-    .is("clock_out", null)
-    .maybeSingle();
-
-  if (activeEntry) {
-    return Response.json({ error: "Already clocked in. Clock out first." }, { status: 400 });
-  }
 
   let body: Record<string, unknown> = {};
   try { body = (await request.json()) as Record<string, unknown>; } catch { /* empty body ok */ }
@@ -114,9 +116,24 @@ export async function POST(request: Request) {
     .select("id, clock_in, clock_status")
     .single();
 
-  if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION) {
+      const { data: openEntry } = await supabase
+        .from("time_clock_entries")
+        .select("id, clock_in, clock_status")
+        .eq("profile_id", user.id)
+        .is("clock_out", null)
+        .maybeSingle();
 
-  return Response.json({ entry: data }, { status: 201 });
+      // A readable open entry is what makes this a duplicate rather than a
+      // failure. Without one, report the original error instead of inventing
+      // a success.
+      if (openEntry) return Response.json({ entry: openEntry, already_open: true });
+    }
+    return Response.json({ error: error.message }, { status: 400 });
+  }
+
+  return Response.json({ entry: data, already_open: false }, { status: 201 });
 }
 
 /**

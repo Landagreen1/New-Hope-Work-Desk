@@ -3,11 +3,18 @@
 import Image from "next/image";
 import { type ReactNode } from "react";
 
-import { AppSidebar, type ModuleId, type NavigationState, type SubNavId } from "@/components/app-sidebar";
+import {
+  AppSidebar,
+  type ModuleId,
+  type NavigationState,
+  type NavigationTarget,
+  type NavigationTargetRecordKind,
+  type SubNavId,
+} from "@/components/app-sidebar";
 import type { AppRole } from "@/features/nhwd-shared/types";
 import { roleLabel } from "@/lib/permissions";
 
-export type { ModuleId, NavigationState, SubNavId };
+export type { ModuleId, NavigationState, NavigationTarget, NavigationTargetRecordKind, SubNavId };
 
 /**
  * SidebarLayout provides the enterprise-grade shell for New Hope Work Desk.

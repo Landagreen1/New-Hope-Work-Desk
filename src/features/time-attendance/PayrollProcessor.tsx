@@ -8,12 +8,23 @@ import { canAdministerAttendance } from '@/lib/permissions';
 import DatePicker from '../nhwd-shared/DatePicker';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
+import { asApiFailure, isAbortError } from './shared/api-failure';
+import { downloadCsvExport, payrollExportUrl, type CsvDownload } from './shared/csv-download';
 
 interface PayrollProcessorProps {
   initialProfile: ProfileLite;
 }
 
 type Step = 'period' | 'review' | 'done';
+
+/** Which of the two export controls a download belongs to. */
+type ExportSource = 'current' | 'history';
+
+/** One finished download, and where its outcome is displayed. */
+interface ExportState {
+  source: ExportSource;
+  download: CsvDownload;
+}
 
 interface EmployeeSummary {
   profile_id: string;
@@ -39,6 +50,34 @@ interface EmployeeSummary {
 
 function formatMoney(amount: number): string {
   return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * What the last download turned out to contain.
+ *
+ * The file itself cannot say that it matched nothing, so the route reports the row
+ * count and Requirement 15, criterion 8's statement in response headers and they
+ * are shown here — rather than arriving as a file the reader has to open to
+ * discover is empty.
+ *
+ * Requirements: 15.8
+ */
+function ExportOutcomeNotice({ download }: { download: CsvDownload }) {
+  const empty = download.notice !== null;
+  return (
+    <p
+      role="status"
+      className={`rounded-xl border px-3.5 py-2.5 text-xs font-semibold ${
+        empty
+          ? 'border-amber-200 bg-amber-50 text-amber-800'
+          : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+      }`}
+    >
+      {empty
+        ? `${download.notice} The file was still downloaded as ${download.filename}, carrying its header row.`
+        : `Downloaded ${download.rowCount} ${download.rowCount === 1 ? 'row' : 'rows'} as ${download.filename}.`}
+    </p>
+  );
 }
 
 function suggestPeriodDates(): { start: string; end: string; payDate: string } {
@@ -73,6 +112,8 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
   const [historyDetailPeriod, setHistoryDetailPeriod] = useState<{ id: string; period_start: string; period_end: string; pay_date: string } | null>(null);
   const [historySummaries, setHistorySummaries] = useState<EmployeeSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [exporting, setExporting] = useState<ExportSource | null>(null);
+  const [exportState, setExportState] = useState<ExportState | null>(null);
 
   // Fetch already-processed periods
   useEffect(() => {
@@ -139,22 +180,44 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
     finally { setProcessing(false); }
   }, [summaries, periodStart, periodEnd, payDate]);
 
-  // CSV export for current calculation
-  const handleExport = () => {
-    const headers = ['Employee', 'Hours', 'OT Hours', 'Break Hrs', 'PTO Days', 'Rate', 'Regular Pay', 'OT Pay', 'PTO Pay', 'Gross', 'Deductions', 'Net Pay'];
-    const rows = summaries.map(s => [
-      s.display_name, s.total_hours, s.overtime_hours, s.break_hours, s.pto_days_used,
-      s.hourly_rate, s.regular_pay, s.overtime_pay, s.pto_pay, s.gross_pay, s.deductions_total, s.net_pay,
-    ]);
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `payroll-${periodStart}-to-${periodEnd}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  // ─── The export ───────────────────────────────────────────────────────────
+  //
+  // One server read for both controls. `/api/attendance/export` with
+  // `view=payroll_ready` reads the period through `payrollInputs` in
+  // `legacy_parity` mode — the same figures `/api/payroll/calculate` returns —
+  // serialises with `toCsv`, which encloses every field in quotation marks and
+  // doubles embedded ones, and names the file with `exportFileName`.
+  //
+  // That is the whole change. The two exports this replaced built their CSV here
+  // with `rows.map(r => r.join(','))`, which quoted nothing, so an employee name
+  // carrying a comma split into two columns and one carrying a quotation mark
+  // corrupted the row. Because `payroll_ready` reads the period from the database
+  // rather than from browser state, the current calculation and a processed
+  // period are the same request with different dates.
+  //
+  // Requirements: 2.2, 2.5, 15.1, 15.4
+  const runExport = useCallback(async (source: ExportSource, from: string, to: string) => {
+    setExporting(source);
+    setError(null);
+    setExportState(null);
+    try {
+      const download = await downloadCsvExport(
+        payrollExportUrl(from, to),
+        `payroll-${from}-to-${to}.csv`,
+      );
+      setExportState({ source, download });
+    } catch (err) {
+      if (isAbortError(err)) return;
+      setError(asApiFailure(err).reason);
+    } finally {
+      setExporting(null);
+    }
+  }, []);
+
+  // CSV export for the current calculation
+  const handleExport = useCallback(() => {
+    void runExport('current', periodStart, periodEnd);
+  }, [runExport, periodStart, periodEnd]);
 
   // View details of a historical payroll period
   const handleViewHistoryDetail = async (period: { id: string; period_start: string; period_end: string; pay_date: string }) => {
@@ -190,23 +253,11 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
     finally { setHistoryLoading(false); }
   };
 
-  // CSV export for a historical period
-  const handleHistoryExport = () => {
-    if (!historyDetailPeriod || !historySummaries.length) return;
-    const headers = ['Employee', 'Regular Hours', 'OT Hours', 'Break Hours', 'Total Hours', 'PTO Days', 'Regular Pay', 'OT Pay', 'PTO Pay', 'Gross Pay', 'Deductions', 'Net Pay', 'Days Worked'];
-    const rows = historySummaries.map(s => [
-      `"${s.display_name}"`, s.regular_hours, s.overtime_hours, s.break_hours, s.total_hours,
-      s.pto_days_used, s.regular_pay, s.overtime_pay, s.pto_pay, s.gross_pay, s.deductions_total, s.net_pay, s.days_worked,
-    ]);
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `payroll-${historyDetailPeriod.period_start}-to-${historyDetailPeriod.period_end}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  // CSV export for a historical period — the same request, other dates
+  const handleHistoryExport = useCallback(() => {
+    if (!historyDetailPeriod) return;
+    void runExport('history', historyDetailPeriod.period_start, historyDetailPeriod.period_end);
+  }, [runExport, historyDetailPeriod]);
 
   // Totals
   const totalGross = summaries.reduce((sum, s) => sum + s.gross_pay, 0);
@@ -224,6 +275,10 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
   return (
     <div className="space-y-5">
       {error && <div className={ui.error}><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
+
+      {/* What the last current-period download contained. The history modal shows
+          its own, because it covers this. */}
+      {exportState?.source === 'current' && <ExportOutcomeNotice download={exportState.download} />}
 
       {/* Step Indicator */}
       <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
@@ -339,7 +394,15 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
                 <h3 className="mt-1 text-lg font-black text-slate-900">Review Employee Payroll</h3>
               </div>
               <div className="flex gap-2">
-                <button type="button" onClick={handleExport} className={ui.btnSecondary + ' !text-xs'}><Download className="h-3.5 w-3.5" /> Export CSV</button>
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  disabled={exporting !== null}
+                  className={ui.btnSecondary + ' !text-xs'}
+                >
+                  <Download className={`h-3.5 w-3.5${exporting === 'current' ? ' animate-pulse' : ''}`} />
+                  {exporting === 'current' ? 'Preparing...' : 'Export CSV'}
+                </button>
                 <button type="button" onClick={() => setStep('period')} className={ui.btnSecondary + ' !text-xs'}>Back</button>
               </div>
             </div>
@@ -451,16 +514,26 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
                 <button
                   type="button"
                   onClick={handleHistoryExport}
-                  disabled={historySummaries.length === 0}
+                  disabled={historySummaries.length === 0 || exporting !== null}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white shadow hover:bg-emerald-700 disabled:opacity-50 transition"
                 >
-                  <Download className="h-3.5 w-3.5" /> Download CSV
+                  <Download className={`h-3.5 w-3.5${exporting === 'history' ? ' animate-pulse' : ''}`} />
+                  {exporting === 'history' ? 'Preparing...' : 'Download CSV'}
                 </button>
                 <button onClick={() => setHistoryDetailPeriod(null)} className="rounded-xl bg-slate-100 px-3 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-200">
                   <X className="mr-1 inline h-3.5 w-3.5" />Close
                 </button>
               </div>
             </div>
+
+            {/* The failure reason and the download's outcome, stated inside the
+                modal because the modal covers the page's own banners. */}
+            {(error !== null || exportState?.source === 'history') && (
+              <div className="space-y-2 border-b border-slate-100 px-6 py-3">
+                {error && <div className={ui.error}><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
+                {exportState?.source === 'history' && <ExportOutcomeNotice download={exportState.download} />}
+              </div>
+            )}
 
             {/* Content */}
             {historyLoading ? (
@@ -574,7 +647,15 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
             {summaries.length} employee{summaries.length !== 1 ? 's' : ''} · Total payout: <span className="font-black text-emerald-700">{formatMoney(totalNet)}</span>
           </p>
           <div className="mt-6 flex justify-center gap-3">
-            <button type="button" onClick={handleExport} className={ui.btnSecondary}><Download className="h-4 w-4" /> Download CSV</button>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting !== null}
+              className={ui.btnSecondary}
+            >
+              <Download className={`h-4 w-4${exporting === 'current' ? ' animate-pulse' : ''}`} />
+              {exporting === 'current' ? 'Preparing...' : 'Download CSV'}
+            </button>
             <button type="button" onClick={() => { setStep('period'); setSummaries([]); setProcessedId(null); }} className={ui.btnPrimary}>Run Another Period</button>
           </div>
         </div>

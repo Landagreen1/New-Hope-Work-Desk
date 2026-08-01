@@ -1,0 +1,504 @@
+{
+  "label": "stage-2-v1.9.1",
+  "capturedAt": "2026-07-31T14:25:37.767Z",
+  "requirement": "20.13",
+  "spec": ".kiro/specs/time-attendance-ui-redesign",
+  "migration": "supabase/migrations/v1.9.1-attendance-indexes.sql",
+  "project": {
+    "ref": "kfbgftkjvtynfdwgcgeb"
+  },
+  "environment": {
+    "server_version": "17.6",
+    "db_current_date": "2026-07-31",
+    "db_now": "2026-07-31 14:25:30.202332+00",
+    "time_clock_entries": 47,
+    "time_clock_breaks": 25,
+    "employee_schedules": 924,
+    "pto_requests": 3,
+    "pto_requests_approved": 0,
+    "active_profiles": 37,
+    "clock_in_min": "2026-07-30 04:01:45.20572+00",
+    "clock_in_max": "2026-07-31 13:31:20.858997+00",
+    "schedule_date_min": "2026-07-28",
+    "schedule_date_max": "2026-08-31",
+    "pto_start_date_min": "2026-07-31",
+    "pto_end_date_max": "2026-11-10"
+  },
+  "windows": {
+    "anchor": "2026-07-31",
+    "day": {
+      "from": "2026-07-31",
+      "to": "2026-07-31",
+      "label": "1 date"
+    },
+    "month": {
+      "from": "2026-07-16",
+      "to": "2026-08-15",
+      "label": "31 dates"
+    }
+  },
+  "rowCounts": {
+    "time_clock_entries": 47,
+    "time_clock_breaks": 25,
+    "employee_schedules": 924,
+    "pto_requests": 3,
+    "pto_requests_approved": 0,
+    "active_profiles": 37
+  },
+  "lastAnalyze": {
+    "employee_schedules": "2026-07-29 16:15:03.673987+00",
+    "pto_requests": "-infinity",
+    "time_clock_breaks": "2026-07-30 14:10:34.328653+00",
+    "time_clock_entries": "2026-07-31 12:46:03.967716+00"
+  },
+  "indexes": [
+    {
+      "index_name": "employee_schedules_pkey",
+      "table_name": "employee_schedules",
+      "definition": "CREATE UNIQUE INDEX employee_schedules_pkey ON public.employee_schedules USING btree (id)",
+      "size_bytes": 90112,
+      "is_valid": true,
+      "is_unique": true,
+      "is_partial": false,
+      "scans_since_stats_reset": 0
+    },
+    {
+      "index_name": "idx_employee_schedules_date",
+      "table_name": "employee_schedules",
+      "definition": "CREATE INDEX idx_employee_schedules_date ON public.employee_schedules USING btree (schedule_date, profile_id)",
+      "size_bytes": 90112,
+      "is_valid": true,
+      "is_unique": false,
+      "is_partial": false,
+      "scans_since_stats_reset": 277
+    },
+    {
+      "index_name": "idx_employee_schedules_profile",
+      "table_name": "employee_schedules",
+      "definition": "CREATE INDEX idx_employee_schedules_profile ON public.employee_schedules USING btree (profile_id, schedule_date)",
+      "size_bytes": 90112,
+      "is_valid": true,
+      "is_unique": false,
+      "is_partial": false,
+      "scans_since_stats_reset": 216
+    },
+    {
+      "index_name": "unique_schedule_per_person_day",
+      "table_name": "employee_schedules",
+      "definition": "CREATE UNIQUE INDEX unique_schedule_per_person_day ON public.employee_schedules USING btree (profile_id, schedule_date)",
+      "size_bytes": 98304,
+      "is_valid": true,
+      "is_unique": true,
+      "is_partial": false,
+      "scans_since_stats_reset": 2165
+    },
+    {
+      "index_name": "idx_pto_requests_approved_range",
+      "table_name": "pto_requests",
+      "definition": "CREATE INDEX idx_pto_requests_approved_range ON public.pto_requests USING btree (start_date, end_date) WHERE (status = ANY (ARRAY['approved'::text, 'partially_approved'::text]))",
+      "size_bytes": 8192,
+      "is_valid": true,
+      "is_unique": false,
+      "is_partial": true,
+      "scans_since_stats_reset": 3
+    },
+    {
+      "index_name": "idx_pto_requests_pending",
+      "table_name": "pto_requests",
+      "definition": "CREATE INDEX idx_pto_requests_pending ON public.pto_requests USING btree (status) WHERE (status = 'pending'::text)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": false,
+      "is_partial": true,
+      "scans_since_stats_reset": 0
+    },
+    {
+      "index_name": "idx_pto_requests_profile",
+      "table_name": "pto_requests",
+      "definition": "CREATE INDEX idx_pto_requests_profile ON public.pto_requests USING btree (profile_id, start_date)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": false,
+      "is_partial": false,
+      "scans_since_stats_reset": 93
+    },
+    {
+      "index_name": "idx_pto_requests_range",
+      "table_name": "pto_requests",
+      "definition": "CREATE INDEX idx_pto_requests_range ON public.pto_requests USING btree (start_date, end_date)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": false,
+      "is_partial": false,
+      "scans_since_stats_reset": 3
+    },
+    {
+      "index_name": "pto_requests_pkey",
+      "table_name": "pto_requests",
+      "definition": "CREATE UNIQUE INDEX pto_requests_pkey ON public.pto_requests USING btree (id)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": true,
+      "is_partial": false,
+      "scans_since_stats_reset": 8
+    },
+    {
+      "index_name": "idx_time_clock_breaks_entry",
+      "table_name": "time_clock_breaks",
+      "definition": "CREATE INDEX idx_time_clock_breaks_entry ON public.time_clock_breaks USING btree (clock_entry_id)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": false,
+      "is_partial": false,
+      "scans_since_stats_reset": 479
+    },
+    {
+      "index_name": "time_clock_breaks_pkey",
+      "table_name": "time_clock_breaks",
+      "definition": "CREATE UNIQUE INDEX time_clock_breaks_pkey ON public.time_clock_breaks USING btree (id)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": true,
+      "is_partial": false,
+      "scans_since_stats_reset": 39
+    },
+    {
+      "index_name": "uniq_time_clock_open_break",
+      "table_name": "time_clock_breaks",
+      "definition": "CREATE UNIQUE INDEX uniq_time_clock_open_break ON public.time_clock_breaks USING btree (clock_entry_id) WHERE (break_end IS NULL)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": true,
+      "is_partial": true,
+      "scans_since_stats_reset": 31
+    },
+    {
+      "index_name": "idx_time_clock_active",
+      "table_name": "time_clock_entries",
+      "definition": "CREATE INDEX idx_time_clock_active ON public.time_clock_entries USING btree (profile_id) WHERE (clock_out IS NULL)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": false,
+      "is_partial": true,
+      "scans_since_stats_reset": 290
+    },
+    {
+      "index_name": "idx_time_clock_clock_in",
+      "table_name": "time_clock_entries",
+      "definition": "CREATE INDEX idx_time_clock_clock_in ON public.time_clock_entries USING btree (clock_in)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": false,
+      "is_partial": false,
+      "scans_since_stats_reset": 147
+    },
+    {
+      "index_name": "idx_time_clock_profile_date",
+      "table_name": "time_clock_entries",
+      "definition": "CREATE INDEX idx_time_clock_profile_date ON public.time_clock_entries USING btree (profile_id, clock_in DESC)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": false,
+      "is_partial": false,
+      "scans_since_stats_reset": 268
+    },
+    {
+      "index_name": "time_clock_entries_pkey",
+      "table_name": "time_clock_entries",
+      "definition": "CREATE UNIQUE INDEX time_clock_entries_pkey ON public.time_clock_entries USING btree (id)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": true,
+      "is_partial": false,
+      "scans_since_stats_reset": 162
+    },
+    {
+      "index_name": "uniq_time_clock_open_entry",
+      "table_name": "time_clock_entries",
+      "definition": "CREATE UNIQUE INDEX uniq_time_clock_open_entry ON public.time_clock_entries USING btree (profile_id) WHERE (clock_out IS NULL)",
+      "size_bytes": 16384,
+      "is_valid": true,
+      "is_unique": true,
+      "is_partial": true,
+      "scans_since_stats_reset": 0
+    }
+  ],
+  "plans": [
+    {
+      "key": "clock-entries-day",
+      "title": "Clock entries on one date, all employees",
+      "table": "time_clock_entries",
+      "index": "idx_time_clock_clock_in",
+      "consumers": "Team Today, Live coverage panel",
+      "window": "day",
+      "windowFrom": "2026-07-31",
+      "windowTo": "2026-07-31",
+      "sql": "select id, profile_id, clock_in, clock_out, clock_status, break_minutes, total_hours, is_overtime\n  from public.time_clock_entries\n where clock_in >= '2026-07-31T00:00:00Z'::timestamptz - interval '1 day'\n   and clock_in <  '2026-07-31T00:00:00Z'::timestamptz + interval '2 days'\n order by clock_in",
+      "measured": {
+        "plan": [
+          "Sort  (cost=2.28..2.36 rows=29 width=68) (actual time=0.107..0.111 rows=47 loops=1)",
+          "  Sort Key: clock_in",
+          "  Sort Method: quicksort  Memory: 28kB",
+          "  Buffers: shared hit=4",
+          "  ->  Seq Scan on time_clock_entries  (cost=0.00..1.58 rows=29 width=68) (actual time=0.027..0.056 rows=47 loops=1)",
+          "        Filter: ((clock_in >= ('2026-07-31 00:00:00+00'::timestamp with time zone - '1 day'::interval)) AND (clock_in < ('2026-07-31 00:00:00+00'::timestamp with time zone + '2 days'::interval)))",
+          "        Buffers: shared hit=1",
+          "Planning:",
+          "  Buffers: shared hit=156",
+          "Planning Time: 0.849 ms",
+          "Execution Time: 0.230 ms"
+        ],
+        "scanNodes": [
+          "Seq Scan"
+        ],
+        "usesExpectedIndex": false,
+        "planningTimeMs": 0.849,
+        "executionTimeMs": 0.23
+      },
+      "diagnostic": null
+    },
+    {
+      "key": "clock-entries-month",
+      "title": "Clock entries across a 31-date window, all employees",
+      "table": "time_clock_entries",
+      "index": "idx_time_clock_clock_in",
+      "consumers": "Review range, metrics, trends",
+      "window": "month",
+      "windowFrom": "2026-07-16",
+      "windowTo": "2026-08-15",
+      "sql": "select id, profile_id, clock_in, clock_out, clock_status, break_minutes, total_hours, is_overtime\n  from public.time_clock_entries\n where clock_in >= '2026-07-16T00:00:00Z'::timestamptz - interval '1 day'\n   and clock_in <  '2026-08-15T00:00:00Z'::timestamptz + interval '2 days'\n order by clock_in",
+      "measured": {
+        "plan": [
+          "Sort  (cost=2.28..2.36 rows=29 width=68) (actual time=0.109..0.114 rows=47 loops=1)",
+          "  Sort Key: clock_in",
+          "  Sort Method: quicksort  Memory: 28kB",
+          "  Buffers: shared hit=4",
+          "  ->  Seq Scan on time_clock_entries  (cost=0.00..1.58 rows=29 width=68) (actual time=0.021..0.050 rows=47 loops=1)",
+          "        Filter: ((clock_in >= ('2026-07-16 00:00:00+00'::timestamp with time zone - '1 day'::interval)) AND (clock_in < ('2026-08-15 00:00:00+00'::timestamp with time zone + '2 days'::interval)))",
+          "        Buffers: shared hit=1",
+          "Planning:",
+          "  Buffers: shared hit=156",
+          "Planning Time: 0.863 ms",
+          "Execution Time: 0.235 ms"
+        ],
+        "scanNodes": [
+          "Seq Scan"
+        ],
+        "usesExpectedIndex": false,
+        "planningTimeMs": 0.863,
+        "executionTimeMs": 0.235
+      },
+      "diagnostic": {
+        "plan": [
+          "Index Scan using idx_time_clock_clock_in on time_clock_entries  (cost=0.14..4.02 rows=29 width=68) (actual time=0.482..0.563 rows=47 loops=1)",
+          "  Index Cond: ((clock_in >= ('2026-07-16 00:00:00+00'::timestamp with time zone - '1 day'::interval)) AND (clock_in < ('2026-08-15 00:00:00+00'::timestamp with time zone + '2 days'::interval)))",
+          "  Buffers: shared hit=2",
+          "Planning:",
+          "  Buffers: shared hit=156",
+          "Planning Time: 1.291 ms",
+          "Execution Time: 1.039 ms"
+        ],
+        "scanNodes": [
+          "Index Scan"
+        ],
+        "usesExpectedIndex": true,
+        "planningTimeMs": 1.291,
+        "executionTimeMs": 1.039
+      }
+    },
+    {
+      "key": "schedules-day",
+      "title": "Schedules on one date, all employees",
+      "table": "employee_schedules",
+      "index": "idx_employee_schedules_date",
+      "consumers": "Team Today, Live coverage panel",
+      "window": "day",
+      "windowFrom": "2026-07-31",
+      "windowTo": "2026-07-31",
+      "sql": "select id, profile_id, schedule_date, shift_start, shift_end, shift_type, status\n  from public.employee_schedules\n where schedule_date >= '2026-07-31'::date\n   and schedule_date <= '2026-07-31'::date\n order by schedule_date, profile_id",
+      "measured": {
+        "plan": [
+          "Sort  (cost=26.51..26.59 rows=35 width=70) (actual time=0.193..0.197 rows=35 loops=1)",
+          "  Sort Key: schedule_date, profile_id",
+          "  Sort Method: quicksort  Memory: 28kB",
+          "  Buffers: shared hit=26",
+          "  ->  Bitmap Heap Scan on employee_schedules  (cost=1.73..25.61 rows=35 width=70) (actual time=0.053..0.125 rows=35 loops=1)",
+          "        Recheck Cond: ((schedule_date >= '2026-07-31'::date) AND (schedule_date <= '2026-07-31'::date))",
+          "        Heap Blocks: exact=18",
+          "        Buffers: shared hit=20",
+          "        ->  Bitmap Index Scan on idx_employee_schedules_date  (cost=0.00..1.73 rows=35 width=0) (actual time=0.033..0.034 rows=35 loops=1)",
+          "              Index Cond: ((schedule_date >= '2026-07-31'::date) AND (schedule_date <= '2026-07-31'::date))",
+          "              Buffers: shared hit=2",
+          "Planning:",
+          "  Buffers: shared hit=140",
+          "Planning Time: 1.036 ms",
+          "Execution Time: 0.447 ms"
+        ],
+        "scanNodes": [
+          "Index Scan",
+          "Bitmap Heap Scan",
+          "Bitmap Index Scan"
+        ],
+        "usesExpectedIndex": true,
+        "planningTimeMs": 1.036,
+        "executionTimeMs": 0.447
+      },
+      "diagnostic": null
+    },
+    {
+      "key": "schedules-month",
+      "title": "Schedules across a 31-date window, all employees",
+      "table": "employee_schedules",
+      "index": "idx_employee_schedules_date",
+      "consumers": "Coverage Calendar, Health Ribbon, Schedule screen",
+      "window": "month",
+      "windowFrom": "2026-07-16",
+      "windowTo": "2026-08-15",
+      "sql": "select id, profile_id, schedule_date, shift_start, shift_end, shift_type, status\n  from public.employee_schedules\n where schedule_date >= '2026-07-16'::date\n   and schedule_date <= '2026-08-15'::date\n order by schedule_date, profile_id",
+      "measured": {
+        "plan": [
+          "Index Scan using idx_employee_schedules_date on employee_schedules  (cost=0.28..53.52 rows=524 width=70) (actual time=0.066..0.477 rows=524 loops=1)",
+          "  Index Cond: ((schedule_date >= '2026-07-16'::date) AND (schedule_date <= '2026-08-15'::date))",
+          "  Buffers: shared hit=509",
+          "Planning:",
+          "  Buffers: shared hit=140",
+          "Planning Time: 0.661 ms",
+          "Execution Time: 0.773 ms"
+        ],
+        "scanNodes": [
+          "Index Scan"
+        ],
+        "usesExpectedIndex": true,
+        "planningTimeMs": 0.661,
+        "executionTimeMs": 0.773
+      },
+      "diagnostic": {
+        "plan": [
+          "Index Scan using idx_employee_schedules_date on employee_schedules  (cost=0.28..53.52 rows=524 width=70) (actual time=0.052..0.664 rows=524 loops=1)",
+          "  Index Cond: ((schedule_date >= '2026-07-16'::date) AND (schedule_date <= '2026-08-15'::date))",
+          "  Buffers: shared hit=509",
+          "Planning:",
+          "  Buffers: shared hit=140",
+          "Planning Time: 2.638 ms",
+          "Execution Time: 0.836 ms"
+        ],
+        "scanNodes": [
+          "Index Scan"
+        ],
+        "usesExpectedIndex": true,
+        "planningTimeMs": 2.638,
+        "executionTimeMs": 0.836
+      }
+    },
+    {
+      "key": "pto-overlap-month",
+      "title": "Time-off overlapping a 31-date window, all employees, every status",
+      "table": "pto_requests",
+      "index": "idx_pto_requests_range",
+      "consumers": "Time-off list, Review",
+      "window": "month",
+      "windowFrom": "2026-07-16",
+      "windowTo": "2026-08-15",
+      "sql": "select id, profile_id, pto_type, start_date, end_date, total_days, status\n  from public.pto_requests\n where start_date <= '2026-08-15'::date\n   and end_date   >= '2026-07-16'::date\n order by start_date, profile_id",
+      "measured": {
+        "plan": [
+          "Sort  (cost=1.05..1.06 rows=1 width=116) (actual time=0.100..0.101 rows=2 loops=1)",
+          "  Sort Key: start_date, profile_id",
+          "  Sort Method: quicksort  Memory: 25kB",
+          "  Buffers: shared hit=7",
+          "  ->  Seq Scan on pto_requests  (cost=0.00..1.04 rows=1 width=116) (actual time=0.050..0.051 rows=2 loops=1)",
+          "        Filter: ((start_date <= '2026-08-15'::date) AND (end_date >= '2026-07-16'::date))",
+          "        Rows Removed by Filter: 1",
+          "        Buffers: shared hit=1",
+          "Planning:",
+          "  Buffers: shared hit=167",
+          "Planning Time: 0.886 ms",
+          "Execution Time: 0.204 ms"
+        ],
+        "scanNodes": [
+          "Seq Scan"
+        ],
+        "usesExpectedIndex": false,
+        "planningTimeMs": 0.886,
+        "executionTimeMs": 0.204
+      },
+      "diagnostic": {
+        "plan": [
+          "Incremental Sort  (cost=2.36..2.40 rows=2 width=116) (actual time=0.415..0.417 rows=2 loops=1)",
+          "  Sort Key: start_date, profile_id",
+          "  Presorted Key: start_date",
+          "  Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB",
+          "  Buffers: shared hit=11",
+          "  ->  Index Scan using idx_pto_requests_range on pto_requests  (cost=0.13..2.35 rows=1 width=116) (actual time=0.042..0.044 rows=2 loops=1)",
+          "        Index Cond: ((start_date <= '2026-08-15'::date) AND (end_date >= '2026-07-16'::date))",
+          "        Buffers: shared hit=2",
+          "Planning:",
+          "  Buffers: shared hit=167",
+          "Planning Time: 1.256 ms",
+          "Execution Time: 0.526 ms"
+        ],
+        "scanNodes": [
+          "Index Scan"
+        ],
+        "usesExpectedIndex": true,
+        "planningTimeMs": 1.256,
+        "executionTimeMs": 0.526
+      }
+    },
+    {
+      "key": "pto-overlap-approved-month",
+      "title": "Approved time-off overlapping a 31-date window, all employees",
+      "table": "pto_requests",
+      "index": "idx_pto_requests_approved_range",
+      "consumers": "Coverage Calendar, Health Ribbon, Approval Impact Preview",
+      "window": "month",
+      "windowFrom": "2026-07-16",
+      "windowTo": "2026-08-15",
+      "sql": "select id, profile_id, pto_type, start_date, end_date, total_days, status\n  from public.pto_requests\n where start_date <= '2026-08-15'::date\n   and end_date   >= '2026-07-16'::date\n   and status in ('approved', 'partially_approved')\n order by start_date, profile_id",
+      "measured": {
+        "plan": [
+          "Sort  (cost=1.06..1.07 rows=1 width=116) (actual time=0.069..0.069 rows=0 loops=1)",
+          "  Sort Key: start_date, profile_id",
+          "  Sort Method: quicksort  Memory: 25kB",
+          "  Buffers: shared hit=7",
+          "  ->  Seq Scan on pto_requests  (cost=0.00..1.05 rows=1 width=116) (actual time=0.029..0.029 rows=0 loops=1)",
+          "        Filter: ((start_date <= '2026-08-15'::date) AND (end_date >= '2026-07-16'::date) AND (status = ANY ('{approved,partially_approved}'::text[])))",
+          "        Rows Removed by Filter: 3",
+          "        Buffers: shared hit=1",
+          "Planning:",
+          "  Buffers: shared hit=223",
+          "Planning Time: 1.597 ms",
+          "Execution Time: 0.172 ms"
+        ],
+        "scanNodes": [
+          "Seq Scan"
+        ],
+        "usesExpectedIndex": false,
+        "planningTimeMs": 1.597,
+        "executionTimeMs": 0.172
+      },
+      "diagnostic": {
+        "plan": [
+          "Incremental Sort  (cost=2.35..2.40 rows=2 width=116) (actual time=0.055..0.056 rows=0 loops=1)",
+          "  Sort Key: start_date, profile_id",
+          "  Presorted Key: start_date",
+          "  Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB",
+          "  Buffers: shared hit=10",
+          "  ->  Index Scan using idx_pto_requests_approved_range on pto_requests  (cost=0.12..2.34 rows=1 width=116) (actual time=0.002..0.003 rows=0 loops=1)",
+          "        Index Cond: ((start_date <= '2026-08-15'::date) AND (end_date >= '2026-07-16'::date))",
+          "        Buffers: shared hit=1",
+          "Planning:",
+          "  Buffers: shared hit=223",
+          "Planning Time: 1.065 ms",
+          "Execution Time: 0.126 ms"
+        ],
+        "scanNodes": [
+          "Index Scan"
+        ],
+        "usesExpectedIndex": true,
+        "planningTimeMs": 1.065,
+        "executionTimeMs": 0.126
+      }
+    }
+  ]
+}

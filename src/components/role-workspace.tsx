@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import {
   getDefaultNavigation,
   resolveNavigationForRole,
+  type NavigationTarget,
 } from "@/components/app-sidebar";
 import { SidebarLayout, type NavigationState, type SubNavId } from "@/components/sidebar-layout";
 import { WorkDeskApp } from "@/components/work-desk-app";
@@ -18,6 +19,7 @@ import CommercialCommissionReview from "@/features/commercial/CommercialCommissi
 import CommercialDatabase from "@/features/commercial/CommercialDatabase";
 import CommercialReports from "@/features/commercial/CommercialReports";
 import CommercialTimingReport from "@/features/commercial/CommercialTimingReport";
+import { attendanceSectionForSubNav } from "@/features/time-attendance/shared/navigation-target";
 import TimeAttendanceWorkspace from "@/features/time-attendance/TimeAttendanceWorkspace";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
@@ -147,6 +149,48 @@ export function RoleWorkspace({
     setNavigation(resolveNavigationForRole(sessionProfile.role, nav));
   }, [sessionProfile.role]);
 
+  /**
+   * Drops the record target once the owning screen has opened it.
+   *
+   * A target is a one-shot instruction: it opens a record's drawer and is then
+   * spent. Leaving it in navigation state would reopen that drawer every time the
+   * screen remounted, long after the reader had closed it. The screen keeps the
+   * drawer open from its own state, so clearing here changes nothing on screen.
+   *
+   * Requirements: 1.11
+   */
+  const clearNavigationTarget = useCallback(() => {
+    setNavigation((current) =>
+      current.target === undefined ? current : { module: current.module, subNav: current.subNav },
+    );
+  }, []);
+
+  /**
+   * Moves to the screen a record belongs to, with the record named.
+   *
+   * The Needs Attention inbox is mounted on every Time & Attendance screen and its
+   * items belong to four of them, so selecting one is a navigation rather than
+   * something the screen holding the inbox can do itself. `subNav` is set from the
+   * target's own `screen`, because `resolveNavigationForRole` drops a target whose
+   * screen is not the one being navigated to — a target and a sub-navigation
+   * identifier that disagree would open a drawer on a screen the reader is not
+   * looking at.
+   *
+   * Requirements: 1.11, 17.6
+   */
+  const openNavigationTarget = useCallback(
+    (target: NavigationTarget) => {
+      setNavigation(
+        resolveNavigationForRole(sessionProfile.role, {
+          module: "time_attendance",
+          subNav: target.screen,
+          target,
+        }),
+      );
+    },
+    [sessionProfile.role],
+  );
+
   // Determine what content to render based on sidebar navigation state
   const renderContent = () => {
     const { module, subNav } = activeNavigation;
@@ -221,16 +265,25 @@ export function RoleWorkspace({
 
     // --- Time & Attendance ---
     if (module === "time_attendance" && permissions.timeAttendance) {
-      const taSection = subNav === "ta_schedule" ? "schedule"
-        : subNav === "ta_pto" ? "pto"
-        : subNav === "ta_payroll" && permissions.attendanceAdministration ? "payroll"
-        : subNav === "ta_staffing" && permissions.attendanceAdministration ? "staffing"
-        : subNav === "ta_workforce" && permissions.attendanceAdministration ? "workforce"
-        : subNav === "ta_reports" && permissions.attendanceAdministration ? "reports"
-        : "clock";
+      // One mapping from sub-navigation identifier to section, shared with the
+      // target resolution, so the section rendered and the section a record
+      // target is offered to cannot disagree. The mapping still carries the four
+      // retired identifiers and answers Today for anything it does not own, which
+      // is Requirement 1, criterion 10.
+      const taSection = attendanceSectionForSubNav(
+        subNav,
+        permissions.attendanceAdministration,
+      );
       return (
         <Suspense fallback={<LoadingWorkspace label="Time & Attendance" />}>
-          <TimeAttendanceWorkspace initialProfile={profile} embedded activeSection={taSection} />
+          <TimeAttendanceWorkspace
+            initialProfile={profile}
+            embedded
+            activeSection={taSection}
+            navigationTarget={activeNavigation.target}
+            onNavigationTargetConsumed={clearNavigationTarget}
+            onNavigate={openNavigationTarget}
+          />
         </Suspense>
       );
     }

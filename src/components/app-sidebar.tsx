@@ -4,6 +4,7 @@ import {
   BarChart3,
   Building2,
   Calendar,
+  CalendarOff,
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
@@ -66,19 +67,62 @@ export type SubNavId =
   // Renewals
   | "renewals_dashboard"
   // Time & Attendance
-  | "ta_clock"
+  | "ta_today"
   | "ta_schedule"
-  | "ta_pto"
+  | "ta_timeoff"
+  | "ta_review"
   | "ta_payroll"
-  | "ta_staffing"
   | "ta_workforce"
+  // Retired Time & Attendance identifiers. Still declared so a navigation state
+  // stored by an earlier build type-checks on its way through the resolution that
+  // sends it to Today. Task 24.4 removes them.
+  | "ta_clock"
+  | "ta_pto"
+  | "ta_staffing"
   | "ta_reports"
   // User Admin
   | "ua_users";
 
+/**
+ * What a {@link NavigationTarget}'s `recordId` names.
+ *
+ * - `attendance_day` — one employee on one work date, as `profileId:workDate`.
+ * - `pto_request` — one `pto_requests` row, by id.
+ * - `coverage_date` — one calendar date, as `YYYY-MM-DD`.
+ */
+export type NavigationTargetRecordKind = 'attendance_day' | 'pto_request' | 'coverage_date';
+
+/**
+ * A navigation instruction that names a record as well as a screen.
+ *
+ * The Needs Attention inbox lists items that live on four different screens, and
+ * selecting one has to land on the owning screen with that record's drawer open
+ * (Requirement 17, criterion 6). Navigation state alone could not express that:
+ * it named a screen and nothing else.
+ *
+ * `recordKind` and `recordId` are optional so that a target may name a screen on
+ * its own. `openDrawer` is what asks the screen to open the detail drawer rather
+ * than only select the row.
+ *
+ * Deliberately not a URL. The Time & Attendance module has no route of its own,
+ * so a deep link would mean introducing routing — a larger change than this
+ * redesign needs. A target is React state, and it is cleared once the owning
+ * screen has resolved it, so it cannot reopen a drawer on a later render.
+ *
+ * Requirements: 1.11, 1.12, 17.6
+ */
+export interface NavigationTarget {
+  screen: SubNavId;
+  recordKind?: NavigationTargetRecordKind;
+  recordId?: string;
+  openDrawer?: boolean;
+}
+
 export interface NavigationState {
   module: ModuleId;
   subNav: SubNavId;
+  /** Set only by a navigation that names a record, such as an inbox selection. */
+  target?: NavigationTarget;
 }
 
 interface SubNavItem {
@@ -183,16 +227,15 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
   // Time & Attendance (all roles — super_admin gets extra tabs)
   {
     const taSubItems: SubNavItem[] = [
-      { id: "ta_clock", label: "Time Clock", icon: Clock },
+      { id: "ta_today", label: "Today", icon: Clock },
       { id: "ta_schedule", label: "Schedule", icon: Calendar },
-      { id: "ta_pto", label: "Time Off", icon: Calendar },
+      { id: "ta_timeoff", label: "Time Off & Coverage", icon: CalendarOff },
     ];
     if (permissions.attendanceAdministration) {
       taSubItems.push(
+        { id: "ta_review", label: "Review", icon: ClipboardCheck },
         { id: "ta_payroll", label: "Payroll", icon: LayoutDashboard },
-        { id: "ta_staffing", label: "Coverage", icon: UsersRound },
         { id: "ta_workforce", label: "Workforce", icon: BarChart3 },
-        { id: "ta_reports", label: "Reports", icon: TrendingUp },
       );
     }
     modules.push({
@@ -235,6 +278,34 @@ export function getDefaultNavigation(role: AppRole): NavigationState {
   }
 }
 
+/**
+ * The navigation state to render for a role, given the state that was asked for.
+ *
+ * Three outcomes, in order:
+ *
+ *  1. The module is reachable and the sub-navigation item exists on it, so the
+ *     state stands as asked.
+ *  2. The module is reachable and the sub-navigation item is not one of its
+ *     items, so the module's **first** item is used. This is what a retired
+ *     identifier resolves to: the comparison below is a string comparison against
+ *     the items the module actually offers, and the four retired Time & Attendance
+ *     identifiers are declared but no longer offered, so a stored state naming one
+ *     lands on that module's first item — Today — rather than being thrown out of
+ *     the module altogether (Requirement 1, criterion 10).
+ *  3. The module is not reachable at all, so the role's default applies.
+ *
+ * Outcome 2 is the change this function needed. Falling straight through to
+ * `getDefaultNavigation` sent a stale Time & Attendance state to the Sales
+ * overview, which is a different module than the one the user was last in — an
+ * unexplained jump rather than the graceful resolution the criterion asks for.
+ *
+ * A record target survives only while it names the screen being rendered. A
+ * target that named a retired or unreachable screen describes a record on a
+ * screen nobody is looking at, and carrying it onto Today would open the wrong
+ * drawer.
+ *
+ * Requirements: 1.2, 1.3, 1.4, 1.5, 1.6, 1.10, 1.11
+ */
 export function resolveNavigationForRole(
   role: AppRole,
   navigation: NavigationState,
@@ -242,11 +313,19 @@ export function resolveNavigationForRole(
   const accessibleModule = getModulesForRole(role).find(
     (candidate) => candidate.id === navigation.module,
   );
-  if (accessibleModule?.subItems.some((subItem) => subItem.id === navigation.subNav)) {
-    return navigation;
+
+  if (accessibleModule === undefined) return getDefaultNavigation(role);
+
+  if (accessibleModule.subItems.some((subItem) => subItem.id === navigation.subNav)) {
+    return navigation.target === undefined || navigation.target.screen === navigation.subNav
+      ? navigation
+      : { module: navigation.module, subNav: navigation.subNav };
   }
 
-  return getDefaultNavigation(role);
+  const firstSubItem = accessibleModule.subItems[0];
+  if (firstSubItem === undefined) return getDefaultNavigation(role);
+
+  return { module: accessibleModule.id, subNav: firstSubItem.id };
 }
 
 // ---------- Sidebar Component ----------

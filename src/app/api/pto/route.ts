@@ -1,201 +1,149 @@
-import { canAdministerAttendance } from "@/lib/permissions";
-import { createClient } from "@/lib/supabase/server";
+// src/app/api/pto/route.ts
+// GET  /api/pto?status&department&profile_id&pto_type&from&to&coverage_risk&page&limit
+// POST /api/pto  { action: 'submit' | 'cancel', … }
+//
+// The Request_Inbox read, and the two writes that belong to the employee whose
+// leave it is: submitting a request, and withdrawing one. An administrator's
+// answer to a request is a decision and lives on `/api/pto/decisions`, because a
+// decision moves a balance and this endpoint moves none.
+//
+// This replaces the inherited implementation, which is the reason the module has
+// a service at all. That version took `total_days` from the request body, counted
+// weekdays with a second implementation that could disagree with the first, read
+// `pto_balances` into JavaScript, added a figure, wrote the sum back — so two
+// approvals landing together lost one increment — and logged the failure to the
+// console while still answering success (Appendix A.5). Every one of those
+// figures is now computed by `pto-service.ts` from stored rows, and this file
+// carries no time-off rule of its own: it resolves the caller, reads the request,
+// and hands both to the service.
+//
+// ## GET
+//
+// One page of the inbox: at most fifty rows, pending before decided, filtered by
+// the six inbox filters (Requirement 7, criteria 6 through 8 and 12). Scope comes
+// from `visibleProfileIds` inside the service, so an employee sees their own
+// requests in all five states and an administrator sees the team, without this
+// route holding a rule about it (Requirements 7.11, 11.6).
+//
+// The response carries `requestTypes`: the request types the
+// `pto_requests.pto_type` constraint accepts, read off the same map every balance
+// movement goes through. The composer builds its type selector from that list, so
+// it cannot offer a type the database refuses — which is what the inherited
+// screen did with `birthday` (Requirement 10, criterion 20).
+//
+// ## POST
+//
+// | `action`   | body                                          | answers                    |
+// | ---------- | --------------------------------------------- | -------------------------- |
+// | `submit`   | `pto_type`, `start_date`, `end_date`, `reason?` | `{ request, disclosure }` |
+// | `cancel`   | `request_id`                                  | `{ request }`              |
+//
+// `action` is required rather than inferred from which fields are present.
+// Inferring would make a submission with a stray `request_id` ambiguous, and the
+// two writes are not interchangeable: one creates a row, the other closes one.
+//
+// A submission carries no day count and no balance. The working-day count and the
+// short-notice condition are computed on the server and stored on the row, and
+// the disclosure that comes back is what the composer displays — the shortfall
+// and the short-notice condition, neither of which blocks the submission
+// (Requirements 11.2, 11.4, 11.5).
+//
+// A cancellation is offered for `pending` and `waitlisted` and refused for
+// everything else, which the service decides through the same `canCancelRequest`
+// the composer used to decide whether to offer the action. A request that moved
+// under the employee is answered as a conflict carrying the current row, so the
+// screen can re-render against the truth rather than re-submitting
+// (Requirements 11.8, 11.9, 11.10).
+//
+// Both writes answer 200 with the affected row rebuilt from stored data, so the
+// screen replaces that row from the response rather than reloading the inbox. The
+// module has one success shape, `apiOk`, for the same reason it has one failure
+// contract.
+//
+// The inherited `PATCH` is gone. Approving or denying a request is one of the
+// eight decision options, and all eight are `POST /api/pto/decisions`.
+//
+// Requirements: 7.4–7.12, 10.20, 11.1, 11.3, 11.6, 11.8, 11.9, 11.10, 21.1,
+// 21.2, 21.15, 22.16
 
-export const runtime = "nodejs";
+import {
+  refuseInvisibleProfiles,
+  resolveActor,
+} from '@/features/time-attendance/server/api-actor';
+import { apiOk, serviceFailure } from '@/features/time-attendance/server/api-response';
+import {
+  cancelOwnRequest,
+  listRequests,
+  submitRequest,
+  type SubmissionInput,
+} from '@/features/time-attendance/server/pto-service';
+import {
+  optionalText,
+  readJsonBody,
+  requiredBodyDate,
+  requiredBodyRecordId,
+  requiredChoice,
+} from '@/features/time-attendance/server/request-body';
+import {
+  PTO_TYPES,
+  parseRequestQuery,
+} from '@/features/time-attendance/server/request-query';
 
-/**
- * Count weekdays (Mon-Fri) between two dates inclusive.
- */
-function countWeekdays(startStr: string, endStr: string): number {
-  const start = new Date(startStr + "T00:00:00");
-  const end = new Date(endStr + "T00:00:00");
-  if (end < start) return 0;
-  let count = 0;
-  const current = new Date(start);
-  while (current <= end) {
-    const dow = current.getDay();
-    if (dow !== 0 && dow !== 6) count++;
-    current.setDate(current.getDate() + 1);
-  }
-  return count;
-}
+export const runtime = 'nodejs';
 
-/**
- * GET /api/pto
- * Get PTO requests. Agents see own, managers see all.
- * Query: ?status=pending&profile_id=...
- */
+/** The two writes this endpoint serves, in the order the screen offers them. */
+const ACTIONS = ['submit', 'cancel'] as const;
+
 export async function GET(request: Request) {
-  const supabase = await createClient();
-  if (!supabase) return Response.json({ error: "Supabase is not configured." }, { status: 503 });
+  const resolved = await resolveActor();
+  if (!resolved.ok) return resolved.response;
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
+  try {
+    const { searchParams } = new URL(request.url);
+    const query = parseRequestQuery(searchParams);
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  const canAdminister = canAdministerAttendance(profile?.role);
+    // An employee asking for a colleague's requests is refused rather than
+    // answered with an empty page, which would read as "no requests" instead of
+    // "not yours".
+    const refusal = await refuseInvisibleProfiles(resolved.actor, query.profileIds);
+    if (refusal !== null) return refusal;
 
-  const { searchParams } = new URL(request.url);
-  const status = searchParams.get("status");
-  const requestedProfileId = searchParams.get("profile_id");
-  const profileId = canAdminister ? requestedProfileId : user.id;
-
-  let query = supabase
-    .from("pto_requests")
-    .select("*, profiles!pto_requests_profile_id_fkey(display_name, initials, role)")
-    .order("start_date", { ascending: false });
-
-  if (status) query = query.eq("status", status);
-  if (profileId) query = query.eq("profile_id", profileId);
-
-  const { data, error } = await query;
-  if (error) return Response.json({ error: error.message }, { status: 400 });
-
-  return Response.json({ requests: data ?? [] });
+    const page = await listRequests(resolved.actor, query, { client: resolved.client });
+    return apiOk({ ...page, requestTypes: PTO_TYPES });
+  } catch (error) {
+    return serviceFailure(error);
+  }
 }
 
-/**
- * POST /api/pto
- * Submit a PTO request.
- * Body: { pto_type, start_date, end_date, total_days, reason? }
- */
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  if (!supabase) return Response.json({ error: "Supabase is not configured." }, { status: 503 });
+  const resolved = await resolveActor();
+  if (!resolved.ok) return resolved.response;
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
+  try {
+    const body = await readJsonBody(request);
+    const action = requiredChoice(body, 'action', ACTIONS);
 
-  let body: Record<string, unknown>;
-  try { body = (await request.json()) as Record<string, unknown>; } catch {
-    return Response.json({ error: "Invalid request body." }, { status: 400 });
-  }
-
-  const ptoType = String(body.pto_type ?? "");
-  const startDate = String(body.start_date ?? "");
-  const endDate = String(body.end_date ?? "");
-  const totalDays = Number(body.total_days ?? 0);
-
-  if (!ptoType || !startDate || !endDate || totalDays <= 0) {
-    return Response.json({ error: "pto_type, start_date, end_date, and total_days are required." }, { status: 400 });
-  }
-
-  const { data, error } = await supabase
-    .from("pto_requests")
-    .insert({
-      profile_id: user.id,
-      pto_type: ptoType,
-      start_date: startDate,
-      end_date: endDate,
-      total_days: totalDays,
-      reason: body.reason ?? null,
-      status: "pending",
-    })
-    .select("id")
-    .single();
-
-  if (error) return Response.json({ error: error.message }, { status: 400 });
-  return Response.json({ id: data.id }, { status: 201 });
-}
-
-/**
- * PATCH /api/pto
- * Approve or deny a PTO request (super admin only).
- * Body: { request_id, decision: 'approved' | 'denied', denial_reason? }
- */
-export async function PATCH(request: Request) {
-  const supabase = await createClient();
-  if (!supabase) return Response.json({ error: "Supabase is not configured." }, { status: 503 });
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (!canAdministerAttendance(profile?.role)) {
-    return Response.json({ error: "Only super admins can approve or deny PTO requests." }, { status: 403 });
-  }
-
-  let body: Record<string, unknown>;
-  try { body = (await request.json()) as Record<string, unknown>; } catch {
-    return Response.json({ error: "Invalid request body." }, { status: 400 });
-  }
-
-  const requestId = String(body.request_id ?? "");
-  const decision = String(body.decision ?? "");
-
-  if (!requestId || !["approved", "denied"].includes(decision)) {
-    return Response.json({ error: "request_id and decision (approved/denied) are required." }, { status: 400 });
-  }
-
-  const denialReason = decision === "denied" ? String(body.denial_reason ?? "").trim() : null;
-
-  const { error } = await supabase
-    .from("pto_requests")
-    .update({
-      status: decision,
-      reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
-      denial_reason: denialReason,
-    })
-    .eq("id", requestId)
-    .eq("status", "pending");
-
-  if (error) return Response.json({ error: error.message }, { status: 400 });
-
-  // If approved, update PTO balance — deduct only weekdays
-  if (decision === "approved") {
-    const { data: req } = await supabase
-      .from("pto_requests")
-      .select("profile_id, pto_type, start_date, end_date, total_days")
-      .eq("id", requestId)
-      .single();
-
-    if (req) {
-      // Recalculate weekdays to ensure accuracy
-      const weekdays = countWeekdays(req.start_date, req.end_date);
-      const daysToDeduct = weekdays > 0 ? weekdays : Number(req.total_days);
-
-      const year = new Date().getFullYear();
-      const field = req.pto_type === "vacation" ? "vacation_used"
-        : req.pto_type === "sick" ? "sick_used"
-        : "personal_used";
-
-      // Ensure a balance record exists for this year
-      const { data: existingBalance } = await supabase
-        .from("pto_balances")
-        .select("id, vacation_used, sick_used, personal_used")
-        .eq("profile_id", req.profile_id)
-        .eq("year", year)
-        .maybeSingle();
-
-      if (existingBalance) {
-        // Increment the used field
-        const balanceRecord = existingBalance as unknown as Record<string, unknown>;
-        const currentUsed = Number(balanceRecord[field] ?? 0);
-        const { error: updateError } = await supabase
-          .from("pto_balances")
-          .update({ [field]: currentUsed + daysToDeduct })
-          .eq("id", existingBalance.id as string);
-
-        if (updateError) {
-          console.error("Failed to update PTO balance:", updateError.message);
-        }
-      } else {
-        // Create balance record for this year with the deduction
-        const { error: insertError } = await supabase
-          .from("pto_balances")
-          .insert({
-            profile_id: req.profile_id,
-            year,
-            [field]: daysToDeduct,
-          });
-
-        if (insertError) {
-          console.error("Failed to create PTO balance:", insertError.message);
-        }
-      }
+    if (action === 'cancel') {
+      const requestId = requiredBodyRecordId(body, 'request_id');
+      return apiOk({
+        request: await cancelOwnRequest(resolved.actor, requestId, { client: resolved.client }),
+      });
     }
-  }
 
-  return Response.json({ success: true, decision });
+    const input: SubmissionInput = {
+      ptoType: requiredChoice(body, 'pto_type', PTO_TYPES),
+      startDate: requiredBodyDate(body, 'start_date'),
+      endDate: requiredBodyDate(body, 'end_date'),
+    };
+
+    const reason = optionalText(body, 'reason');
+    if (reason !== undefined) input.reason = reason;
+
+    return apiOk(await submitRequest(resolved.actor, input, { client: resolved.client }));
+  } catch (error) {
+    // `write_failed` is the honest fallback for an unclassified failure on a
+    // mutation: it tells the caller nothing was saved, where `read_failed` would
+    // invite them to retry a request that may already have landed.
+    return serviceFailure(error, 'write_failed');
+  }
 }
