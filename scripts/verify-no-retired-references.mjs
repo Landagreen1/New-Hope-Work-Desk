@@ -21,10 +21,10 @@
  *   npm run verify-no-retired-references -- --raw
  *
  * Flags:
- *   --raw     scan every source file including the ones pending deletion, and
- *             include comment prose. This is the unfiltered view: what the
- *             repository contains before any judgement about what is allowed to
- *             contain it. Useful for auditing the exclusions below.
+ *   --raw     scan every source file including this one, and include comment
+ *             prose. This is the unfiltered view: what the repository contains
+ *             before any judgement about what is allowed to contain it. Useful
+ *             for auditing the exclusion below.
  *   --json    emit the findings as JSON on stdout instead of the report
  *   --quiet   print the verdict and the hits, and omit the scan summary
  *
@@ -50,19 +50,18 @@
  * because a pattern loose enough to match the escaped form would also match
  * unrelated text, and no route in this repository is referenced that way.
  *
- * ## Exclusions, and why each one is here
+ * ## Exclusions, and why the last one is here
  *
- * Two kinds of path are excluded, both listed in `EXEMPT_PATHS` with the reason
- * attached:
+ * One path is excluded, listed in `EXEMPT_PATHS` with the reason attached:
+ * **this script**, which names all ten targets by construction.
  *
- *  1. **The files task 24.3 deletes.** `src/app/api/staffing/route.ts`
- *     documents the route it serves, and legitimately carries its own name right
- *     up to the commit that removes the file. Scanning it would report the
- *     deletion target as a blocker for its own deletion. The four component
- *     files carried the same exemption for the same reason until task 24.2
- *     deleted them; those four entries are gone, and the four component targets
- *     now report clean with nothing exempt.
- *  2. **This script.** It names all ten targets by construction.
+ * Every other exemption has expired. Each deletion target documented itself —
+ * `TimeClock.tsx` carried its own name, `src/app/api/staffing/route.ts`
+ * documented the route it served — so each was exempt right up to the commit
+ * that removed the file, because scanning it would have reported the deletion
+ * target as a blocker for its own deletion. Task 24.2 deleted the four
+ * components and task 24.3 the two routes; those six entries are gone, and all
+ * six of those targets now report clean with nothing exempt.
  *
  * Nothing else is excluded. In particular the retired navigation identifiers
  * still held by `app-sidebar.tsx` and `shared/navigation-target.ts` are
@@ -137,18 +136,11 @@ const SKIP_DIRECTORIES = new Set([
  * Paths the scan skips, each with the reason and the sub-task that ends the
  * exemption. Matched as exact paths or as directory prefixes, in repo-relative
  * posix form.
+ *
+ * Only the self-exemption is left, and it never expires. The six entries that
+ * covered the deletion targets themselves expired with tasks 24.2 and 24.3.
  */
 const EXEMPT_PATHS = [
-  {
-    path: 'src/app/api/staffing',
-    reason: 'serves the retired route; deleted by task 24.3',
-    endsWith: '24.3',
-  },
-  {
-    path: 'src/app/api/time-clock/reports',
-    reason: 'serves the retired route; deleted by task 24.3',
-    endsWith: '24.3',
-  },
   {
     path: 'scripts/verify-no-retired-references.mjs',
     reason: 'this script names every target by construction',
