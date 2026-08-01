@@ -82,20 +82,17 @@
 // that callback is present: an inbox whose selections went nowhere would be a list
 // of broken links, which is worse than not showing it.
 //
-// ## The health ribbon is mounted here too, for three sections of the six
+// ## The health ribbon is mounted here too, for Time Off & Coverage only
 //
-// Requirement 18, criterion 1 asks for the Health_Ribbon on Today, Schedule, and
-// Time Off & Coverage — three of the six sections rather than all of them, because
-// the other three are payroll, workforce configuration, and review, none of which
-// is about the week ahead. So the mount is one condition on the active section,
-// in the same place the inbox is mounted, rather than a copy inside each of the
-// three screens.
+// Requirement 18, criterion 1 asks for the Health_Ribbon on the Time Off &
+// Coverage section only — all roles see it there. Payroll, workforce
+// configuration, review, today, and schedule do not show the ribbon. So the mount
+// is one condition on the active section, in the same place the inbox is mounted,
+// rather than a copy inside each screen.
 //
 // That is also what makes criterion 10 structural. There is one `HealthRibbon`
-// instance, reading `/api/coverage` once; the three sections cannot disagree about
-// a date's state because there is only ever one answer on screen. Three mounts
-// reading the same endpoint would agree only as long as they were read at the same
-// moment.
+// instance, reading `/api/coverage` once; multiple sections cannot disagree about
+// a date's state because there is only ever one answer on screen.
 //
 // ## One read of the organisation's timezone
 //
@@ -159,17 +156,16 @@ interface TimeAttendanceWorkspaceProps {
 }
 
 /**
- * The three sections the Health_Ribbon appears on: Today, Schedule, and Time Off
- * & Coverage.
+ * The Health_Ribbon now appears only on Time Off & Coverage, for all roles.
  *
- * A list rather than three comparisons, so the set the criterion names is stated
- * once and a section added later has to be added to it deliberately. The same list
- * decides whether the business-timezone read is issued, because the strip is what
- * needs the zone earliest and the third of the three needs it for its panes.
+ * A list rather than a direct comparison, so the set is stated once and a section
+ * added later has to be added to it deliberately. The same list decides whether
+ * the business-timezone read is issued, because the strip is what needs the zone
+ * earliest and Time Off & Coverage needs it for its panes.
  *
  * Requirements: 18.1, 18.2
  */
-const RIBBON_SECTIONS: readonly AttendanceSection[] = ['clock', 'schedule', 'pto'];
+const RIBBON_SECTIONS: readonly AttendanceSection[] = ['pto'];
 
 /**
  * The Review_Center's four view seams.
@@ -243,7 +239,7 @@ export default function TimeAttendanceWorkspace({
         />
       )}
 
-      {/* Requirement 18, criterion 1: on Today, Schedule, and Time Off & Coverage,
+      {/* Requirement 18, criterion 1: on Time Off & Coverage only (all roles),
           from one mount reading the endpoint once, so criterion 10 holds by
           construction. The zone is the organisation's, so the seven dates begin on
           its current date rather than on the reader's or on UTC. */}
