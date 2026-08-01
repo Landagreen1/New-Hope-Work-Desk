@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "bootstrap-users": "node --env-file=.env.local scripts/bootstrap-users.mjs"
+    "test": "vitest --run",
+    "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs --run integration.test",
+    "bootstrap-users": "node --env-file=.env.local scripts/bootstrap-users.mjs",
+    "verify-row-retention": "node --env-file=.env.local scripts/verify-attendance-row-retention.mjs",
+    "verify-payroll-parity": "node --env-file=.env.local scripts/verify-payroll-parity.mjs",
+    "verify-no-retired-references": "node scripts/verify-no-retired-references.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",
@@ -25,12 +30,14 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "16.3.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^16.2.10",
     "fast-check": "^4.9.0",
+    "jsdom": "30.0.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"
