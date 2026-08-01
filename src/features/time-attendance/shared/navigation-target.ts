@@ -44,29 +44,29 @@ import { addCalendarDays } from '../domain/work-date';
  * The sections `TimeAttendanceWorkspace` routes between.
  *
  * These are the workspace's own section names rather than the sidebar's
- * identifiers. Six of them have a screen behind them. `staffing` no longer does:
- * coverage folded into Today's Live_Coverage_Panel and into the Time Off &
- * Coverage calendar (Requirement 1, criterion 5), so the section is carried only
- * so a stored navigation state naming it still resolves, and the workspace routes
- * it to Today. Task 24.4 removes it.
+ * identifiers, and there is one per section that has a screen behind it. There is
+ * no `staffing` section: coverage folded into Today's Live_Coverage_Panel and into
+ * the Time Off & Coverage calendar (Requirement 1, criterion 5), so a section name
+ * for it would name nothing.
  */
 export type AttendanceSection =
   | 'clock'
   | 'schedule'
   | 'pto'
   | 'payroll'
-  | 'staffing'
   | 'workforce'
   | 'reports';
 
 /**
  * Every sub-navigation identifier the module answers to.
  *
- * The six the sidebar offers, and the four retired identifiers an older stored
- * state may still name. Keeping the retired four here is Requirement 1, criterion
- * 10: each has a section to land on rather than a missing entry, and the
- * workspace routes a section with no screen behind it to Today. Task 24.4 removes
- * the four entries once nothing reaches this map naming them.
+ * The six the sidebar offers, and nothing else. The retired identifiers are gone
+ * from `SubNavId` and from here, which does not weaken Requirement 1, criterion
+ * 10: this is a lookup with a stated answer for a miss, and the answer is the
+ * module's first section — Today. `resolveNavigationForRole` reaches the same
+ * conclusion one step earlier by falling back to the module's first sub-item, so a
+ * stored state naming an identifier this build no longer declares is normalised to
+ * `ta_today` before it ever reaches this map.
  *
  * `Partial` because `SubNavId` spans every module, not only this one, and a Sales
  * identifier has no attendance section.
@@ -78,16 +78,11 @@ const SECTION_FOR_SUBNAV: Partial<Record<SubNavId, AttendanceSection>> = {
   ta_review: 'reports',
   ta_payroll: 'payroll',
   ta_workforce: 'workforce',
-  ta_clock: 'clock',
-  ta_pto: 'pto',
-  ta_staffing: 'staffing',
-  ta_reports: 'reports',
 };
 
 /** The sections only an Attendance_Administrator may reach. */
 const ADMINISTRATOR_SECTIONS: readonly AttendanceSection[] = [
   'payroll',
-  'staffing',
   'workforce',
   'reports',
 ];

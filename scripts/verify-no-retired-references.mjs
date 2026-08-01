@@ -63,10 +63,11 @@
  * components and task 24.3 the two routes; those six entries are gone, and all
  * six of those targets now report clean with nothing exempt.
  *
- * Nothing else is excluded. In particular the retired navigation identifiers
- * still held by `app-sidebar.tsx` and `shared/navigation-target.ts` are
- * reported, because task 24.4 is what removes them and this scan is the check
- * that 24.4 is complete.
+ * Nothing else is excluded, and nothing else needs to be. Task 24.4 removed the
+ * last four targets — the retired navigation identifiers held by
+ * `app-sidebar.tsx`'s `SubNavId` union and by the section map in
+ * `shared/navigation-target.ts` — so all ten now report clean with only this
+ * file exempt.
  *
  * ## Precision
  *

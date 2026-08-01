@@ -23,12 +23,14 @@
 // either (Requirement 1, criteria 3 and 4). The gate is a second check rather than
 // a duplicated rule: one imported predicate, read in two places.
 //
-// There is no seventh screen. Coverage folded into Today's Live_Coverage_Panel
+// There is no seventh section. Coverage folded into Today's Live_Coverage_Panel
 // and into the Time Off & Coverage screen's calendar, so there is no standalone
-// Coverage screen to route to (Requirement 1, criterion 5), and the `staffing`
-// section a stored navigation state may still name has nothing behind it. It is
-// routed to Today rather than rendered as a blank panel, which is criterion 10.
-// Task 24.4 removes the section, and this fallback with it.
+// Coverage screen to route to (Requirement 1, criterion 5). Nothing is routed
+// defensively here either: `activeSection` is an `AttendanceSection`, every one of
+// the six has a screen below, and `attendanceSectionForSubNav` answers Today for
+// any identifier it does not own — so a stored state naming a retired identifier
+// arrives as `clock` rather than as a section with no screen behind it, which is
+// criterion 10.
 //
 // ## The screens are composed here, through their own seams
 //
@@ -170,22 +172,6 @@ interface TimeAttendanceWorkspaceProps {
 const RIBBON_SECTIONS: readonly AttendanceSection[] = ['clock', 'schedule', 'pto'];
 
 /**
- * Sections that no longer have a screen behind them.
- *
- * `staffing` is the only one: the standalone Coverage screen folded into Today and
- * into the Time Off & Coverage calendar (Requirement 1, criterion 5), while the
- * section name is still reachable from a navigation state an older build stored.
- * Listing it here rather than leaving it unmatched below is what makes criterion 10
- * hold — an unmatched section would render as an empty panel.
- *
- * Requirements: 1.5, 1.10
- */
-const RETIRED_SECTIONS: readonly AttendanceSection[] = ['staffing'];
-
-/** The section a retired one is rendered as: Today. */
-const RETIRED_SECTION_FALLBACK: AttendanceSection = 'clock';
-
-/**
  * The Review_Center's four view seams.
  *
  * Each view's props are `ReviewViewContext` exactly, so the seam is a spread and
@@ -213,15 +199,11 @@ export default function TimeAttendanceWorkspace({
   embedded = false,
   // Today when the caller names no section, which is the same answer
   // `attendanceSectionForSubNav` gives an identifier it does not own.
-  activeSection: requestedSection = 'clock',
+  activeSection: section = 'clock',
   navigationTarget,
   onNavigationTargetConsumed,
   onNavigate,
 }: TimeAttendanceWorkspaceProps) {
-  // A retired section is rendered as Today rather than as nothing.
-  const section = RETIRED_SECTIONS.includes(requestedSection)
-    ? RETIRED_SECTION_FALLBACK
-    : requestedSection;
   const canAdminister = canAdministerAttendance(initialProfile.role);
 
   const resolution = useMemo(

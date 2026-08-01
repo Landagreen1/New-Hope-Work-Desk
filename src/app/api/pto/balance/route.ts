@@ -52,7 +52,8 @@ export async function GET(request: Request) {
  * POST /api/pto/balance
  * Create or update PTO balance for an employee (super_admin only).
  * Body: { profile_id, year?, vacation_days, personal_days }
- * personal_days is used for "birthday day" (1 special day).
+ * personal_days is the employee's personal-day allocation, and the editor writes
+ * one by default.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
   const profileId = String(body.profile_id ?? "");
   const year = Number(body.year ?? new Date().getFullYear());
   const vacationDays = Number(body.vacation_days ?? 10);
-  const personalDays = Number(body.personal_days ?? 1); // birthday day
+  const personalDays = Number(body.personal_days ?? 1); // one personal day
 
   if (!profileId) return Response.json({ error: "profile_id is required." }, { status: 400 });
 

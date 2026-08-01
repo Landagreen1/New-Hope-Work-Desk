@@ -73,13 +73,6 @@ export type SubNavId =
   | "ta_review"
   | "ta_payroll"
   | "ta_workforce"
-  // Retired Time & Attendance identifiers. Still declared so a navigation state
-  // stored by an earlier build type-checks on its way through the resolution that
-  // sends it to Today. Task 24.4 removes them.
-  | "ta_clock"
-  | "ta_pto"
-  | "ta_staffing"
-  | "ta_reports"
   // User Admin
   | "ua_users";
 
@@ -287,11 +280,13 @@ export function getDefaultNavigation(role: AppRole): NavigationState {
  *     state stands as asked.
  *  2. The module is reachable and the sub-navigation item is not one of its
  *     items, so the module's **first** item is used. This is what a retired
- *     identifier resolves to: the comparison below is a string comparison against
- *     the items the module actually offers, and the four retired Time & Attendance
- *     identifiers are declared but no longer offered, so a stored state naming one
+ *     identifier resolves to, and it is the whole of the guarantee now that the
+ *     retired identifiers are gone from `SubNavId`: the comparison below is a
+ *     string comparison against the items the module actually offers, so a stored
+ *     Time & Attendance state naming an identifier this build no longer declares
  *     lands on that module's first item — Today — rather than being thrown out of
- *     the module altogether (Requirement 1, criterion 10).
+ *     the module altogether (Requirement 1, criterion 10). Nothing is looked up,
+ *     so there is no missing entry to fail on.
  *  3. The module is not reachable at all, so the role's default applies.
  *
  * Outcome 2 is the change this function needed. Falling straight through to

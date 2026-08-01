@@ -267,9 +267,10 @@ export function RoleWorkspace({
     if (module === "time_attendance" && permissions.timeAttendance) {
       // One mapping from sub-navigation identifier to section, shared with the
       // target resolution, so the section rendered and the section a record
-      // target is offered to cannot disagree. The mapping still carries the four
-      // retired identifiers and answers Today for anything it does not own, which
-      // is Requirement 1, criterion 10.
+      // target is offered to cannot disagree. `subNav` has already been through
+      // `resolveNavigationForRole`, so an identifier this build no longer offers
+      // arrives here as `ta_today`; the mapping answers Today for anything it does
+      // not own regardless, which is Requirement 1, criterion 10.
       const taSection = attendanceSectionForSubNav(
         subNav,
         permissions.attendanceAdministration,
