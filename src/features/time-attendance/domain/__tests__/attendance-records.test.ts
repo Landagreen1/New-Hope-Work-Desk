@@ -42,6 +42,7 @@ const POLICY: AttendancePolicy = {
   missingClockOutToleranceMinutes: 120,
   unpaidBreakTypes: ['lunch'],
   breakOverrunMinutes: 60,
+  effectiveStartDate: null,
 };
 
 /** 2026-07-28 is a summer weekday, so New York is UTC-4 that day. */

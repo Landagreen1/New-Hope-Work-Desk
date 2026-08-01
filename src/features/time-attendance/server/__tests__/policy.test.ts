@@ -36,6 +36,7 @@ describe('toAttendancePolicy', () => {
       missingClockOutToleranceMinutes: 90,
       breakOverrunMinutes: 45,
       unpaidBreakTypes: ['lunch', 'personal'],
+      effectiveStartDate: null,
     });
   });
 

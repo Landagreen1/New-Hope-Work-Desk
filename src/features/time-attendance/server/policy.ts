@@ -74,6 +74,7 @@ export const DEFAULT_ATTENDANCE_POLICY: AttendancePolicy = {
   missingClockOutToleranceMinutes: 120,
   breakOverrunMinutes: 60,
   unpaidBreakTypes: ['lunch'],
+  effectiveStartDate: null,
 };
 
 /**
@@ -126,6 +127,7 @@ export interface AttendancePolicyRow {
   missing_clock_out_tolerance_minutes?: unknown;
   break_overrun_minutes?: unknown;
   unpaid_break_types?: unknown;
+  effective_start_date?: unknown;
 }
 
 /** The `staffing_thresholds` row as it arrives, unchecked for the same reason. */
@@ -204,6 +206,19 @@ function readTimeZone(value: unknown): string | null {
 }
 
 /**
+ * A calendar date (`YYYY-MM-DD`), or null when the value cannot be read as one.
+ *
+ * Used for `effective_start_date`, which the domain layer compares against work
+ * dates as a plain string. A value that is not a ten-character date string is
+ * treated as absent (no restriction).
+ */
+function readEffectiveStartDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+}
+
+/**
  * The unpaid break types, filtered to the ones the code recognises and
  * de-duplicated.
  *
@@ -264,6 +279,7 @@ export function toAttendancePolicy(row: AttendancePolicyRow | null | undefined):
     unpaidBreakTypes:
       readUnpaidBreakTypes(row.unpaid_break_types) ??
       DEFAULT_ATTENDANCE_POLICY.unpaidBreakTypes,
+    effectiveStartDate: readEffectiveStartDate(row.effective_start_date),
   };
 }
 
@@ -331,7 +347,8 @@ export function buildStaffingThresholdTable(
  */
 const POLICY_COLUMNS =
   'business_timezone, grace_period_minutes, early_departure_tolerance_minutes, ' +
-  'missing_clock_out_tolerance_minutes, break_overrun_minutes, unpaid_break_types';
+  'missing_clock_out_tolerance_minutes, break_overrun_minutes, unpaid_break_types, ' +
+  'effective_start_date';
 
 /** The policy columns plus the trail the editor displays. */
 const POLICY_SNAPSHOT_COLUMNS = `${POLICY_COLUMNS}, updated_at`;

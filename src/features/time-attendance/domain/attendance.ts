@@ -1330,9 +1330,23 @@ export const EXCEPTION_CODES: readonly ExceptionCode[] = [
  * a break long, and end with an unended break at once, and it is still one
  * record with three exceptions rather than three records.
  *
+ * When `policy.effectiveStartDate` is set and the work date precedes it, no
+ * exceptions are generated. The record still exists and derives its status
+ * normally, but the absence of exceptions means `payrollBlocking` is false and
+ * the record does not appear in the Exception Queue's actionable filters. This
+ * is the "grace period" behaviour: clock data is visible but generates no noise.
+ *
  * Requirements: 3.13, 12.20
  */
 export function collectExceptions(ctx: EvaluationContext): AttendanceException[] {
+  // Suppress all exceptions for dates before the effective start date.
+  if (
+    ctx.policy.effectiveStartDate !== null &&
+    ctx.workDate < ctx.policy.effectiveStartDate
+  ) {
+    return [];
+  }
+
   const exceptions: AttendanceException[] = [];
 
   for (const rule of EXCEPTION_RULES) {

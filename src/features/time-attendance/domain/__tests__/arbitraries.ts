@@ -538,6 +538,7 @@ export const attendancePolicyArb: fc.Arbitrary<AttendancePolicy> = fc
     missingClockOutToleranceMinutes: toleranceArb(120, 240),
     unpaidBreakTypes: unpaidBreakTypesArb,
     breakOverrunMinutes: toleranceArb(60, 120),
+    effectiveStartDate: fc.constant<string | null>(null),
   })
   .map((policy): AttendancePolicy => policy);
 

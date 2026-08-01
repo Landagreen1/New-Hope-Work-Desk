@@ -69,6 +69,7 @@ export interface AttendancePolicy {
   missingClockOutToleranceMinutes: number;     // 120
   unpaidBreakTypes: readonly BreakType[];      // ['lunch']
   breakOverrunMinutes: number;                 // 60
+  effectiveStartDate: string | null;           // '2026-08-04' or null (no restriction)
 }
 
 /**
