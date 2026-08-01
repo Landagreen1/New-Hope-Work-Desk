@@ -55,11 +55,13 @@
  * Two kinds of path are excluded, both listed in `EXEMPT_PATHS` with the reason
  * attached:
  *
- *  1. **The files 24.2 and 24.3 delete.** `TimeClock.tsx` declares a component
- *     called `TimeClock`; `src/app/api/staffing/route.ts` documents the route it
- *     serves. Each legitimately carries its own name right up to the commit that
- *     removes the file. Scanning them would report the deletion targets as
- *     blockers for their own deletion.
+ *  1. **The files task 24.3 deletes.** `src/app/api/staffing/route.ts`
+ *     documents the route it serves, and legitimately carries its own name right
+ *     up to the commit that removes the file. Scanning it would report the
+ *     deletion target as a blocker for its own deletion. The four component
+ *     files carried the same exemption for the same reason until task 24.2
+ *     deleted them; those four entries are gone, and the four component targets
+ *     now report clean with nothing exempt.
  *  2. **This script.** It names all ten targets by construction.
  *
  * Nothing else is excluded. In particular the retired navigation identifiers
@@ -137,26 +139,6 @@ const SKIP_DIRECTORIES = new Set([
  * posix form.
  */
 const EXEMPT_PATHS = [
-  {
-    path: 'src/features/time-attendance/TimeClock.tsx',
-    reason: 'declares the retired component; deleted by task 24.2',
-    endsWith: '24.2',
-  },
-  {
-    path: 'src/features/time-attendance/PTORequests.tsx',
-    reason: 'declares the retired component; deleted by task 24.2',
-    endsWith: '24.2',
-  },
-  {
-    path: 'src/features/time-attendance/StaffingCoverage.tsx',
-    reason: 'declares the retired component; deleted by task 24.2',
-    endsWith: '24.2',
-  },
-  {
-    path: 'src/features/time-attendance/AttendanceReports.tsx',
-    reason: 'declares the retired component; deleted by task 24.2',
-    endsWith: '24.2',
-  },
   {
     path: 'src/app/api/staffing',
     reason: 'serves the retired route; deleted by task 24.3',
