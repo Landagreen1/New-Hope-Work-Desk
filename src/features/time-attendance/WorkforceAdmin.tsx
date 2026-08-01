@@ -133,9 +133,7 @@ interface RosterPaySettingsResponse {
 interface RosterBalanceRow {
   profile_id: string;
   vacation_days: number | null;
-  personal_days: number | null;
   vacation_used: number | null;
-  personal_used: number | null;
 }
 
 interface RosterBalancesResponse {
@@ -157,9 +155,7 @@ interface BalanceListing {
   profile_id: string;
   display_name: string;
   vacation_days: number;
-  personal_days: number;
   vacation_used: number;
-  personal_used: number;
 }
 
 interface ClockEntry {
@@ -186,9 +182,7 @@ interface ClockEntry {
  */
 const UNCONFIGURED_BALANCE = {
   vacation_days: 10,
-  personal_days: 1,
   vacation_used: 0,
-  personal_used: 0,
 } as const;
 
 type Section = 'pay' | 'timeoff' | 'clock' | 'policy' | 'thresholds';
@@ -433,9 +427,7 @@ function mergeBalances(
         profile_id: user.id,
         display_name: user.display_name,
         vacation_days: stored?.vacation_days ?? UNCONFIGURED_BALANCE.vacation_days,
-        personal_days: stored?.personal_days ?? UNCONFIGURED_BALANCE.personal_days,
         vacation_used: stored?.vacation_used ?? UNCONFIGURED_BALANCE.vacation_used,
-        personal_used: stored?.personal_used ?? UNCONFIGURED_BALANCE.personal_used,
       };
     });
 }
@@ -443,10 +435,6 @@ function mergeBalances(
 function PTOBalancesSection() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editVacation, setEditVacation] = useState('');
-  // `pto_balances.personal_days`, named for the column it edits. The screen used
-  // to label this one "birthday day", which is the retired `birthday` vocabulary
-  // the database check constraint never accepted.
-  const [editPersonal, setEditPersonal] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -480,7 +468,7 @@ function PTOBalancesSection() {
       const res = await fetch('/api/pto/balance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile_id: profileId, vacation_days: Number(editVacation), personal_days: Number(editPersonal) }),
+        body: JSON.stringify({ profile_id: profileId, vacation_days: Number(editVacation) }),
       });
       if (!res.ok) throw new Error('Save failed.');
       setEditId(null);
@@ -499,7 +487,7 @@ function PTOBalancesSection() {
       <div className="border-b border-slate-100 p-5">
         <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Workforce</p>
         <h3 className="mt-1 text-xl font-black">Employee PTO Balances</h3>
-        <p className="mt-1 text-sm text-slate-500">Edit vacation days and personal days allocation for each employee ({year}).</p>
+        <p className="mt-1 text-sm text-slate-500">Edit vacation days allocation for each employee ({year}).</p>
       </div>
       {error && <div className={`${ui.error} mx-5 mt-4`}><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
       <AsyncStateBlock
@@ -519,8 +507,6 @@ function PTOBalancesSection() {
                 <th className={ui.th}>Employee</th>
                 <th className={ui.th}>Vacation Days</th>
                 <th className={ui.th}>Vacation Used</th>
-                <th className={ui.th}>Personal Days</th>
-                <th className={ui.th}>Personal Used</th>
                 <th className={ui.th}>Actions</th>
               </tr>
             </thead>
@@ -540,14 +526,6 @@ function PTOBalancesSection() {
                     <td className={`${ui.td} text-sm font-bold text-slate-500`}>{emp.vacation_used}</td>
                     <td className={ui.td}>
                       {isEditing ? (
-                        <input type="number" min="0" max="5" step="1" value={editPersonal} onChange={e => setEditPersonal(e.target.value)} aria-label={`Personal days for ${emp.display_name}`} className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-bold outline-none focus:border-[#223f7a]" />
-                      ) : (
-                        <span className="text-sm font-black">{emp.personal_days}</span>
-                      )}
-                    </td>
-                    <td className={`${ui.td} text-sm font-bold text-slate-500`}>{emp.personal_used}</td>
-                    <td className={ui.td}>
-                      {isEditing ? (
                         <div className="flex gap-2">
                           <button onClick={() => void handleSaveBalance(emp.profile_id)} disabled={saving} className={ui.btnPrimary + ' !px-3 !py-1.5 !text-xs'}>
                             <Save className="h-3.5 w-3.5" />{saving ? '...' : 'Save'}
@@ -558,7 +536,7 @@ function PTOBalancesSection() {
                         </div>
                       ) : (
                         <button
-                          onClick={() => { setEditId(emp.profile_id); setEditVacation(String(emp.vacation_days)); setEditPersonal(String(emp.personal_days)); }}
+                          onClick={() => { setEditId(emp.profile_id); setEditVacation(String(emp.vacation_days)); }}
                           className={ui.btnSecondary + ' !px-3 !py-1.5 !text-xs'}
                         >
                           <Edit3 className="h-3.5 w-3.5" />Edit

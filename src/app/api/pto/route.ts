@@ -86,6 +86,7 @@ import {
 } from '@/features/time-attendance/server/request-body';
 import {
   PTO_TYPES,
+  SUBMITTABLE_PTO_TYPES,
   parseRequestQuery,
 } from '@/features/time-attendance/server/request-query';
 
@@ -109,7 +110,7 @@ export async function GET(request: Request) {
     if (refusal !== null) return refusal;
 
     const page = await listRequests(resolved.actor, query, { client: resolved.client });
-    return apiOk({ ...page, requestTypes: PTO_TYPES });
+    return apiOk({ ...page, requestTypes: SUBMITTABLE_PTO_TYPES });
   } catch (error) {
     return serviceFailure(error);
   }
@@ -131,7 +132,7 @@ export async function POST(request: Request) {
     }
 
     const input: SubmissionInput = {
-      ptoType: requiredChoice(body, 'pto_type', PTO_TYPES),
+      ptoType: requiredChoice(body, 'pto_type', SUBMITTABLE_PTO_TYPES),
       startDate: requiredBodyDate(body, 'start_date'),
       endDate: requiredBodyDate(body, 'end_date'),
     };

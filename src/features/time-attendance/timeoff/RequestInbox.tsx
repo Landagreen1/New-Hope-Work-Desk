@@ -91,7 +91,7 @@ import {
 import { StatusPill } from '../shared/StatusPill';
 import { colorRoleToken } from '../shared/tokens';
 import type { ActiveFilter, AsyncResourceStatus } from '../shared/useAsyncResource';
-import { DEPARTMENT_LABELS, PTO_TYPE_LABELS, type PTOStatus, type PTOType } from '../types';
+import { DEPARTMENT_LABELS, PTO_TYPE_LABELS, REQUESTABLE_PTO_TYPES, type PTOStatus, type PTOType } from '../types';
 
 /**
  * The four status values the control offers, in the order Requirement 7,
@@ -120,7 +120,7 @@ export const COVERAGE_RISK_OPTIONS: readonly CoverageStatus[] = (
 ).sort((a, b) => COVERAGE_SEVERITY[b] - COVERAGE_SEVERITY[a]);
 
 /** Every accepted request type, for a screen with no response to read them from. */
-export const REQUEST_TYPE_OPTIONS: readonly PTOType[] = Object.keys(PTO_TYPE_LABELS) as PTOType[];
+export const REQUEST_TYPE_OPTIONS: readonly PTOType[] = [...REQUESTABLE_PTO_TYPES];
 
 /**
  * The six filters of Requirement 7, criterion 6. An unset filter is null.

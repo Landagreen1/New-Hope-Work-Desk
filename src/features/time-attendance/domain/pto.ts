@@ -105,6 +105,16 @@ export const PTO_TYPE_TO_BALANCE_FIELD: Record<PTOType, BalanceField> = {
 };
 
 /**
+ * Types that debit a balance column when approved.
+ *
+ * Unpaid leave is tracked by request only — approving it sets the status to
+ * approved but does not debit any balance counter. Legacy types (sick, personal,
+ * bereavement) are kept in the map above for existing row display but are no
+ * longer requestable; only vacation actually debits a balance today.
+ */
+export const BALANCE_TRACKED_TYPES: readonly PTOType[] = ['vacation'];
+
+/**
  * One balance movement: a number of days applied to one column of one calendar
  * year's balance row.
  *
@@ -340,6 +350,10 @@ export function balanceDeltas(
   if (sign !== 1 && sign !== -1) {
     throw new RangeError(`balanceDeltas: sign must be 1 or -1, received ${String(sign)}`);
   }
+
+  // Types not in BALANCE_TRACKED_TYPES (e.g. unpaid leave) are tracked by
+  // request only — no balance counter is debited or credited.
+  if (!BALANCE_TRACKED_TYPES.includes(ptoType)) return [];
 
   const balanceField = PTO_TYPE_TO_BALANCE_FIELD[ptoType];
   if (!balanceField) {

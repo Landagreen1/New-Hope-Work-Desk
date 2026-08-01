@@ -77,6 +77,7 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react';
 
 import { statusLabel, ui } from '../../nhwd-shared/ui';
 import {
+  BALANCE_TRACKED_TYPES,
   CANCELLABLE_STATUSES,
   PTO_TYPE_TO_BALANCE_FIELD,
   REQUEST_PAGE_LIMIT,
@@ -101,7 +102,7 @@ import { StatusIcon } from '../shared/StatusIcon';
 import { StatusPill } from '../shared/StatusPill';
 import { colorRoleToken, type ColorRole } from '../shared/tokens';
 import { useAsyncResource } from '../shared/useAsyncResource';
-import { PTO_TYPE_LABELS, type PTOType } from '../types';
+import { PTO_TYPE_LABELS, REQUESTABLE_PTO_TYPES, type PTOType } from '../types';
 import type { ComposerPaneContext, RequestInboxResponse } from './TimeOffCoverageScreen';
 
 const FALLBACK_TIME_ZONE = 'UTC';
@@ -811,13 +812,14 @@ export function RequestComposer({
           {requestTypes.length > 0 && (
             <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
               {requestTypes.map((type) => {
-                const left = remainingByType.get(type) ?? null;
+                const tracked = BALANCE_TRACKED_TYPES.includes(type);
+                const left = tracked ? (remainingByType.get(type) ?? null) : null;
                 return (
                   <Figure
                     key={type}
                     label={PTO_TYPE_LABELS[type]}
-                    value={formatDays(left)}
-                    muted={left === null}
+                    value={tracked ? formatDays(left) : 'No balance limit'}
+                    muted={tracked ? left === null : true}
                   />
                 );
               })}

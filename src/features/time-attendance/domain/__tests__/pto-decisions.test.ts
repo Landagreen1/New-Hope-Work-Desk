@@ -270,8 +270,8 @@ describe('decisionBalanceDeltas', () => {
       requested: range(MONDAY, FRIDAY),
       approved: [range(MONDAY, WEDNESDAY)],
     };
-    expect(decisionBalanceDeltas('approve_partial', 'sick', ranges, NOTHING_CLOSED)).toEqual([
-      { year: 2026, balanceField: 'sick_used', deltaDays: 3 },
+    expect(decisionBalanceDeltas('approve_partial', 'vacation', ranges, NOTHING_CLOSED)).toEqual([
+      { year: 2026, balanceField: 'vacation_used', deltaDays: 3 },
     ]);
   });
 
@@ -298,13 +298,13 @@ describe('decisionBalanceDeltas', () => {
     expect(
       decisionBalanceDeltas(
         'approve_full',
-        'personal',
+        'vacation',
         { requested: STRADDLE },
         NOTHING_CLOSED,
       ),
     ).toEqual([
-      { year: 2025, balanceField: 'personal_used', deltaDays: 3 },
-      { year: 2026, balanceField: 'personal_used', deltaDays: 2 },
+      { year: 2025, balanceField: 'vacation_used', deltaDays: 3 },
+      { year: 2026, balanceField: 'vacation_used', deltaDays: 2 },
     ]);
   });
 
@@ -330,15 +330,15 @@ describe('decisionBalanceDeltas', () => {
     ).toEqual([{ year: 2026, balanceField: 'vacation_used', deltaDays: 4 }]);
   });
 
-  it('rejects a request type the database constraint does not accept', () => {
-    expect(() =>
+  it('returns empty for a request type not in BALANCE_TRACKED_TYPES', () => {
+    expect(
       decisionBalanceDeltas(
         'approve_full',
         'birthday' as unknown as 'vacation',
         requested(MONDAY, FRIDAY),
         NOTHING_CLOSED,
       ),
-    ).toThrow(RangeError);
+    ).toEqual([]);
   });
 });
 

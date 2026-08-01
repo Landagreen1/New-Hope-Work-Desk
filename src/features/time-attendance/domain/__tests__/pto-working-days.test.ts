@@ -188,9 +188,9 @@ describe('balanceDeltas', () => {
   });
 
   it('debits each year of a range spanning two calendar years', () => {
-    expect(balanceDeltas('sick', [STRADDLE], NOTHING_CLOSED, 1)).toEqual([
-      { year: 2025, balanceField: 'sick_used', deltaDays: 3 },
-      { year: 2026, balanceField: 'sick_used', deltaDays: 2 },
+    expect(balanceDeltas('vacation', [STRADDLE], NOTHING_CLOSED, 1)).toEqual([
+      { year: 2025, balanceField: 'vacation_used', deltaDays: 3 },
+      { year: 2026, balanceField: 'vacation_used', deltaDays: 2 },
     ]);
   });
 
@@ -206,8 +206,8 @@ describe('balanceDeltas', () => {
 
   it('produces the reversal by negating the sign and nothing else', () => {
     const ranges = [STRADDLE, range(MONDAY, FRIDAY)];
-    const debits = balanceDeltas('personal', ranges, NOTHING_CLOSED, 1);
-    const credits = balanceDeltas('personal', ranges, NOTHING_CLOSED, -1);
+    const debits = balanceDeltas('vacation', ranges, NOTHING_CLOSED, 1);
+    const credits = balanceDeltas('vacation', ranges, NOTHING_CLOSED, -1);
 
     expect(credits).toEqual(
       debits.map((delta) => ({ ...delta, deltaDays: -delta.deltaDays })),
@@ -247,11 +247,9 @@ describe('balanceDeltas', () => {
     expect(balanceDeltas('vacation', [], NOTHING_CLOSED, -1)).toEqual([]);
   });
 
-  it('sends bereavement and unpaid leave to the personal column', () => {
+  it('returns empty deltas for unpaid and bereavement (not balance-tracked)', () => {
     for (const ptoType of ['bereavement', 'unpaid'] as const) {
-      expect(balanceDeltas(ptoType, [range(WEDNESDAY, WEDNESDAY)], NOTHING_CLOSED, 1)).toEqual([
-        { year: 2026, balanceField: 'personal_used', deltaDays: 1 },
-      ]);
+      expect(balanceDeltas(ptoType, [range(WEDNESDAY, WEDNESDAY)], NOTHING_CLOSED, 1)).toEqual([]);
     }
   });
 
@@ -265,10 +263,10 @@ describe('balanceDeltas', () => {
     );
   });
 
-  it('rejects a request type the database constraint does not accept', () => {
+  it('returns empty for a request type not in BALANCE_TRACKED_TYPES', () => {
     const ranges = [range(MONDAY, FRIDAY)];
-    expect(() =>
+    expect(
       balanceDeltas('birthday' as unknown as PTOType, ranges, NOTHING_CLOSED, 1),
-    ).toThrow(RangeError);
+    ).toEqual([]);
   });
 });

@@ -84,6 +84,7 @@ import { AUDIT_ACTION_IDS, type AuditQuery } from '../domain/audit';
 import { COVERAGE_SEVERITY, type CoverageStatus } from '../domain/coverage';
 import { EXPORT_VIEWS, isExportView, type ExportView } from '../domain/csv';
 import { PTO_TYPE_TO_BALANCE_FIELD, type RequestQuery } from '../domain/pto';
+import { REQUESTABLE_PTO_TYPES } from '../types';
 import type { DateRange } from '../domain/types';
 import { addCalendarDays } from '../domain/work-date';
 import { PTO_STATUS_STYLES, type PTOStatus, type PTOType } from '../types';
@@ -128,6 +129,15 @@ export const COVERAGE_MODES: readonly CoverageMode[] = ['live', 'projected'];
  * keeping a list of its own (Requirement 10, criterion 20).
  */
 export const PTO_TYPES = Object.keys(PTO_TYPE_TO_BALANCE_FIELD) as readonly PTOType[];
+
+/**
+ * The types accepted for new PTO submissions.
+ *
+ * Only vacation and unpaid leave are offered. Legacy types (sick, personal,
+ * bereavement) are kept in `PTO_TYPES` for filtering the inbox, but the route
+ * refuses them for new requests.
+ */
+export const SUBMITTABLE_PTO_TYPES: readonly PTOType[] = REQUESTABLE_PTO_TYPES;
 
 /**
  * The statuses a `pto_requests` row can hold.

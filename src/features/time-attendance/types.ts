@@ -220,8 +220,9 @@ export const CLOCK_STATUS_STYLES: Record<ClockStatus, { bg: string; text: string
 /**
  * The label for each accepted request type.
  *
- * The type selector is built from this map, so it offers exactly the values the
- * check constraint accepts and nothing else (Requirement 10, criterion 20).
+ * All five values are kept so legacy requests stored with `sick`, `personal`, or
+ * `bereavement` still render a human-readable label. New requests may only use
+ * the types listed in `REQUESTABLE_PTO_TYPES`.
  */
 export const PTO_TYPE_LABELS: Record<PTOType, string> = {
   vacation: 'Vacation',
@@ -230,6 +231,15 @@ export const PTO_TYPE_LABELS: Record<PTOType, string> = {
   bereavement: 'Bereavement',
   unpaid: 'Unpaid Leave',
 };
+
+/**
+ * The request types the organisation actually offers for new submissions.
+ *
+ * Only vacation and unpaid leave are requestable. Sick, personal, and bereavement
+ * are retained in the type union and labels for legacy display but cannot be
+ * selected for new requests.
+ */
+export const REQUESTABLE_PTO_TYPES: readonly PTOType[] = ['vacation', 'unpaid'];
 
 export const PTO_STATUS_STYLES: Record<PTOStatus, { bg: string; text: string; label: string }> = {
   pending: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Pending' },
