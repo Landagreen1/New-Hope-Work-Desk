@@ -390,7 +390,7 @@ describe('payroll blocking', () => {
     expect(isPayrollBlocking(exceptions)).toBe(true);
   });
 
-  it('blocks on unscheduled work until it is approved', () => {
+  it('does not block on unscheduled work (informational only)', () => {
     const unapproved = exceptionsOf({
       schedule: null,
       sessions: [session('s1', eastern('09:00:00'), eastern('17:00:00'))],
@@ -401,7 +401,8 @@ describe('payroll blocking', () => {
       unscheduledWorkApproved: true,
     });
 
-    expect(isPayrollBlocking(unapproved)).toBe(true);
+    expect(unapproved.map((exception) => exception.code)).toEqual(['unscheduled_work']);
+    expect(isPayrollBlocking(unapproved)).toBe(false);
     expect(approved.map((exception) => exception.code)).toEqual(['unscheduled_work']);
     expect(isPayrollBlocking(approved)).toBe(false);
   });

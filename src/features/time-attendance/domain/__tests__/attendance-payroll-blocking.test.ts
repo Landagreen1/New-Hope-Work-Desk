@@ -1,15 +1,15 @@
 // src/features/time-attendance/domain/__tests__/attendance-payroll-blocking.test.ts
 // Property test for which records hold payroll.
 //
-// Requirement 12, criterion 8 names three conditions and no others: a missing
-// clock-out, a missing clock-in on a date carrying a published schedule, and
-// unscheduled work that has not been approved. "Exactly when" is the whole
-// content of the property — a fourth condition creeping in would hold pay for a
-// day that should have been paid, and a missing one would pay a day nobody has
-// checked.
+// Requirement 12, criterion 8 names two conditions and no others: a missing
+// clock-out, and a missing clock-in on a date carrying a published schedule.
+// Unscheduled work is informational only and never blocks payroll.
+// "Exactly when" is the whole content of the property — a third condition
+// creeping in would hold pay for a day that should have been paid, and a missing
+// one would pay a day nobody has checked.
 //
 // The expected value is computed from the exception codes on the record and the
-// two input facts the classification consults, so the rule table is not asked
+// input facts the classification consults, so the rule table is not asked
 // whether it agrees with itself.
 //
 // Feature: time-attendance-ui-redesign, Property 9: Payroll-blocking classification
@@ -22,7 +22,7 @@ import type { ExceptionCode } from '../types';
 import { attendanceInputsArb } from './arbitraries';
 
 describe('PBT-9: Payroll-blocking classification', () => {
-  it('holds payroll exactly for a missing clock-out, a missing clock-in on a published schedule, and unapproved unscheduled work', () => {
+  it('holds payroll exactly for a missing clock-out and a missing clock-in on a published schedule', () => {
     let blockingCases = 0;
     let nonBlockingCases = 0;
 
@@ -34,29 +34,24 @@ describe('PBT-9: Payroll-blocking classification', () => {
           (exception) => exception.code,
         );
 
-        // The two input facts the classification depends on, read from the
+        // The input fact the classification depends on, read from the
         // inputs rather than from the context the rules were evaluated against.
         const publishedSchedule = inputs.schedule !== null && inputs.schedule.status === 'published';
-        const unscheduledWorkApproved = inputs.unscheduledWorkApproved;
 
         const missingClockOut = codes.includes('missing_clock_out');
         const missingClockInOnSchedule = codes.includes('missing_clock_in') && publishedSchedule;
-        const unapprovedUnscheduledWork =
-          codes.includes('unscheduled_work') && !unscheduledWorkApproved;
 
-        const expected = missingClockOut || missingClockInOnSchedule || unapprovedUnscheduledWork;
+        const expected = missingClockOut || missingClockInOnSchedule;
         expect(record.payrollBlocking).toBe(expected);
 
-        // Per exception, the same three conditions and no others.
+        // Per exception, the same two conditions and no others.
         for (const exception of record.exceptions) {
           const expectedForException =
             exception.code === 'missing_clock_out'
               ? true
               : exception.code === 'missing_clock_in'
                 ? publishedSchedule
-                : exception.code === 'unscheduled_work'
-                  ? !unscheduledWorkApproved
-                  : false;
+                : false;
           expect(exception.payrollBlocking).toBe(expectedForException);
         }
 

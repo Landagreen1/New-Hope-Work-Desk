@@ -380,7 +380,7 @@ describe('buildAttendanceInputs', () => {
 
     const unapproved = deriveRecords(base);
     expect(unapproved[0].derivedStatus).toBe('clocked_in_unscheduled');
-    expect(unapproved[0].payrollBlocking).toBe(true);
+    expect(unapproved[0].payrollBlocking).toBe(false);
 
     const approved = deriveRecords({
       ...base,

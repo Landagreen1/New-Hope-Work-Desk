@@ -158,7 +158,7 @@ describe('record assembly', () => {
   });
 
   it('reports payroll blocking as the OR of the exception flags', () => {
-    expect(recordFor('p4').payrollBlocking).toBe(true); // unapproved unscheduled work
+    expect(recordFor('p4').payrollBlocking).toBe(false); // unscheduled work (informational only)
     expect(recordFor('p5').payrollBlocking).toBe(true); // missing clock-out
     expect(recordFor('p7').payrollBlocking).toBe(true); // missing clock-in while scheduled
     expect(recordFor('p9').payrollBlocking).toBe(false); // break overrun does not hold pay
@@ -307,7 +307,7 @@ describe('record queries', () => {
       'p8',
       'p9',
     ]);
-    expect(profileIdsMatching({ savedFilter: 'payroll_blocking' })).toEqual(['p4', 'p5', 'p7']);
+    expect(profileIdsMatching({ savedFilter: 'payroll_blocking' })).toEqual(['p5', 'p7']);
     expect(profileIdsMatching({ savedFilter: 'missing_punches' })).toEqual(['p5', 'p7']);
     expect(profileIdsMatching({ savedFilter: 'missing_clock_ins' })).toEqual(['p7']);
     expect(profileIdsMatching({ savedFilter: 'missing_clock_outs' })).toEqual(['p5']);
@@ -316,7 +316,7 @@ describe('record queries', () => {
     expect(profileIdsMatching({ savedFilter: 'absences' })).toEqual(['p3']);
     expect(profileIdsMatching({ savedFilter: 'break_issues' })).toEqual(['p9']);
     expect(profileIdsMatching({ savedFilter: 'unscheduled_work' })).toEqual(['p4']);
-    expect(profileIdsMatching({ savedFilter: 'pending_manager_approval' })).toEqual(['p4']);
+    expect(profileIdsMatching({ savedFilter: 'pending_manager_approval' })).toEqual([]);
     expect(profileIdsMatching({ savedFilter: 'corrected' })).toEqual([]);
     expect(profileIdsMatching({ savedFilter: 'all_records' })).toHaveLength(RECORDS.length);
   });
@@ -359,6 +359,7 @@ describe('record queries', () => {
       'p1',
       'p2',
       'p3',
+      'p4',
       'p6',
       'p8',
       'p9',
@@ -427,7 +428,7 @@ describe('metric aggregation', () => {
     expect(value('attendance_rate')).toBe(71.43); // 5 of 7 expected days clocked in
     expect(value('scheduled_hours')).toBe(60);
     expect(value('worked_hours')).toBe(43.17);
-    expect(value('approved_payable_hours')).toBe(28.17); // excludes the two blocked records
+    expect(value('approved_payable_hours')).toBe(32.17); // excludes only the two missing-punch blocked records
     expect(value('overtime_hours')).toBe(7); // 4 unscheduled plus 3 past a scheduled end
     expect(value('late_arrival_count')).toBe(1);
     expect(value('total_late_minutes')).toBe(20);

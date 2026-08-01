@@ -1125,9 +1125,8 @@ function ExceptionSubject({
 
                 {control === 'approve_unscheduled' && (
                   <p className="text-[12px] font-semibold text-slate-600">
-                    Approving the unscheduled work recorded on this date clears the
-                    payroll-blocking exception. The approval is the audit entry; there is no
-                    un-approve.
+                    Approving the unscheduled work recorded on this date marks it as reviewed.
+                    The approval is the audit entry; there is no un-approve.
                   </p>
                 )}
 

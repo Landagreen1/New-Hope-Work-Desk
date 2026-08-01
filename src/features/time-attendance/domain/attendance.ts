@@ -1162,11 +1162,10 @@ const DOES_NOT_BLOCK_PAYROLL = () => false;
 /**
  * Every condition on a Daily_Attendance_Record that requires human review.
  *
- * Exactly three of them block payroll, and they are the three Requirement 12,
- * criterion 8 names: a missing clock-out, a missing clock-in on a date carrying
- * a published schedule, and unscheduled work that has not been approved. The
- * remaining rules describe conditions an administrator should see without
- * holding up pay.
+ * Exactly two of them block payroll: a missing clock-out and a missing clock-in
+ * on a date carrying a published schedule. The remaining rules — including
+ * unscheduled work, which is purely informational — describe conditions an
+ * administrator should see without holding up pay.
  *
  * AX-01 and AX-05 split at the scheduled end, the same boundary the status
  * matrix splits Missing_Clock_In from Absent at, so a genuine absence is never
@@ -1249,12 +1248,11 @@ export const EXCEPTION_RULES: readonly ExceptionRule[] = [
     id: 'AX-06',
     code: 'unscheduled_work',
     description:
-      'The employee clocked in on a date carrying no published schedule. Payroll is held until the work is approved.',
+      'The employee clocked in on a date carrying no published schedule.',
     holds: (ctx) => ctx.hasSessions && !hasPublishedSchedule(ctx),
-    payrollBlocking: (ctx) => !ctx.unscheduledWorkApproved,
+    payrollBlocking: DOES_NOT_BLOCK_PAYROLL,
     detail: (ctx) => ({
       workedHours: ctx.workedHours,
-      approved: ctx.unscheduledWorkApproved ? 'yes' : 'no',
     }),
   },
   {
@@ -1753,7 +1751,7 @@ export const RECORD_PREDICATES: readonly RecordPredicate[] = [
     id: 'pending_manager_approval',
     label: 'Pending manager approval',
     description:
-      'Unscheduled work on this date is still unapproved, so payroll is held until an administrator approves it.',
+      'Unscheduled work on this date is still unapproved. (Legacy filter — unscheduled work no longer blocks payroll.)',
     saved: true,
     holds: (record) =>
       record.exceptions.some(

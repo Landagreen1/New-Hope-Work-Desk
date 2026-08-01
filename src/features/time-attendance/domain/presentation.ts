@@ -377,7 +377,7 @@ export const ROW_ACTION_LABELS: Record<RowAction, string> = {
  * | ------------------------- | --------------------- | ------------------------------------------------------------ |
  * | `missing_clock_out`       | `add_clock_out`       | payroll-blocking, and the missing value is the clock-out      |
  * | `missing_clock_in`        | `correct_punch`       | payroll-blocking on a scheduled date; the punch is supplied   |
- * | `unscheduled_work`        | `approve_unscheduled` | payroll-blocking until the work is approved                   |
+ * | `unscheduled_work`        | `approve_unscheduled` | informational; the work is marked as reviewed                 |
  * | `negative_duration`       | `correct_punch`       | a duration runs backwards, so a punch is wrong                |
  * | `overlapping_sessions`    | `correct_punch`       | two sessions share time, so worked hours cannot be trusted    |
  * | `open_break_at_clock_out` | `correct_punch`       | the break has no end, so its minutes were inferred            |
