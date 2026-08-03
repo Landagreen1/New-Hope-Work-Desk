@@ -25,7 +25,7 @@ import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type { ProfileLite } from "@/features/nhwd-shared/types";
 import { NotificationPanel } from "@/features/notifications/NotificationPanel";
-import RenewalsPage from "@/features/renewals/RenewalsPage";
+import PolicyFollowUpPage from "@/features/renewals/PolicyFollowUpPage";
 import WorkloadLog from "@/features/workload/WorkloadLog";
 import { getRolePermissions, isBroadManagerRole } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
@@ -251,15 +251,15 @@ export function RoleWorkspace({
       );
     }
 
-    // --- Renewals ---
+    // --- Policy Follow-up (Renewals + Pending Cancellations) ---
     if (module === "renewals" && permissions.renewals) {
       return (
-        <RenewalsPage
-          initialProfile={profile}
-          embedded
-          initialTab={isBroadManager ? "pipeline" : "overview"}
-          showImportTab={isBroadManager}
-        />
+        <Suspense>
+          <PolicyFollowUpPage
+            initialProfile={profile}
+            embedded
+          />
+        </Suspense>
       );
     }
 
