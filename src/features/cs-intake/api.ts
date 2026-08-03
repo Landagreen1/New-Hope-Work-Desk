@@ -13,7 +13,7 @@ export type CsIntakeStatus =
   | 'deleted';
 export type CsIntakePriority = 'normal' | 'high' | 'urgent';
 export type CsIntakeLob = 'personal_auto' | 'commercial_auto' | 'auto' | 'trucking' | 'commercial_gl' | 'homeowners' | 'non_owners' | 'motorcycle' | 'boat' | 'trailer' | 'renters';
-export type DesiredCoverage = 'liability_only' | 'full_coverage' | 'unsure';
+export type DesiredCoverage = 'liability_only' | 'full_coverage' | 'both_prices' | 'unsure';
 export type QuoteKind = 'new_quote' | 'requote';
 
 export interface CsIntakeSubmission {
@@ -135,6 +135,19 @@ export interface CsIntakeVehicle {
   garaging_zip: string | null;
 }
 
+export interface CsIntakeOwner {
+  id?: string;
+  submission_id?: string;
+  position: number;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  dob: string | null;
+  phone: string | null;
+  email: string | null;
+  ownership_percentage: number | null;
+}
+
 export interface Dealer {
   id: string;
   name: string;
@@ -222,6 +235,7 @@ export async function getIntake(id: string): Promise<{
   submission: CsIntakeSubmission;
   drivers: CsIntakeDriver[];
   vehicles: CsIntakeVehicle[];
+  owners: CsIntakeOwner[];
   events: IntakeEvent[];
 } | null> {
   const supabase = getSupabase();
@@ -232,19 +246,22 @@ export async function getIntake(id: string): Promise<{
     .single();
   if (error || !submission) return null;
 
-  const [driversResult, vehiclesResult, eventsResult] = await Promise.all([
+  const [driversResult, vehiclesResult, ownersResult, eventsResult] = await Promise.all([
     supabase.from('cs_intake_drivers').select('*').eq('submission_id', id).order('position'),
     supabase.from('cs_intake_vehicles').select('*').eq('submission_id', id).order('position'),
+    supabase.from('cs_intake_owners').select('*').eq('submission_id', id).order('position'),
     supabase.from('cs_intake_events').select('*').eq('submission_id', id).order('created_at', { ascending: false }),
   ]);
   throwIfError(driversResult.error);
   throwIfError(vehiclesResult.error);
+  throwIfError(ownersResult.error);
   throwIfError(eventsResult.error);
 
   return {
     submission: submission as CsIntakeSubmission,
     drivers: (driversResult.data as CsIntakeDriver[]) ?? [],
     vehicles: (vehiclesResult.data as CsIntakeVehicle[]) ?? [],
+    owners: (ownersResult.data as CsIntakeOwner[]) ?? [],
     events: (eventsResult.data as IntakeEvent[]) ?? [],
   };
 }
@@ -254,6 +271,7 @@ export async function saveDraft(
   submission: Partial<CsIntakeSubmission> & { id?: string },
   drivers: CsIntakeDriver[],
   vehicles: CsIntakeVehicle[],
+  owners: CsIntakeOwner[] = [],
 ): Promise<string> {
   const supabase = getSupabase();
   let id = submission.id;
@@ -306,6 +324,21 @@ export async function saveDraft(
   if (vehicles.length) {
     const { error } = await supabase.from('cs_intake_vehicles').insert(
       vehicles.map(({ id: _id, submission_id: _sid, ...rest }, index) => ({
+        ...rest,
+        submission_id: id,
+        position: index + 1,
+      })),
+    );
+    throwIfError(error);
+  }
+
+  // Owners (commercial intakes)
+  const { error: ownerDeleteError } = await supabase.from('cs_intake_owners').delete().eq('submission_id', id);
+  throwIfError(ownerDeleteError);
+
+  if (owners.length) {
+    const { error } = await supabase.from('cs_intake_owners').insert(
+      owners.map(({ id: _id, submission_id: _sid, ...rest }, index) => ({
         ...rest,
         submission_id: id,
         position: index + 1,
@@ -502,9 +535,10 @@ export async function deleteCustomerIntake(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Authentication required.');
 
-  // Delete child records first (drivers, vehicles, events)
+  // Delete child records first (drivers, vehicles, owners, events)
   await supabase.from('cs_intake_vehicles').delete().eq('submission_id', intakeId);
   await supabase.from('cs_intake_drivers').delete().eq('submission_id', intakeId);
+  await supabase.from('cs_intake_owners').delete().eq('submission_id', intakeId);
   await supabase.from('cs_intake_events').delete().eq('submission_id', intakeId);
 
   // Hard delete the intake submission

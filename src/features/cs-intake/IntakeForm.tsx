@@ -22,6 +22,7 @@ import AddressAutocomplete from './AddressAutocomplete';
 import {
   type CsIntakeDriver,
   type CsIntakeLob,
+  type CsIntakeOwner,
   type CsIntakePriority,
   type CsIntakeSubmission,
   type CsIntakeVehicle,
@@ -39,7 +40,7 @@ import DatePicker from '../nhwd-shared/DatePicker';
 import LobPicker, { type ExtendedLob, isCommercialRoute } from './LobPicker';
 import NonOwnersSection, { type NonOwnersData } from './NonOwnersSection';
 import TruckingSection, { type TruckingData } from './TruckingSection';
-import CommercialGlSection, { type CommercialGlData } from './CommercialGlSection';
+import CommercialGlSection, { type CommercialGlData, emptyOwner } from './CommercialGlSection';
 import HomeownersSection, { type HomeownersData } from './HomeownersSection';
 import OtherPersonalSection, { type OtherPersonalData } from './OtherPersonalSection';
 
@@ -99,6 +100,7 @@ interface Props {
     submission: CsIntakeSubmission;
     drivers: CsIntakeDriver[];
     vehicles: CsIntakeVehicle[];
+    owners?: CsIntakeOwner[];
   };
   readOnly?: boolean;
   onDone: () => void;
@@ -154,6 +156,9 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
     initial?.drivers?.length ? initial.drivers.map((row) => ({ ...row, document_type: row.document_type || 'driver_license' })) : (submission.line_of_business === 'commercial_gl' ? [] : [emptyDriver()]),
   );
   const [vehicles, setVehicles] = useState<CsIntakeVehicle[]>(initial?.vehicles?.length ? initial.vehicles : (submission.line_of_business === 'commercial_gl' ? [] : [emptyVehicle()]));
+  const [owners, setOwners] = useState<CsIntakeOwner[]>(
+    initial?.owners?.length ? initial.owners : [emptyOwner()],
+  );
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [salespeople, setSalespeople] = useState<DealerSalesperson[]>([]);
   const [loadingSalespeople, setLoadingSalespeople] = useState(false);
@@ -409,6 +414,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         },
         drivers,
         vehicles,
+        owners,
       );
       patch({ id });
       if (alsoSubmit) {
@@ -646,6 +652,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
               <option value="">Select coverage</option>
               <option value="liability_only">Liability Only</option>
               <option value="full_coverage">Full Coverage</option>
+              <option value="both_prices">Customer Wants Both Prices</option>
               <option value="unsure">Customer Unsure / Agent to Review</option>
             </select>
           </Field>
@@ -745,7 +752,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
             if ('annual_payroll' in glPatch) (mapped as Record<string, unknown>).annual_payroll = glPatch.annual_payroll;
             if ('years_in_business' in glPatch) mapped.years_in_business = glPatch.years_in_business;
             if ('coverage_types_needed' in glPatch) (mapped as Record<string, unknown>).coverage_types_needed = glPatch.coverage_types_needed;
-            // Owner info maps to insured fields directly
+            // Owner info maps to insured fields directly (kept for backward compat)
             if ('owner_first_name' in glPatch) mapped.insured_first_name = glPatch.owner_first_name || '';
             if ('owner_middle_name' in glPatch) (mapped as Record<string, unknown>).insured_middle_name = glPatch.owner_middle_name || '';
             if ('owner_last_name' in glPatch) (mapped as Record<string, unknown>).insured_last_name = glPatch.owner_last_name || '';
@@ -753,6 +760,22 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
             if ('owner_phone' in glPatch) (mapped as Record<string, unknown>).insured_phone_primary = glPatch.owner_phone || null;
             if ('owner_email' in glPatch) (mapped as Record<string, unknown>).insured_email = glPatch.owner_email || null;
             patch(mapped);
+          }}
+          owners={owners}
+          onOwnersChange={(updated) => {
+            setOwners(updated);
+            // Sync primary owner to insured fields
+            if (updated.length > 0) {
+              const primary = updated[0];
+              patch({
+                insured_first_name: primary.first_name || '',
+                insured_last_name: primary.last_name || '',
+                insured_dob: primary.dob || null,
+                insured_phone_primary: primary.phone || null,
+                insured_email: primary.email || null,
+                insured_middle_name: primary.middle_name || null,
+              } as Partial<DraftSubmission>);
+            }
           }}
           disabled={disabled}
         />

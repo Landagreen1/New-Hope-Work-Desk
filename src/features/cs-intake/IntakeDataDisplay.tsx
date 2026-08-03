@@ -17,6 +17,7 @@ export interface IntakeDataDetails {
   preferred_language?: string | null;
   preferred_contact?: string | null;
   addr_street?: string | null;
+  addr_unit?: string | null;
   addr_city?: string | null;
   addr_state?: string | null;
   addr_zip?: string | null;
@@ -41,6 +42,16 @@ export interface IntakeDataDetails {
     vin?: string | null;
     usage?: string | null;
     annual_mileage?: number | null;
+  }>;
+  // Owners (commercial)
+  owners?: Array<{
+    first_name?: string;
+    middle_name?: string | null;
+    last_name?: string;
+    dob?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    ownership_percentage?: number | null;
   }>;
   // Coverage
   desired_coverage?: string | null;
@@ -69,6 +80,30 @@ function val(value: string | number | boolean | null | undefined): string {
   if (value === null || value === undefined || value === '') return 'N/A';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   return String(value);
+}
+
+/** Format an ISO date string (YYYY-MM-DD) to M/D/YYYY. Returns 'N/A' for invalid/empty. */
+function fmtDate(value: string | null | undefined): string {
+  if (!value) return 'N/A';
+  const parts = value.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${parseInt(m, 10)}/${parseInt(d, 10)}/${y}`;
+  }
+  // Already formatted (e.g. M/D/YYYY from DB) — pass through
+  return value;
+}
+
+/** Human-readable label for desired_coverage values. */
+function fmtCoverage(value: string | null | undefined): string {
+  if (!value) return 'N/A';
+  const labels: Record<string, string> = {
+    liability_only: 'Liability Only',
+    full_coverage: 'Full Coverage',
+    both_prices: 'Customer Wants Both Prices',
+    unsure: 'Customer Unsure',
+  };
+  return labels[value] || value;
 }
 
 /** Check if at least one of the provided values is non-null/defined. */
@@ -117,6 +152,7 @@ export default function IntakeDataDisplay({ details }: IntakeDataDisplayProps) {
   );
   const hasDrivers = d.drivers && d.drivers.length > 0;
   const hasVehicles = d.vehicles && d.vehicles.length > 0;
+  const hasOwners = d.owners && d.owners.length > 0;
   const hasCoverage = hasAny(
     d.desired_coverage, d.liability_limit,
     d.comprehensive_deductible, d.collision_deductible,
@@ -143,19 +179,20 @@ export default function IntakeDataDisplay({ details }: IntakeDataDisplayProps) {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="First Name" value={val(d.insured_first_name)} />
             <Field label="Last Name" value={val(d.insured_last_name)} />
-            <Field label="Date of Birth" value={val(d.insured_dob)} />
+            <Field label="Date of Birth" value={fmtDate(d.insured_dob)} />
             <Field label="Email" value={val(d.insured_email)} />
             <Field label="Phone" value={val(d.insured_phone_primary)} />
             {d.insured_phone_alt && <Field label="Alt Phone" value={val(d.insured_phone_alt)} />}
             <Field label="Preferred Language" value={val(d.preferred_language)} />
             <Field label="Preferred Contact" value={val(d.preferred_contact)} />
-            {hasAny(d.addr_street, d.addr_city, d.addr_state, d.addr_zip) && (
+            {hasAny(d.addr_street, d.addr_unit, d.addr_city, d.addr_state, d.addr_zip) && (
               <div className="sm:col-span-2">
                 <span className={ui.label}>Address</span>
                 <p className="mt-1 text-sm font-semibold text-slate-800">
-                  {[d.addr_street, d.addr_city, d.addr_state, d.addr_zip]
-                    .filter(Boolean)
-                    .join(', ') || 'N/A'}
+                  {[
+                    d.addr_unit ? `${d.addr_street}, ${d.addr_unit}` : d.addr_street,
+                    d.addr_city, d.addr_state, d.addr_zip,
+                  ].filter(Boolean).join(', ') || 'N/A'}
                 </p>
               </div>
             )}
@@ -169,7 +206,7 @@ export default function IntakeDataDisplay({ details }: IntakeDataDisplayProps) {
       {hasCoverage && (
         <SectionCard title="Coverage Preferences">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Desired Coverage" value={val(d.desired_coverage)} />
+            <Field label="Desired Coverage" value={fmtCoverage(d.desired_coverage)} />
             <Field label="Liability Limit" value={val(d.liability_limit)} />
             <Field label="Comprehensive Deductible" value={val(d.comprehensive_deductible)} />
             <Field label="Collision Deductible" value={val(d.collision_deductible)} />
@@ -211,7 +248,7 @@ export default function IntakeDataDisplay({ details }: IntakeDataDisplayProps) {
                       <td className={ui.td}>
                         {val(driver.first_name)} {val(driver.last_name)}
                       </td>
-                      <td className={ui.td}>{val(driver.dob)}</td>
+                      <td className={ui.td}>{fmtDate(driver.dob)}</td>
                       <td className={ui.td}>{val(driver.license_number)}</td>
                       <td className={ui.td}>{val(driver.license_state)}</td>
                       <td className={ui.td}>{val(driver.years_licensed)}</td>
@@ -260,6 +297,40 @@ export default function IntakeDataDisplay({ details }: IntakeDataDisplayProps) {
                           ? vehicle.annual_mileage.toLocaleString()
                           : 'N/A'}
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+        </div>
+      )}
+
+      {/* Owners */}
+      {hasOwners && (
+        <div className="md:col-span-2">
+          <SectionCard title="Business Owners">
+            <div className="overflow-x-auto">
+              <table className={ui.table}>
+                <thead>
+                  <tr>
+                    <th className={ui.th}>Name</th>
+                    <th className={ui.th}>DOB</th>
+                    <th className={ui.th}>Phone</th>
+                    <th className={ui.th}>Email</th>
+                    <th className={ui.th}>Ownership %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.owners!.map((owner, idx) => (
+                    <tr key={idx}>
+                      <td className={ui.td}>
+                        {val(owner.first_name)} {owner.middle_name ? `${owner.middle_name} ` : ''}{val(owner.last_name)}
+                      </td>
+                      <td className={ui.td}>{fmtDate(owner.dob)}</td>
+                      <td className={ui.td}>{val(owner.phone)}</td>
+                      <td className={ui.td}>{val(owner.email)}</td>
+                      <td className={ui.td}>{owner.ownership_percentage != null ? `${owner.ownership_percentage}%` : 'N/A'}</td>
                     </tr>
                   ))}
                 </tbody>
