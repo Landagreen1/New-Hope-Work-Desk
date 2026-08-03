@@ -573,7 +573,7 @@ export default function CancellationsPage({
   if (!allowed) {
     return (
       <ModuleShell
-        title="Cancellations"
+        title="Pending Cancellations"
         subtitle="Policy follow-up"
         role={profile.role}
         embedded={embedded}
@@ -585,7 +585,7 @@ export default function CancellationsPage({
 
   return (
     <ModuleShell
-      title="Cancellations"
+      title="Pending Cancellations"
       subtitle="Pick a counter, open the case, contact the customer with proof, and record what came back."
       role={profile.role}
       lastUpdated={lastUpdated}

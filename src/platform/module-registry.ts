@@ -78,14 +78,6 @@ export const appModules: AppModule[] = [
     status: 'active',
   },
   {
-    id: 'cancellations',
-    name: 'Cancellations',
-    description: 'Track and manage policies heading to cancellation with automated reminders.',
-    route: '/tools/policy-follow-up?tab=cancellations',
-    roles: rolesWhere(canAccessRenewals),
-    status: 'active',
-  },
-  {
     id: 'commercial-board',
     name: 'Commercial Quotes Board',
     description: 'Kanban board for managing commercial policy quotes pipeline.',

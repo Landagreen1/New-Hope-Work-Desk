@@ -33,10 +33,10 @@ import type { ProfileLite } from '../nhwd-shared/types';
 import type { RenewalsUiState } from './derive';
 import RenewalsPage from './RenewalsPage';
 
-/** Requirement 1.1: exactly two tabs, Renewals first and Cancellations second. */
+/** Requirement 1.1: exactly two tabs, Renewals first and Pending Cancellations second. */
 export const POLICY_FOLLOW_UP_TABS = [
   { id: 'renewals', label: 'Renewals' },
-  { id: 'cancellations', label: 'Cancellations' },
+  { id: 'cancellations', label: 'Pending Cancellations' },
 ] as const;
 
 export type PolicyFollowUpTabId = (typeof POLICY_FOLLOW_UP_TABS)[number]['id'];
