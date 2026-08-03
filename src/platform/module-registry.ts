@@ -60,10 +60,20 @@ export const appModules: AppModule[] = [
     status: 'active',
   },
   {
+    id: 'policy-follow-up',
+    name: 'Policy Follow-up',
+    description: 'Renewals coming due and policies heading to cancellation, in one workspace.',
+    route: '/tools/policy-follow-up',
+    roles: rolesWhere(canAccessRenewals),
+    status: 'active',
+  },
+  {
+    // Kept so existing `renewals` lookups keep resolving; retargeted to the workspace that now
+    // hosts the Renewals tab.
     id: 'renewals',
     name: 'Renewals Management',
     description: 'Import, assign, document, monitor, and re-quote renewals.',
-    route: '/tools/renewals',
+    route: '/tools/policy-follow-up',
     roles: rolesWhere(canAccessRenewals),
     status: 'active',
   },
