@@ -25,9 +25,10 @@
 
 import { useCallback, useRef, useState } from 'react';
 
+import CancellationsPage from '../cancellations/CancellationsPage';
+import type { CancellationsUiState } from '../cancellations/derive';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import type { ProfileLite } from '../nhwd-shared/types';
-import { ui } from '../nhwd-shared/ui';
 import type { RenewalsUiState } from './derive';
 import RenewalsPage from './RenewalsPage';
 
@@ -45,6 +46,17 @@ const INITIAL_TAB: PolicyFollowUpTabId = 'renewals';
 /** What the Renewals tab starts from before the reader has narrowed anything (Req 1.3). */
 const INITIAL_RENEWALS_UI: RenewalsUiState = { searchText: '', savedFilter: null, sortOrder: 'recommended' };
 
+/**
+ * What the Cancellations tab starts from (Req 1.3). A null saved filter is Needs Action, which
+ * `resolveCancellationFilter` and `filterCancellationRows` both resolve it to (Req 16.2): the tab
+ * has no zero-filter state, and storing `'needs-action'` here would claim the reader chose it.
+ */
+const INITIAL_CANCELLATIONS_UI: CancellationsUiState = {
+  searchText: '',
+  savedFilter: null,
+  sortOrder: 'recommended',
+};
+
 export interface PolicyFollowUpPageProps {
   initialProfile: ProfileLite;
   /** Set when a surrounding workspace already draws the page chrome, as `RoleWorkspace` does. */
@@ -56,17 +68,25 @@ export default function PolicyFollowUpPage({ initialProfile, embedded = false }:
 
   /**
    * Requirement 1.3, retention half. The mounted tab reports its three values as the reader changes
-   * them, which must not re-render this shell, so they land in a ref. `restoredRenewalsUi` is the
-   * copy a mounting tab reads, taken from the ref while the tab is being left — the one moment the
-   * retained value matters to a render. Task 16.12 adds the Cancellations pair beside these two.
+   * them, which must not re-render this shell, so they land in a ref. `restored…Ui` is the copy a
+   * mounting tab reads, taken from the ref while the tab is being left — the one moment the retained
+   * value matters to a render. One pair per tab, and neither tab can read the other's.
    */
   const renewalsUi = useRef<RenewalsUiState>(INITIAL_RENEWALS_UI);
   const [restoredRenewalsUi, setRestoredRenewalsUi] = useState<RenewalsUiState>(INITIAL_RENEWALS_UI);
   const retainRenewalsUi = useCallback((next: RenewalsUiState) => { renewalsUi.current = next; }, []);
 
+  const cancellationsUi = useRef<CancellationsUiState>(INITIAL_CANCELLATIONS_UI);
+  const [restoredCancellationsUi, setRestoredCancellationsUi] =
+    useState<CancellationsUiState>(INITIAL_CANCELLATIONS_UI);
+  const retainCancellationsUi = useCallback((next: CancellationsUiState) => {
+    cancellationsUi.current = next;
+  }, []);
+
   /** Requirement 1.3: the tab being left hands over its three values, and the rest of it unmounts. */
   const selectTab = useCallback((next: PolicyFollowUpTabId) => {
     setRestoredRenewalsUi(renewalsUi.current);
+    setRestoredCancellationsUi(cancellationsUi.current);
     setActiveTab(next);
   }, []);
 
@@ -120,11 +140,12 @@ export default function PolicyFollowUpPage({ initialProfile, embedded = false }:
               onUiStateChange={retainRenewalsUi}
             />
           ) : (
-            /* Inert until task 16.12 puts `CancellationsPage` here: text, and not one control. */
-            <div className={ui.empty}>
-              <p>The Cancellations queue is not part of this build yet.</p>
-              <p className="mt-1">Nothing is imported, sent, or stored from this tab.</p>
-            </div>
+            <CancellationsPage
+              initialProfile={initialProfile}
+              embedded
+              initialUiState={restoredCancellationsUi}
+              onUiStateChange={retainCancellationsUi}
+            />
           )}
         </div>
       </div>

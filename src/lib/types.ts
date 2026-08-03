@@ -47,7 +47,15 @@ export type NotSoldReason =
   | "no_response"
   | "no_longer_needed"
   | "other";
-export type NotificationType = "turn" | "assignment";
+/**
+ * Permitted values of `public.user_notifications.notification_type`.
+ *
+ * Mirrors the live check constraint `user_notifications_notification_type_check`, widened
+ * from ('turn', 'assignment') to include 'cancellation_follow_up' by
+ * `supabase/migrations/v1.10.7-extend-user-notifications-type.sql`. Cancellation escalations
+ * (`src/features/cancellations/domain/escalation.ts`) write the third value.
+ */
+export type NotificationType = "turn" | "assignment" | "cancellation_follow_up";
 
 export interface SessionProfile {
   id: string;

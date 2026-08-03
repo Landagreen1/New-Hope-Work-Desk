@@ -72,6 +72,7 @@ import type {
   DealerSalesperson,
   AssignmentMethod,
   AvailabilityStatus,
+  NotificationType,
   PassEvent,
   PendingPricingItem,
   PerformanceRow,
@@ -97,6 +98,32 @@ const workTypeLabels: Record<WorkType, string> = {
   change: "Change",
   whatsapp_update: "WhatsApp Update",
   payment: "Payment",
+};
+
+/**
+ * Alert-inbox presentation per `user_notifications.notification_type`. Total over
+ * `NotificationType`, so a value added to the union (and to the live check constraint) has to
+ * be given a label and an icon here rather than rendering with no treatment at all.
+ */
+const notificationTypeStyles: Record<
+  NotificationType,
+  { label: string; className: string; icon: "bell" | "alert" }
+> = {
+  turn: {
+    label: "Turn",
+    className: "bg-emerald-50 text-emerald-700",
+    icon: "bell",
+  },
+  assignment: {
+    label: "Assignment",
+    className: "bg-blue-50 text-blue-700",
+    icon: "bell",
+  },
+  cancellation_follow_up: {
+    label: "Cancellation follow-up",
+    className: "bg-rose-50 text-rose-700",
+    icon: "alert",
+  },
 };
 
 const methodStyles: Record<
@@ -4269,12 +4296,16 @@ export function WorkDeskApp({
                             <div
                               className={cn(
                                 "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl",
-                                item.type === "turn"
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "bg-blue-50 text-blue-700",
+                                notificationTypeStyles[item.type].className,
                               )}
+                              title={notificationTypeStyles[item.type].label}
                             >
-                              <Bell className="h-4 w-4" />
+                              {notificationTypeStyles[item.type].icon ===
+                              "alert" ? (
+                                <AlertTriangle className="h-4 w-4" />
+                              ) : (
+                                <Bell className="h-4 w-4" />
+                              )}
                             </div>
                             <div>
                               <p className="text-sm font-black text-slate-900">

@@ -7,6 +7,7 @@ import type {
   AlertNotification,
   AssignmentMethod,
   DashboardData,
+  NotificationType,
   SourceOption,
   DealerSalesperson,
   PassEvent,
@@ -165,7 +166,7 @@ type WorkDeskSettingsRow = {
 
 type NotificationRow = {
   id: string;
-  notification_type: "turn" | "assignment";
+  notification_type: NotificationType;
   title: string;
   message: string;
   entity_type: string | null;
