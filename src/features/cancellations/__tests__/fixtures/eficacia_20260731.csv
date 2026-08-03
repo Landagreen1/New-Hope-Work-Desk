@@ -1,0 +1,60 @@
+Cliente,Poliza,Compania,FechaCancelacion,MontoDebido,Enviar,Estado,Resultado,AvisosEnviados,PrimerAviso,UltimoAviso,Productor,ClienteID
+Maria Garcia,POL-2026-001,Mapfre,2026-08-15,1250.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-001
+Maria Garcia,POL-2026-002,Seguros Bolivar,2026-08-20,890.50,Sí,Pendiente,,0,,,Roberto Martinez,CL-001
+Jose Rodriguez,POL-2026-003,Sura,2026-08-18,2100.00,Sí,Pendiente,,0,,,Ana Lopez,CL-002
+Jose Rodriguez,POL-2026-004,Liberty,2026-08-22,750.00,Sí,Pendiente,,0,,,Ana Lopez,CL-002
+Carlos Mendez,POL-2026-005,Mapfre,2026-08-16,1500.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-003
+Ana Lucia Torres,POL-2026-006,Seguros Bolivar,2026-08-19,980.00,Sí,Pendiente,,0,,,Carlos Vega,CL-004
+Pedro Sanchez,POL-2026-007,Sura,2026-08-25,3200.00,Sí,Pendiente,,0,,,,CL-005
+Laura Diaz,POL-2026-008,Liberty,2026-08-14,450.00,Sí,Pendiente,,0,,,,CL-006
+Miguel Angel Ruiz,POL-2026-009,Mapfre,2026-08-17,1800.00,Sí,Pendiente,,0,,,,CL-007
+Sofia Hernandez,POL-2026-010,Seguros Bolivar,2026-08-21,670.00,Sí,Pendiente,,0,,,,CL-008
+Roberto Jimenez,POL-2026-011,Sura,2026-08-23,2400.00,Sí,Pendiente,,0,,,,CL-009
+Diana Morales,POL-2026-012,Liberty,2026-08-15,1100.00,Sí,Pendiente,,0,,,,CL-010
+Andres Felipe Castro,POL-2026-013,Mapfre,2026-08-19,550.00,Sí,Pendiente,,0,,,,CL-011
+Valentina Ospina,POL-2026-014,Seguros Bolivar,2026-08-24,890.00,Sí,Pendiente,,0,,,,CL-012
+
+Luis Fernando Gomez,POL-2026-015,Sura,2026-08-16,1750.00,Sí,En curso,,1,2026-07-15,,Roberto Martinez,CL-013
+Carmen Rosa Alvarez,POL-2026-016,Liberty,2026-08-20,920.00,Sí,En curso,,1,2026-07-15,,Ana Lopez,CL-014
+Fernando Vargas,POL-2026-017,Mapfre,2026-08-18,3100.00,Sí,Pendiente,,0,,,,CL-015
+Patricia Rios,POL-2026-018,Seguros Bolivar,2026-08-22,480.00,Sí,Pendiente,,0,,,,CL-016
+Oscar David Munoz,POL-2026-019,Sura,2026-08-25,2200.00,Sí,Pendiente,,0,,,,CL-017
+Gloria Estefania Pena,POL-2026-020,Liberty,2026-08-14,1350.00,Sí,Pendiente,,0,,,,CL-018
+Ricardo Salazar,POL-2026-021,Mapfre,2026-08-17,780.00,Sí,Pendiente,,0,,,,CL-019
+Natalia Restrepo,POL-2026-022,Seguros Bolivar,2026-08-21,1900.00,Sí,Pendiente,,0,,,,CL-020
+Daniel Esteban Cardenas,POL-2026-023,Sura,2026-08-23,640.00,Sí,Pendiente,,0,,,,CL-021
+Isabella Quintero,POL-2026-024,Liberty,2026-08-15,2800.00,Sí,Pendiente,,0,,,,CL-022
+Santiago Mejia,POL-2026-025,Mapfre,2026-08-19,1050.00,Sí,Pendiente,,0,,,,CL-023
+Camila Andrea Ortiz,POL-2026-026,Seguros Bolivar,2026-08-24,390.00,Sí,Pendiente,,0,,,,CL-024
+Juan Pablo Herrera,POL-2026-027,Sura,2026-08-16,1650.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-025
+Alejandra Gutierrez,POL-2026-028,Liberty,2026-08-20,2050.00,Sí,Pendiente,,0,,,Carlos Vega,CL-026
+Felipe Andres Navarro,POL-2026-029,Mapfre,2026-08-18,870.00,Sí,Pendiente,,0,,,Ana Lopez,CL-027
+Mariana Rojas,POL-2026-030,Seguros Bolivar,2026-08-22,1400.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-028
+Jorge Luis Suarez,POL-2026-031,Sura,2026-08-25,2600.00,Sí,En curso,,2,2026-07-10,2026-07-20,Carlos Vega,CL-029
+Angela Maria Delgado,POL-2026-032,Liberty,2026-08-14,510.00,Sí,Pendiente,,0,,,Ana Lopez,CL-030
+Sergio Ramirez,POL-2026-033,Mapfre,2026-08-17,1950.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-031
+Paola Andrea Montes,POL-2026-034,Seguros Bolivar,2026-08-21,720.00,Sí,Pendiente,,0,,,Carlos Vega,CL-032
+Mauricio Echeverri,POL-2026-035,Sura,2026-08-23,3400.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-033
+Adriana Lucia Velez,POL-2026-036,Liberty,2026-08-15,1280.00,Sí,Pendiente,,0,,,Ana Lopez,CL-034
+Gustavo Adolfo Parra,POL-2026-037,Mapfre,2026-08-19,960.00,Sí,Pendiente,,0,,,Carlos Vega,CL-035
+Lucia Fernanda Caicedo,POL-2026-038,Seguros Bolivar,2026-08-24,2150.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-036
+Maria Garcia,POL-2026-039,Sura,2026-08-16,580.00,Sí,Pendiente,,0,,,Ana Lopez,CL-001
+Jose Rodriguez,POL-2026-040,Liberty,2026-08-20,1700.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-002
+Carlos Mendez,POL-2026-041,Mapfre,2026-08-18,830.00,Sí,Pendiente,,0,,,Carlos Vega,CL-003
+Ana Lucia Torres,POL-2026-042,Seguros Bolivar,2026-08-22,1550.00,Sí,Pendiente,,0,,,Ana Lopez,CL-004
+Hernan Dario Acosta,POL-2026-043,Sura,2026-08-25,2900.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-037
+Claudia Patricia Soto,POL-2026-044,Liberty,2026-08-14,440.00,Sí,Pendiente,,0,,,Carlos Vega,CL-038
+Raul Ernesto Bernal,POL-2026-045,Mapfre,2026-08-17,1850.00,Sí,Pendiente,,0,,,Marcos Silva (Deleted),CL-039
+Martha Cecilia Duarte,POL-2026-046,Seguros Bolivar,2026-08-21,690.00,Sí,Pendiente,,0,,,Marcos Silva (Deleted),CL-040
+Eduardo Andres Fuentes,POL-2026-047,Sura,2026-08-23,2300.00,Sí,Pendiente,,0,,,Ana Lopez,CL-041
+Viviana Marcela Luna,POL-2026-048,Liberty,2026-08-15,1050.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-042
+Cesar Augusto Pineda,POL-2026-049,Mapfre,2026-08-19,3050.00,Sí,Pendiente,,0,,,Carlos Vega,CL-043
+Sandra Milena Correa,POL-2026-050,Seguros Bolivar,2026-08-24,780.00,Sí,Pendiente,,0,,,Ana Lopez,CL-044
+Alberto Jose Marin,POL-2026-051,Sura,2026-08-16,1600.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-045
+Pedro Sanchez,POL-2026-052,Liberty,2026-08-20,2450.00,Sí,Pendiente,,0,,,Carlos Vega,CL-005
+Laura Diaz,POL-2026-053,Mapfre,2026-08-18,920.00,Sí,Pendiente,,0,,,Ana Lopez,CL-006
+Olga Marina Carvajal,POL-2026-054,Seguros Bolivar,2026-08-22,1350.00,Sí,Pendiente,,0,,,Roberto Martinez,CL-048
+Jaime Orlando Trujillo,POL-2026-055,Sura,2026-08-25,2750.00,No,Pagada,Recuperada,3,2026-07-01,2026-07-25,Carlos Vega,CL-049
+Rosa Elena Caballero,POL-2026-056,Liberty,2026-08-14,560.00,No,Pagada,Recuperada,2,2026-07-05,2026-07-20,Ana Lopez,CL-050
+William Alberto Ocampo,POL-2026-057,Mapfre,2026-08-17,1450.00,No,Pagada,Recuperada,3,2026-07-01,2026-07-25,Roberto Martinez,CL-051
+Teresa de Jesus Florez,POL-2026-058,Seguros Bolivar,2026-08-21,2100.00,No,Cancelada,Perdida,4,2026-06-25,2026-07-28,Carlos Vega,CL-052

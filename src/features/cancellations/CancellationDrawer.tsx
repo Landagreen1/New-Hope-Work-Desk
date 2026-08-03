@@ -654,6 +654,7 @@ const CASE_STATUS_TONE: Record<CaseStatus, string> = {
   Resolved: 'success',
   Invalid: 'neutral',
   Duplicate: 'neutral',
+  'Import Review Required': 'warning',
 };
 
 const COMMUNICATION_STATUS_TONE: Record<CommunicationStatus, string> = {

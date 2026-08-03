@@ -229,6 +229,9 @@ export interface ImportPreview {
 
   /** Every row that will load, in data row order, ready for the loader. */
   readonly plan: readonly PreviewedCaseRow[];
+
+  /** Status distribution for the eficacia status mapping (REQ-2.3). */
+  readonly statusCounts: Readonly<Record<string, number>>;
 }
 
 /**
@@ -409,6 +412,13 @@ export function buildImportPreview(input: ImportPreviewInput): ImportPreview {
     });
   }
 
+  // Compute status distribution from the plan rows (REQ-2.3)
+  const statusCounts: Record<string, number> = {};
+  for (const entry of plan) {
+    const status = entry.fields.case_status ?? 'Imported';
+    statusCounts[status] = (statusCounts[status] ?? 0) + 1;
+  }
+
   return {
     columnSet: mapping.columnSet,
     rowsTotal: rows.length,
@@ -425,6 +435,7 @@ export function buildImportPreview(input: ImportPreviewInput): ImportPreview {
     contactOverflowCount,
     duplicateContactCount,
     plan,
+    statusCounts,
   };
 }
 

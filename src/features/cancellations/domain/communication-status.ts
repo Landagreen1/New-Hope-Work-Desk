@@ -103,7 +103,7 @@ import {
 // Stored value domain
 // ---------------------------------------------------------------------------
 
-/** `cancellation_cases.case_status`, the ten values Requirement 15.1 allows. */
+/** `cancellation_cases.case_status`, the eleven values the CHECK constraint allows. */
 export type CaseStatus =
   | 'Imported'
   | 'Open'
@@ -114,7 +114,8 @@ export type CaseStatus =
   | 'Cancelled'
   | 'Resolved'
   | 'Invalid'
-  | 'Duplicate';
+  | 'Duplicate'
+  | 'Import Review Required';
 
 export const CASE_STATUSES = [
   'Imported',
@@ -127,6 +128,7 @@ export const CASE_STATUSES = [
   'Resolved',
   'Invalid',
   'Duplicate',
+  'Import Review Required',
 ] as const satisfies readonly CaseStatus[];
 
 /** The two open Case_Status values; every other value excludes automatic sending (Req 15.1, 12.12). */

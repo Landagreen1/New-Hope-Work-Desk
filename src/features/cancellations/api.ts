@@ -2081,6 +2081,111 @@ export async function assignCancellationCase(
 }
 
 // ---------------------------------------------------------------------------
+// Writes — follow-up recording (REQ-6.1, REQ-6.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Records a consolidated follow-up event on a cancellation case.
+ *
+ * Stores one `cancellation_events` entry with `event_type = 'follow_up'` containing the full
+ * payload. Optionally updates `next_required_action`, `follow_up_deadline`, and `case_status`
+ * based on the form values.
+ */
+export async function recordFollowUp(
+  caseId: string,
+  payload: {
+    contactMethod: string;
+    direction: string;
+    contactUsed: string;
+    outcome: string;
+    notes: string;
+    customerResponse?: string | null;
+    paymentReported: boolean;
+    evidenceFiles?: string[];
+    nextFollowUpDate?: string | null;
+    nextRequiredAction?: string | null;
+  },
+): Promise<void> {
+  const actor = await requireActor('record a follow-up');
+  const supabase = getSupabase();
+
+  // Insert the consolidated follow-up event
+  await appendEvent(caseId, actor.id, 'follow_up', {
+    type: 'follow_up',
+    contact_method: payload.contactMethod,
+    direction: payload.direction,
+    contact_used: payload.contactUsed,
+    outcome: payload.outcome,
+    notes: payload.notes,
+    customer_response: payload.customerResponse ?? null,
+    payment_reported: payload.paymentReported,
+    evidence_files: payload.evidenceFiles ?? [],
+    next_follow_up_date: payload.nextFollowUpDate ?? null,
+    next_required_action: payload.nextRequiredAction ?? null,
+  });
+
+  // Update case fields based on follow-up
+  const casePatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  if (payload.nextRequiredAction) {
+    casePatch.next_required_action = payload.nextRequiredAction;
+  }
+  if (payload.nextFollowUpDate) {
+    casePatch.follow_up_deadline = payload.nextFollowUpDate;
+  }
+  if (payload.paymentReported) {
+    casePatch.case_status = 'Payment Reported';
+    casePatch.next_required_action = 'Verify Payment';
+  }
+
+  const { error } = await supabase
+    .from('cancellation_cases')
+    .update(casePatch)
+    .eq('id', caseId);
+  throwIfError(error, 'updating the case after follow-up');
+}
+
+// ---------------------------------------------------------------------------
+// Writes — claim unassigned case (REQ-7.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Claims an unassigned cancellation case for the signed-in agent.
+ *
+ * Only works when the case has no current assignment (`assigned_to IS NULL`).
+ * Sets `assignment_source = 'claim'` to distinguish from manager assignments.
+ */
+export async function claimCancellationCase(caseId: string): Promise<CancellationCase> {
+  const actor = await requireActor('claim a cancellation');
+  const stored = await readCaseStatus(caseId, 'claim a cancellation');
+
+  if (stored.assigned_to !== null) {
+    reject('This cancellation is already assigned. Only unassigned cases may be claimed.');
+  }
+
+  const { data, error } = await getSupabase()
+    .from('cancellation_cases')
+    .update({
+      assigned_to: actor.id,
+      assignment_source: 'claim',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', caseId)
+    .is('assigned_to', null)
+    .select(CASE_LIST_COLUMNS)
+    .single();
+  throwIfError(error, 'claiming the cancellation');
+
+  await appendEvent(caseId, actor.id, CANCELLATION_EVENT_TYPES.caseAssigned, {
+    previous_assigned_to: null,
+    new_assigned_to: actor.id,
+    assignment_source: 'claim',
+  });
+
+  return data as unknown as CancellationCase;
+}
+
+// ---------------------------------------------------------------------------
 // Writes — the settings kill switch (Requirement 26.4)
 // ---------------------------------------------------------------------------
 

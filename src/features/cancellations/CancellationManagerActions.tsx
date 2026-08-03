@@ -393,6 +393,10 @@ export interface CancellationManagerActionsProps {
   /** Raised after each successful write so the container refetches. */
   onChanged?: (change: CancellationManagerChange) => void | Promise<void>;
   disabled?: boolean;
+  /** REQ-4.3: Open the import wizard externally (from the header Import button). */
+  importWizardOpen?: boolean;
+  /** Called when the externally-triggered import wizard should close. */
+  onImportWizardClose?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -549,6 +553,8 @@ export default function CancellationManagerActions({
   resolveProfileName,
   onChanged,
   disabled = false,
+  importWizardOpen = false,
+  onImportWizardClose,
 }: CancellationManagerActionsProps) {
   const isManager = isBroadManagerRole(role);
   const baseId = useId();
@@ -605,6 +611,17 @@ export default function CancellationManagerActions({
       mountedRef.current = false;
     };
   }, []);
+
+  // REQ-4.3: Open import wizard when triggered externally
+  useEffect(() => {
+    if (importWizardOpen && isManager && panel !== 'import') {
+      setPanel('import');
+      setStage('upload');
+    }
+    if (!importWizardOpen && panel === 'import' && onImportWizardClose) {
+      // External close request — only close if we haven't navigated away
+    }
+  }, [importWizardOpen, isManager]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const assigneeList = assigneesProp ?? loadedAssignees;
   const importRuns = importRunsProp ?? loadedRuns;
