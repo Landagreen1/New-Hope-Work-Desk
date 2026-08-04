@@ -223,14 +223,6 @@ export async function PATCH(request: Request) {
     const workMinutes = totalMinutes - (activeEntry.break_minutes || 0);
     const totalHours = Math.round((workMinutes / 60) * 100) / 100;
 
-    // Check if agent is currently on break before ending it
-    const { data: onBreak } = await supabase
-      .from("time_clock_breaks")
-      .select("id")
-      .eq("clock_entry_id", activeEntry.id)
-      .is("break_end", null)
-      .maybeSingle();
-
     // End any active breaks
     await supabase
       .from("time_clock_breaks")
@@ -245,11 +237,9 @@ export async function PATCH(request: Request) {
 
     if (error) return Response.json({ error: error.message }, { status: 400 });
 
-    // If the agent was on a break (desk status is 'break' from sync), set to unavailable
-    // so they don't remain in the rotation queue after leaving
-    if (onBreak) {
-      await supabase.rpc("set_my_availability", { p_status: "unavailable" });
-    }
+    // Always set to unavailable on clock-out — the agent is leaving for the day
+    // and must not remain in the rotation queue.
+    await supabase.rpc("set_my_availability", { p_status: "unavailable" });
 
     return Response.json({ success: true, total_hours: totalHours });
   }
