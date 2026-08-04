@@ -15,7 +15,7 @@
  * honoured it.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ui } from '../nhwd-shared-bridge';
 import { fetchRecords } from '../api';
@@ -195,37 +195,48 @@ export function RecordDrawer({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
-  const load = useCallback(
-    async (requestedPage: number) => {
-      if (target === null) return;
+  const metricId = target?.metricId ?? null;
+
+  /**
+   * Load whenever the metric, the filters or the page changes.
+   *
+   * The page is not reset here. The shell gives this component a key derived from the
+   * metric and the filters, so a new number remounts it with page 1 already set. Reaching
+   * for setPage inside an effect would mean a second render pass every time the drawer
+   * opened, for a value that was already correct.
+   */
+  useEffect(() => {
+    if (metricId === null) return;
+    let cancelled = false;
+    void (async () => {
       setLoading(true);
       setError(null);
       try {
         const result = await fetchRecords(
           filters,
-          target.metricId,
-          requestedPage,
+          metricId,
+          page,
           PAGE_SIZE,
           filters.sortColumn ?? 'created_at_desc',
         );
+        if (cancelled) return;
         setRows(result.rows);
         setTotalCount(result.totalCount);
       } catch (caught) {
+        if (cancelled) return;
         setError(caught instanceof Error ? caught.message : 'Unable to load these records.');
         setRows([]);
         setTotalCount(0);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    },
-    [filters, target],
-  );
-
-  useEffect(() => {
-    setPage(1);
-    void load(1);
-  }, [load]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [metricId, filters, page, reloadToken]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -278,7 +289,7 @@ export function RecordDrawer({
               {error}
               <button
                 type="button"
-                onClick={() => void load(page)}
+                onClick={() => setReloadToken((value) => value + 1)}
                 className="ml-3 underline"
               >
                 Retry
@@ -310,11 +321,7 @@ export function RecordDrawer({
             <button
               type="button"
               disabled={page <= 1 || loading}
-              onClick={() => {
-                const next = page - 1;
-                setPage(next);
-                void load(next);
-              }}
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
               className={ui.btnSecondary}
             >
               Previous
@@ -325,11 +332,7 @@ export function RecordDrawer({
             <button
               type="button"
               disabled={page >= lastPage || loading}
-              onClick={() => {
-                const next = page + 1;
-                setPage(next);
-                void load(next);
-              }}
+              onClick={() => setPage((value) => value + 1)}
               className={ui.btnSecondary}
             >
               Next

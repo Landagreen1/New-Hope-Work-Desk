@@ -57,7 +57,12 @@ import type {
   ReviewAction,
   SourceReportRow,
 } from './types';
-import { businessToday, parseReportUrl, writeReportUrl } from './url-state';
+import {
+  businessToday,
+  parseReportUrl,
+  toFilterPayload,
+  writeReportUrl,
+} from './url-state';
 
 const VIEW_LABELS: Record<ReportView, string> = {
   overview: 'Overview',
@@ -103,8 +108,14 @@ export function SalesReportingCenter({
   const [error, setError] = useState<string | null>(null);
   const [drawerTarget, setDrawerTarget] = useState<DrawerTarget | null>(null);
   const [drawerFilters, setDrawerFilters] = useState<ReportFilters>(filters);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const canReview = options?.can_manage_sales ?? false;
+
+  /**
+   * Guards against a slow earlier response overwriting a newer one. Every load stamps a
+   * token and discards its own result if another load has started since.
+   */
   const requestToken = useRef(0);
 
   /** Push a new filter state through the URL. The URL is the state. */
@@ -139,11 +150,12 @@ export function SalesReportingCenter({
     const token = ++requestToken.current;
     const timer = setTimeout(() => {
       void (async () => {
+        const active = filters;
         setLoading(true);
         setError(null);
         try {
-          if (filters.view === 'integrity') {
-            const flags = await fetchIntegrityFlags(filters, savedFilter, flagPage, 25);
+          if (active.view === 'integrity') {
+            const flags = await fetchIntegrityFlags(active, savedFilter, flagPage, 25);
             if (token !== requestToken.current) return;
             setFlagRows(flags.rows);
             setFlagTotal(flags.totalCount);
@@ -156,14 +168,14 @@ export function SalesReportingCenter({
               sources,
               afterHoursData,
             ] = await Promise.all([
-              fetchSummary(filters),
-              filters.mode === 'cohort'
-                ? fetchLifecycle(filters)
+              fetchSummary(active),
+              active.mode === 'cohort'
+                ? fetchLifecycle(active)
                 : Promise.resolve<LifecycleSummary>({ authorized: true }),
-              fetchNeedsAttention(filters),
-              fetchAgentRows(filters),
-              fetchSourceRows(filters),
-              fetchAfterHoursSummary(filters),
+              fetchNeedsAttention(active),
+              fetchAgentRows(active),
+              fetchSourceRows(active),
+              fetchAfterHoursSummary(active),
             ]);
             if (token !== requestToken.current) return;
             setSummary(summaryData);
@@ -183,26 +195,7 @@ export function SalesReportingCenter({
     }, FILTER_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    filters.view,
-    filters.mode,
-    filters.startDate,
-    filters.endDate,
-    filters.compareToPreviousPeriod,
-    filters.hoursSegment,
-    filters.afterHoursDimensions.join(','),
-    filters.agentProfileIds.join(','),
-    filters.dealerIds.join(','),
-    filters.salespersonIds.join(','),
-    filters.channels.join(','),
-    filters.quoteKinds.join(','),
-    filters.assignmentMethods.join(','),
-    filters.statuses.join(','),
-    filters.outcomes.join(','),
-    savedFilter,
-    flagPage,
-  ]);
+  }, [filters, savedFilter, flagPage, reloadToken]);
 
   function openDrawer(metricId: string, label: string, scoped: ReportFilters = filters) {
     const definition =
@@ -297,7 +290,7 @@ export function SalesReportingCenter({
           {error}
           <button
             type="button"
-            onClick={() => applyFilters({ ...filters })}
+            onClick={() => setReloadToken((value) => value + 1)}
             className="ml-3 underline"
           >
             Retry
@@ -381,7 +374,17 @@ export function SalesReportingCenter({
         </p>
       </section>
 
+      {/*
+        Keyed on the metric and the filters it was opened with, so opening a different
+        number remounts the drawer at page 1. That is why the drawer needs no effect to
+        reset its own pagination.
+      */}
       <RecordDrawer
+        key={
+          drawerTarget === null
+            ? 'no-drawer'
+            : `${drawerTarget.metricId}|${JSON.stringify(toFilterPayload(drawerFilters))}`
+        }
         target={drawerTarget}
         filters={drawerFilters}
         onClose={() => setDrawerTarget(null)}

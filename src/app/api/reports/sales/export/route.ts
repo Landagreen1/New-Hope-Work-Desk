@@ -263,7 +263,13 @@ export async function POST(request: Request) {
       const page = (data ?? []) as Array<Record<string, unknown>>;
       if (page.length === 0) break;
       total = Number(page[0].total_count ?? 0);
-      collected.push(...page.map(({ total_count: _ignored, ...rest }) => rest));
+      // total_count rides on every row for the on-screen pager; it is not a column of
+      // the export, so it is dropped rather than repeated on ten thousand lines.
+      for (const row of page) {
+        const withoutTotal: Record<string, unknown> = { ...row };
+        delete withoutTotal.total_count;
+        collected.push(withoutTotal);
+      }
       if (collected.length >= total) break;
     }
     return { rows: collected, truncated: total > MAX_RECORDS, total };
