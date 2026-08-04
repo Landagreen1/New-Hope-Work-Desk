@@ -153,8 +153,55 @@ const nonRcSourceTypeArb = fc.constantFrom(
   'web'
 );
 
+/**
+ * Columns on `CsIntakeSubmission` that this file's properties never read: the
+ * middle-name/walk-in pair plus the trucking, commercial GL, homeowners,
+ * non-owners, and commercial-card extension blocks.
+ *
+ * `fc.record` must supply every required property of `CsIntakeSubmission` or the
+ * resulting arbitrary is not assignable to `fc.Arbitrary<CsIntakeSubmission>`, so
+ * each one is pinned to its absent/default value. Pinning rather than generating
+ * keeps the generated input space of every property below exactly what it was: no
+ * assertion in this file reads any of these fields, and none of the simulated
+ * transitions branches on them.
+ */
+const unreadSubmissionColumnArbs = {
+  insured_middle_name: fc.constant(null),
+  is_walk_in: fc.constant(false),
+  // Trucking
+  mc_number: fc.constant(null),
+  mcs150_date: fc.constant(null),
+  cargo_type: fc.constant(null),
+  power_unit_count: fc.constant(null),
+  // Commercial GL
+  ein: fc.constant(null),
+  states_of_operation: fc.constant(null),
+  employee_count: fc.constant(null),
+  annual_payroll: fc.constant(null),
+  coverage_types_needed: fc.constant(null),
+  // Homeowners
+  property_address_street: fc.constant(null),
+  property_address_city: fc.constant(null),
+  property_address_state: fc.constant(null),
+  property_address_zip: fc.constant(null),
+  dwelling_type: fc.constant(null),
+  year_built: fc.constant(null),
+  square_footage: fc.constant(null),
+  roof_type: fc.constant(null),
+  roof_age: fc.constant(null),
+  coverage_amount: fc.constant(null),
+  prior_claims: fc.constant(false),
+  prior_claims_detail: fc.constant(null),
+  // Non-owners
+  sr22_filing_state: fc.constant(null),
+  court_order_date: fc.constant(null),
+  // Commercial card link
+  source_commercial_quote_id: fc.constant(null),
+};
+
 /** Generate a CsIntakeSubmission row representing a NON-RC intake in 'submitted' status */
 const nonRcSubmittedArb: fc.Arbitrary<CsIntakeSubmission> = fc.record({
+  ...unreadSubmissionColumnArbs,
   id: uuidArb,
   status: fc.constant('submitted' as CsIntakeStatus),
   priority: fc.constantFrom('normal' as const, 'high' as const, 'urgent' as const),
@@ -211,6 +258,7 @@ const nonRcSubmittedArb: fc.Arbitrary<CsIntakeSubmission> = fc.record({
 
 /** Generate a CsIntakeSubmission in 'claimed' status (post-claim, pre-convert) for non-RC */
 const nonRcClaimedArb: fc.Arbitrary<CsIntakeSubmission> = fc.record({
+  ...unreadSubmissionColumnArbs,
   id: uuidArb,
   status: fc.constant('claimed' as CsIntakeStatus),
   priority: fc.constantFrom('normal' as const, 'high' as const, 'urgent' as const),
@@ -267,6 +315,7 @@ const nonRcClaimedArb: fc.Arbitrary<CsIntakeSubmission> = fc.record({
 
 /** Generate a CsIntakeSubmission with varying work_item_id states for isRingcentralSource tests */
 const nonRcWithVaryingWorkItemArb: fc.Arbitrary<CsIntakeSubmission> = fc.record({
+  ...unreadSubmissionColumnArbs,
   id: uuidArb,
   status: fc.constantFrom('submitted' as CsIntakeStatus, 'claimed' as CsIntakeStatus, 'converted' as CsIntakeStatus),
   priority: fc.constantFrom('normal' as const, 'high' as const, 'urgent' as const),

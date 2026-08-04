@@ -18,7 +18,7 @@ describe('PBT Bug Condition: Quote Visibility Missing for Converted Intakes', ()
     id: uuidArb,
     status: fc.constant('converted' as const),
     work_item_id: uuidArb, // always set for converted intakes
-    converted_at: fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).map(d => d.toISOString()),
+    converted_at: fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31'), noInvalidDate: true }).map(d => d.toISOString()),
     insured_first_name: fc.string({ minLength: 1, maxLength: 20 }).filter(s => s.trim().length > 0),
     insured_last_name: fc.string({ minLength: 1, maxLength: 20 }).filter(s => s.trim().length > 0),
   });
