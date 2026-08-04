@@ -2,11 +2,50 @@
 
 Sales Reporting Center. Spec: `.kiro/specs/sales-reporting-center-redesign`.
 
-## Current state
+## Deploy record
 
-**The database changes are already live.** All eleven migrations were applied to project `kfbgftkjvtynfdwgcgeb` on 3 August 2026 and verified. This document is what a second environment needs, and what to do if the application deploy has to be undone.
+**Both halves are live.**
 
-**The application is not deployed.** The branch `feature/sales-reporting-center` is committed but not merged and not pushed. Nothing was deployed automatically.
+| | |
+| --- | --- |
+| Database | All eleven migrations applied to project `kfbgftkjvtynfdwgcgeb`, 3 August 2026 |
+| Application | `origin/main` fast-forwarded from `b34184c` to `6905e6e`, 4 August 2026 |
+| Branch | `origin/feature/sales-reporting-center` at the same commit, kept for review |
+
+Five commits went to `main`:
+
+```
+6905e6e  fix(reporting): clear every lint problem in the new code
+b485143  docs(reporting): record legacy comparison and evidence
+831066e  feat(reporting): add the Sales Reporting Center interface
+113c69a  feat(reporting): add sales reporting data layer
+b710413  feat(reporting): document sales metric definitions and credit rules
+```
+
+Pushed as `git push origin feature/sales-reporting-center:main`, a fast-forward. `origin/main` had not moved since the branch was cut, so nothing was merged and no history was rewritten. The push was done without checking out `main`, deliberately, so that unrelated uncommitted work in the tree could not be disturbed.
+
+Vercel builds on push to `main` through its GitHub integration, per Part 7 of `LIVE-DEPLOYMENT-GUIDE.md`.
+
+**No environment variable changes are needed.** The export route uses the same `createClient()` server helper as every other route, and `exceljs` and `pdfkit` are ordinary dependencies. Nothing new is read from the environment.
+
+### Verified after the push
+
+| Check | Result |
+| --- | --- |
+| `v1.12-reporting-checks.sql` | 17 of 17 PASS |
+| `v1.12-reporting-authorization-checks.sql` | 21 of 21 PASS |
+| Smoke: last 7 days, as a manager | 357 received, 306 priced, 4 awaiting pricing, **60 awaiting customer decision**, 157 sold, 170 not sold, 48% conversion, 9.3 min median |
+| Smoke: 11 agent rows, 136 source rows, 569 open flags, 6 working days | as expected |
+
+That **60** is worth noting: it is exactly the figure the legacy "Pending Pricing" card shows. The companion metric added in `v1.12.10` lands on the number managers already recognise, which is the outcome that change was for.
+
+### Not verified
+
+The deployed site itself was not requested. The production URL is configured in the Vercel dashboard and in the Supabase Site URL setting, not recorded in this repository, so there was nothing to check against without guessing at a hostname. Confirm in Vercel that the deployment for `6905e6e` succeeded, then sign in as a manager and check the five points under "Deploying the application" below.
+
+## Outstanding: no holidays are loaded
+
+`business_hours_closures` is empty. Until it is populated a holiday reads as an ordinary working day, and after-hours figures understate on those dates. See "Confirming business hours" below for the insert. This is the one known correctness gap in what is now live.
 
 ## Why applying the database first was safe
 
@@ -64,11 +103,18 @@ It is an upsert keyed on `(subject_kind, subject_id, signal_key)` and never writ
 
 ## Deploying the application
 
-1. Push the branch and open a pull request. **Do not push to `main`.**
-2. Confirm `npx tsc --noEmit`, `npm test` and `npm run build` on the branch.
-3. Confirm `serverExternalPackages: ['pdfkit', 'exceljs']` survived any merge. Without it the build fails on `fontkit`'s import of `applyDecoratedDescriptor` from `@swc/helpers`.
-4. Confirm `exceljs@4.4.0`, `pdfkit@0.15.2` and `@types/pdfkit@0.13.9` are in the lockfile at those exact versions.
-5. After deploying, sign in as a manager and check: the Reporting Center loads, a KPI opens its drawer, the record count in the drawer matches the KPI, and a Summary CSV export downloads with totals equal to the screen.
+Done for this environment; kept for the next one.
+
+1. Confirm `npx tsc --noEmit`, `npm run lint` over the feature directories, `npm test` and `npm run build` on the branch. If `next build` reports "Another next build process is already running", delete `.next` and rerun — a stale lock, not a failure.
+2. Confirm `serverExternalPackages: ['pdfkit', 'exceljs']` survived any merge. Without it the build fails on `fontkit`'s import of `applyDecoratedDescriptor` from `@swc/helpers`.
+3. Confirm `exceljs@4.4.0`, `pdfkit@0.15.2` and `@types/pdfkit@0.13.9` are in the lockfile at those exact versions.
+4. Push. Vercel builds from `main`.
+5. Sign in as a manager and check five things:
+   - **Sales → Reporting Center** loads on Overview with eight KPIs populated.
+   - Selecting a KPI opens the right-side drawer, and the drawer's total matches the KPI.
+   - **Sales → Legacy Reports** still lists all 24 views, each with a retention banner.
+   - **Review & Integrity** lists flags, and a supervisor can record a decision.
+   - **Export Current View → Summary CSV** downloads, and its totals equal the screen.
 
 ## Confirming business hours before anyone reads a report
 
@@ -176,7 +222,8 @@ commit;
 
 ## Not done, deliberately
 
-- The branch is not merged and not pushed.
-- No legacy report was removed. That needs explicit Manager_Role approval.
-- No holidays or closures were loaded.
-- Integrity detection was run once against live data to verify it; it is not scheduled.
+- **No legacy report was removed.** That needs explicit Manager_Role approval, per Requirements 1.2 and 20.3.
+- **No holidays or closures were loaded.** Which dates the office closes is a business decision, not one to infer.
+- **Integrity detection is not scheduled.** It was run once against live data to verify it, producing the 569 flags now in the queue. A manager refreshes it from the Review & Integrity view. Scheduling it would need a cron route like the renewals SMS scheduler already has.
+- **The duplicate-quote defect in `.kiro/specs/rc-claim-duplicate-quote-fix/` was not fixed.** This feature reports duplicates; it does not change the path that creates them.
+- **The claim RPCs were not changed to populate `turn_events.work_item_id`.** Doing so would switch queue reconciliation from the systemic finding to per-record flags with no reporting change, but it touches the queue rotation path, which is out of scope here and governed by its own rules.
