@@ -47,6 +47,9 @@ export type SubNavId =
   | "sales_overview"
   | "sales_work"
   | "sales_databases"
+  /** The Sales Reporting Center: Overview, Agents, Sources, Review & Integrity. */
+  | "sales_reporting_center"
+  /** The twenty-four original reports, retained unchanged for comparison. */
   | "sales_reports"
   // Sales Agent sub-tabs
   | "sales_desk"
@@ -147,7 +150,11 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
           { id: "sales_overview", label: "Overview", icon: ShieldCheck },
           { id: "sales_work", label: "Work & Pricing", icon: ClipboardList, badge: badges?.sales_work },
           { id: "sales_databases", label: "Databases", icon: Table2 },
-          { id: "sales_reports", label: "Reports", icon: BarChart3 },
+          { id: "sales_reporting_center", label: "Reporting Center", icon: BarChart3 },
+          // Retained until the new centre has been compared against these for a full
+          // reporting period. Spec: .kiro/specs/sales-reporting-center-redesign,
+          // Requirement 1.
+          { id: "sales_reports", label: "Legacy Reports", icon: Table2 },
         ]
       : isCS
         ? [

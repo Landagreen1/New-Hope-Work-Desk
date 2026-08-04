@@ -26,6 +26,7 @@ import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type { ProfileLite } from "@/features/nhwd-shared/types";
 import { NotificationPanel } from "@/features/notifications/NotificationPanel";
 import PolicyFollowUpPage from "@/features/renewals/PolicyFollowUpPage";
+import SalesReportingCenter from "@/features/reporting/SalesReportingCenter";
 import WorkloadLog from "@/features/workload/WorkloadLog";
 import { getRolePermissions, isBroadManagerRole } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
@@ -194,6 +195,19 @@ export function RoleWorkspace({
   // Determine what content to render based on sidebar navigation state
   const renderContent = () => {
     const { module, subNav } = activeNavigation;
+
+    // --- Sales Reporting Center ---
+    // Its own screen rather than another tab inside WorkDeskApp: that component is
+    // already 12,500 lines and holds the twenty-four legacy reports, and keeping the new
+    // centre out of it is the point of the redesign.
+    // Spec: .kiro/specs/sales-reporting-center-redesign, Requirement 2.5.
+    if (module === "sales" && subNav === "sales_reporting_center" && permissions.manageSales) {
+      return (
+        <Suspense fallback={<LoadingWorkspace label="Sales Reporting Center" />}>
+          <SalesReportingCenter initialProfile={profile} />
+        </Suspense>
+      );
+    }
 
     // --- Sales module: delegate to WorkDeskApp ---
     if (module === "sales" && permissions.sales) {

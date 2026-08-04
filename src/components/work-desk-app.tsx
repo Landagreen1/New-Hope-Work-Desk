@@ -69,6 +69,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
+import { legacyReportMapping } from "@/features/reporting/definitions";
 import DatePicker from "@/features/nhwd-shared/DatePicker";
 import DateTimePicker from "@/features/nhwd-shared/DateTimePicker";
 import type {
@@ -509,6 +510,17 @@ const reportNavigationGroups: ReportNavigationGroup[] = [
 const reportNavigationItems = reportNavigationGroups.flatMap(
   (group) => group.items,
 );
+
+/**
+ * Display names of the four Sales Reporting Center views, for the retention banner on
+ * each legacy report. Spec: .kiro/specs/sales-reporting-center-redesign, Requirement 1.4.
+ */
+const LEGACY_VIEW_LABELS: Record<string, string> = {
+  overview: "Overview",
+  agents: "Agents",
+  sources: "Sources",
+  integrity: "Review & Integrity",
+};
 type ManagerQuoteStage = "active" | "pending" | "finalized";
 type QuoteRecord = {
   id: string;
@@ -6310,6 +6322,17 @@ function ManagerView({
       group.items.some((item) => item.id === reportView),
     ) ?? reportNavigationGroups[0];
   const SelectedReportIcon = selectedReport.icon;
+  // Requirement 1.4: name the Sales Reporting Center view that supersedes this legacy
+  // one, or say that none does. The mapping is data in the reporting feature so the
+  // spec, the tests and this banner cannot disagree about it.
+  const legacyMapping = legacyReportMapping(selectedReport.id);
+  const legacySupersededBy =
+    legacyMapping?.supersededBy === undefined || legacyMapping.supersededBy === null
+      ? null
+      : LEGACY_VIEW_LABELS[legacyMapping.supersededBy];
+  const legacyRetentionReason =
+    legacyMapping?.retentionReason ??
+    "It has no direct replacement and is kept as-is.";
   const [quoteSearch, setQuoteSearch] = useState("");
   const [managerQuoteDay, setManagerQuoteDay] = useState(
     dateInputValue(new Date()),
@@ -6549,8 +6572,10 @@ function ManagerView({
       icon: <Table2 className="h-4 w-4" />,
     },
     {
+      // Retained for comparison against the Sales Reporting Center, which supersedes
+      // these views. Spec: .kiro/specs/sales-reporting-center-redesign, Requirement 1.
       id: "reports",
-      label: "Reports",
+      label: "Legacy Reports",
       icon: <BarChart3 className="h-4 w-4" />,
     },
   ];
@@ -8576,11 +8601,11 @@ function ManagerView({
               <div className="sticky top-5 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 p-5">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-                    Report Library
+                    Legacy Report Library
                   </p>
                   <div className="mt-1 flex items-end justify-between gap-3">
                     <h3 className="text-xl font-black text-slate-900">
-                      Choose a view
+                      Legacy views
                     </h3>
                     <span className="rounded-full bg-[#eef3fb] px-2.5 py-1 text-[10px] font-black text-[#223f7a]">
                       {reportNavigationItems.length} reports
@@ -8659,6 +8684,21 @@ function ManagerView({
                     </optgroup>
                   ))}
                 </select>
+              </div>
+
+              {/*
+                Requirement 1.4: every legacy view says it is retained for comparison
+                and names the view that supersedes it, or states that none does.
+              */}
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-800">
+                  Retained for comparison
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-6 text-amber-900">
+                  {legacySupersededBy === null
+                    ? `${selectedReport.label} has no replacement in the Sales Reporting Center. ${legacyRetentionReason}`
+                    : `${selectedReport.label} is superseded by the ${legacySupersededBy} view of the Sales Reporting Center. It stays here until both have been compared over a full reporting period.`}
+                </p>
               </div>
 
               <div className="rounded-[28px] border border-[#c9d5e9] bg-gradient-to-br from-white to-[#f3f6fb] p-5 shadow-sm sm:p-6">

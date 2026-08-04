@@ -276,3 +276,234 @@ export interface ReportFilters {
   page: number;
   pageSize: number;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  RPC response shapes                                                        */
+/* -------------------------------------------------------------------------- */
+
+export interface FilterOptions {
+  authorized: boolean;
+  can_manage_sales: boolean;
+  self_profile_id: string | null;
+  agents: Array<{
+    id: string;
+    name: string;
+    username: string;
+    role: string;
+    is_active: boolean;
+  }>;
+  dealers: Array<{ id: string; name: string; is_active: boolean }>;
+  /** Each salesperson carries its dealer so the two filters can be linked. */
+  salespeople: Array<{
+    id: string;
+    dealer_id: string;
+    name: string;
+    is_active: boolean;
+  }>;
+  channels: string[];
+  assignment_methods: string[];
+  statuses: string[];
+  outcomes: string[];
+}
+
+/** The eight KPIs over one window. A null rate is undefined, never zero. */
+export interface KpiWindow {
+  quotes_received: number;
+  pricing_sent: number;
+  pending_pricing: number;
+  sold: number;
+  not_sold: number;
+  finalized: number;
+  conversion_rate: number | null;
+  quote_to_sale_rate: number | null;
+  median_time_to_pricing_minutes: number | null;
+}
+
+export interface ReportSummary {
+  authorized: boolean;
+  mode?: ReportMode;
+  start_date?: string;
+  end_date?: string;
+  timezone?: string;
+  current?: KpiWindow;
+  previous?: KpiWindow | null;
+  compare?: boolean;
+}
+
+export interface LifecycleSummary {
+  authorized: boolean;
+  mode?: string;
+  received?: number;
+  accepted?: number;
+  priced?: number;
+  finalized?: number;
+  sold?: number;
+  not_sold?: number;
+  awaiting_customer_decision?: number;
+  still_pending_pricing?: number;
+  still_active?: number;
+  /** Returned so the caller can assert the invariant rather than trust it. */
+  states_sum_to_received?: boolean;
+}
+
+export interface NeedsAttentionRow {
+  condition_key: string;
+  label: string;
+  record_count: number;
+  severity: IntegritySeverity;
+}
+
+export interface AgentReportRow {
+  profile_id: string;
+  display_name: string;
+  username: string;
+  role: string;
+  quotes_received: number;
+  pricing_sent: number;
+  pending_pricing: number;
+  sold: number;
+  not_sold: number;
+  finalized: number;
+  conversion_rate: number | null;
+  manual_quotes: number;
+  manual_workloads: number;
+  after_hours_activity: number;
+  median_time_to_pricing_minutes: number | null;
+  new_quotes: number;
+  requotes: number;
+  intake_claims: number;
+  whatsapp_claims: number;
+  ringcentral_claims: number;
+  workload_queue_claims: number;
+  passes: number;
+  missed_turns: number;
+  recovered_quotes: number;
+  notes_coverage_percent: number | null;
+  follow_ups_overdue: number;
+  sold_without_pricing_evidence: number;
+  not_sold_without_reason: number;
+  scheduled_hours: number;
+  quotes_per_scheduled_hour: number | null;
+  sales_per_hundred_finalized: number | null;
+  manual_per_hundred_activities: number | null;
+  missed_turns_per_hundred_eligible: number | null;
+  /** The five populations, reported separately. Requirement 12.6. */
+  quotes_created: number;
+  quotes_claimed: number;
+  quotes_priced: number;
+  quotes_sales_credited: number;
+  quotes_outcome_entered: number;
+}
+
+export interface SourceReportRow {
+  dealer_id: string | null;
+  source_name: string;
+  quotes: number;
+  pricing_sent: number;
+  pending_pricing: number;
+  sold: number;
+  not_sold: number;
+  finalized: number;
+  conversion_rate: number | null;
+  median_time_to_pricing_minutes: number | null;
+  manual_quote_share_percent: number | null;
+  after_hours_share_percent: number | null;
+  missing_salesperson_count: number;
+  duplicate_count: number;
+  no_response_count: number;
+  median_days_pending: number | null;
+  source_change_count: number;
+}
+
+export interface QuoteRecordRow {
+  total_count: number;
+  quote_id: string;
+  customer_name: string | null;
+  dealer_name: string | null;
+  salesperson_name: string | null;
+  channel: string | null;
+  work_type: string | null;
+  is_requote: boolean;
+  assignment_method: string | null;
+  is_manual_quote: boolean;
+  is_cs_intake: boolean;
+  assigned_agent_name: string | null;
+  created_by_name: string | null;
+  claimed_by_name: string | null;
+  pricing_employee_name: string | null;
+  outcome_employee_name: string | null;
+  sales_credit_name: string | null;
+  created_at: string;
+  accepted_at: string | null;
+  first_pricing_sent_at: string | null;
+  finalized_at: string | null;
+  lifecycle_stage: string;
+  final_outcome: string | null;
+  not_sold_reason: string | null;
+  notes_count: number;
+  follow_up_count: number;
+  source_change_count: number;
+  salesperson_change_count: number;
+  received_after_hours: boolean;
+  worked_after_hours: boolean;
+  finalized_after_hours: boolean;
+  manual_entry_after_hours: boolean;
+  attribution_conflict: boolean;
+  finalized_without_pricing: boolean;
+  not_sold_without_reason: boolean;
+  minutes_to_pricing: number | null;
+}
+
+export interface AfterHoursSummary {
+  authorized: boolean;
+  quotes_received_after_hours?: number;
+  quotes_worked_after_hours?: number;
+  quotes_finalized_after_hours?: number;
+  manual_quotes_after_hours?: number;
+  manual_workloads_after_hours?: number;
+  after_hours_conversion_rate?: number | null;
+  median_wait_to_first_action_minutes?: number | null;
+  quotes_waiting_until_next_business_day?: number;
+  sources?: Array<{ source_name: string; quotes: number }>;
+  agents?: Array<{ agent_name: string; quotes: number }>;
+}
+
+export interface IntegrityFlagRow {
+  total_count: number;
+  id: string;
+  subject_kind: string;
+  subject_id: string;
+  signal_key: string;
+  flag_type: IntegrityFlagType;
+  severity: IntegritySeverity;
+  explanation: string;
+  evidence: Record<string, unknown>;
+  detected_on: string;
+  review_status: ReviewStatus;
+  reviewed_by: string | null;
+  reviewer_name: string | null;
+  reviewed_at: string | null;
+  /** Null for a reader without review rights. Requirement 19.4. */
+  manager_explanation: string | null;
+  resolution: string | null;
+  subject_label: string | null;
+  subject_agent_name: string | null;
+  review_count: number;
+}
+
+export type ReviewAction = 'Explained' | 'Confirmed Data Issue' | 'Dismissed' | 'Reopened';
+
+export interface ReconciliationRow {
+  metric: string;
+  new_value: number | null;
+  legacy_value: number | null;
+  difference: number | null;
+  note: string;
+}
+
+/** What the record drawer was opened from. */
+export interface DrawerTarget {
+  metricId: string;
+  label: string;
+  definition: string;
+}
