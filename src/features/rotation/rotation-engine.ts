@@ -47,6 +47,12 @@ export interface RotationProfile {
   whatsappPosition: number | null;
   ringcentralPosition: number | null;
   workloadPosition: number | null;
+  /**
+   * Authorized to take walk-in intakes (`profiles.can_claim_walk_in`, v1.11.0).
+   * Not part of rotation eligibility — a walk-in refusal happens before the
+   * rotation is touched, so this never changes who holds a turn.
+   */
+  canClaimWalkIn?: boolean;
 }
 
 export function rotationEnabled(

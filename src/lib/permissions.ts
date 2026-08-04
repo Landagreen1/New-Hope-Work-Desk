@@ -86,6 +86,28 @@ export function canAdministerUsers(role: AppRole): boolean {
   return isBroadManagerRole(role);
 }
 
+/** Any scoped supervisor. There is no bare "supervisor" role in this project. */
+export function isSupervisorRole(role: AppRole): boolean {
+  return (
+    role === "sales_supervisor" ||
+    role === "customer_service_supervisor" ||
+    role === "commercial_supervisor"
+  );
+}
+
+/**
+ * Operational SLA alerts (unclaimed personal intakes, suspiciously fast pricing).
+ * Managers, super admins, and supervisors only — these alerts are about agent
+ * behaviour and queue neglect, so agents and CS reps must not see them.
+ *
+ * Mirrors public.can_view_manager_alerts() in
+ * supabase/migrations/v1.11.1-manager-sla-alerts.sql, which is the enforcing
+ * check. This helper only decides whether to bother asking.
+ */
+export function canViewManagerAlerts(role: AppRole): boolean {
+  return isBroadManagerRole(role) || isSupervisorRole(role);
+}
+
 export function canAdministerAttendance(role: AppRole): boolean {
   return isSuperAdminRole(role);
 }

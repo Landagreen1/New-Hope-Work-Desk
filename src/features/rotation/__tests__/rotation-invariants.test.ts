@@ -816,6 +816,284 @@ describe("Customer Service Intake Queue claim (one atomic workflow)", () => {
     expect(after.rotations.ringcentral.currentProfileId).toBe("solo");
     expect(after.turnEvents[0].nextProfileId).toBe("solo");
   });
+
+  // ─── Walk-in customers (v1.11.0) ─────────────────────────────────────────
+  //
+  // Only the designated walk-in agents may take a walk-in intake. The gate is a
+  // pure rejection: it must never move a rotation, null a turn, create a work
+  // item, or make the queue unusable for non-walk-in intakes.
+  describe("walk-in intakes are restricted to the designated agents", () => {
+    function worldWithWalkIn(current: string | null, profiles: RotationProfile[]): World {
+      const w = worldWithIntake(profiles, current);
+      w.intakes[0].isWalkIn = true;
+      return w;
+    }
+
+    const walkInAgent = (
+      id: string,
+      position: number,
+      overrides: Partial<RotationProfile> = {},
+    ) => agent(id, position, { canClaimWalkIn: true, ...overrides });
+
+    it("an unauthorized agent holding the turn is refused and the rotation does not move", () => {
+      const before = worldWithWalkIn("a", [agent("a", 1), walkInAgent("b", 2)]);
+      const { world: after, error } = claimIntakeThroughQueue(before, {
+        actorId: "a",
+        intakeId: "intake-1",
+      });
+
+      expect(error?.message).toMatch(/walk-in/i);
+      expect(after.workItems).toHaveLength(0);
+      expect(after.turnEvents).toHaveLength(0);
+      expect(after.intakes[0].status).toBe("submitted");
+      expect(after.intakes[0].claimedBy).toBeNull();
+      expectNoRotationChanged(before, after);
+    });
+
+    it("an authorized agent holding the turn claims normally and advances once", () => {
+      const before = worldWithWalkIn("b", [agent("a", 1), walkInAgent("b", 2)]);
+      const { world: after, result, error } = claimIntakeThroughQueue(before, {
+        actorId: "b",
+        intakeId: "intake-1",
+      });
+
+      expect(error).toBeUndefined();
+      expect(after.intakes[0].status).toBe("converted");
+      expect(after.intakes[0].workItemId).toBe(result);
+      expect(after.workItems).toHaveLength(1);
+      expect(after.turnEvents).toHaveLength(1);
+      expect(after.rotations.ringcentral.currentProfileId).toBe("a");
+      expectOnlyRotationChanged(before, after, "ringcentral");
+    });
+
+    // ── v1.11.2: served out of turn, queue order untouched ──────────────────
+
+    it("an authorized agent takes a walk-in out of turn WITHOUT changing the queue", () => {
+      // The turn belongs to "a". "b" is authorized for walk-ins and takes it
+      // anyway, because the customer is standing in the office.
+      const before = worldWithWalkIn("a", [agent("a", 1), walkInAgent("b", 2)]);
+      const { world: after, result, error } = claimIntakeThroughQueue(before, {
+        actorId: "b",
+        intakeId: "intake-1",
+      });
+
+      expect(error).toBeUndefined();
+      expect(after.intakes[0].status).toBe("converted");
+      expect(after.intakes[0].claimedBy).toBe("b");
+      expect(after.workItems).toHaveLength(1);
+      expect(after.workItems[0]).toMatchObject({
+        assignedProfileId: "b",
+        assignmentMethod: "ringcentral_turn",
+        sourceIntakeId: "intake-1",
+      });
+
+      // The whole point: "a" still holds the turn, the version did not move, and
+      // no turn event was written.
+      expect(after.turnEvents).toHaveLength(0);
+      expectNoRotationChanged(before, after);
+      expect(result).toBe(after.workItems[0].id);
+    });
+
+    it("taking a walk-in out of turn does not skip or reorder anyone", () => {
+      const before = worldWithWalkIn("a", [
+        agent("a", 1),
+        walkInAgent("b", 2),
+        agent("c", 3),
+      ]);
+      const walkIn = claimIntakeThroughQueue(before, {
+        actorId: "b",
+        intakeId: "intake-1",
+      });
+      expect(walkIn.error).toBeUndefined();
+
+      // "a" now takes a normal intake. The turn must pass to "b" — exactly where
+      // it would have gone had the walk-in never happened.
+      walkIn.world.intakes.push({
+        id: "intake-2",
+        status: "submitted",
+        intakeChannel: "ringcentral",
+        claimedBy: null,
+        workItemId: null,
+      });
+      const normal = claimIntakeThroughQueue(walkIn.world, {
+        actorId: "a",
+        intakeId: "intake-2",
+      });
+
+      expect(normal.error).toBeUndefined();
+      expect(normal.world.rotations.ringcentral.currentProfileId).toBe("b");
+      expect(normal.world.turnEvents).toHaveLength(1);
+      expect(normal.world.turnEvents[0]).toMatchObject({
+        previousProfileId: "a",
+        nextProfileId: "b",
+      });
+    });
+
+    it("an out-of-turn walk-in claim is idempotent on retry", () => {
+      const before = worldWithWalkIn("a", [agent("a", 1), walkInAgent("b", 2)]);
+      const first = claimIntakeThroughQueue(before, {
+        actorId: "b",
+        intakeId: "intake-1",
+      });
+      const retry = claimIntakeThroughQueue(first.world, {
+        actorId: "b",
+        intakeId: "intake-1",
+      });
+
+      expect(retry.error).toBeUndefined();
+      expect(retry.result).toBe(first.result);
+      expect(retry.world.workItems).toHaveLength(1);
+      expect(retry.world.turnEvents).toHaveLength(0);
+      expectNoRotationChanged(before, retry.world);
+    });
+
+    it("rotation membership is not required to take a walk-in out of turn", () => {
+      // RingCentral switched off, so this agent can never be the turn holder.
+      // They must still be able to serve a walk-in, and still change nothing.
+      const before = worldWithWalkIn("a", [
+        agent("a", 1),
+        walkInAgent("b", 2, { ringcentralActive: false }),
+      ]);
+      const { world: after, error } = claimIntakeThroughQueue(before, {
+        actorId: "b",
+        intakeId: "intake-1",
+      });
+
+      expect(error).toBeUndefined();
+      expect(after.workItems).toHaveLength(1);
+      expect(after.turnEvents).toHaveLength(0);
+      expectNoRotationChanged(before, after);
+    });
+
+    it("an unavailable walk-in agent is still refused", () => {
+      const before = worldWithWalkIn("a", [
+        agent("a", 1),
+        walkInAgent("b", 2, { availability: "unavailable" }),
+      ]);
+      const { world: after, error } = claimIntakeThroughQueue(before, {
+        actorId: "b",
+        intakeId: "intake-1",
+      });
+
+      expect(error?.message).toMatch(/available/i);
+      expect(after.workItems).toHaveLength(0);
+      expect(after.intakes[0].status).toBe("submitted");
+      expectNoRotationChanged(before, after);
+    });
+
+    it("a walk-in claimed while holding the turn consumes it exactly once, even with three agents", () => {
+      const before = worldWithWalkIn("b", [
+        agent("a", 1),
+        walkInAgent("b", 2),
+        agent("c", 3),
+      ]);
+      const { world: after, error } = claimIntakeThroughQueue(before, {
+        actorId: "b",
+        intakeId: "intake-1",
+      });
+
+      expect(error).toBeUndefined();
+      expect(after.turnEvents).toHaveLength(1);
+      expect(after.rotations.ringcentral.currentProfileId).toBe("c");
+      expectOnlyRotationChanged(before, after, "ringcentral");
+    });
+
+    it("a refused walk-in leaves the queue usable for the next normal intake", () => {
+      const before = worldWithWalkIn("a", [agent("a", 1), walkInAgent("b", 2)]);
+      before.intakes.push({
+        id: "intake-2",
+        status: "submitted",
+        intakeChannel: "ringcentral",
+        claimedBy: null,
+        workItemId: null,
+      });
+
+      const refused = claimIntakeThroughQueue(before, {
+        actorId: "a",
+        intakeId: "intake-1",
+      });
+      expect(refused.error).toBeDefined();
+
+      const allowed = claimIntakeThroughQueue(refused.world, {
+        actorId: "a",
+        intakeId: "intake-2",
+      });
+      expect(allowed.error).toBeUndefined();
+      expect(allowed.world.turnEvents).toHaveLength(1);
+      expect(allowed.world.rotations.ringcentral.currentProfileId).toBe("b");
+    });
+
+    it("a double-clicked refusal is still a no-op", () => {
+      let world = worldWithWalkIn("a", [agent("a", 1), walkInAgent("b", 2)]);
+      const original = world;
+      for (let i = 0; i < 4; i++) {
+        const res = claimIntakeThroughQueue(world, {
+          actorId: "a",
+          intakeId: "intake-1",
+        });
+        expect(res.error).toBeDefined();
+        world = res.world;
+      }
+      expect(world.workItems).toHaveLength(0);
+      expect(world.turnEvents).toHaveLength(0);
+      expectNoRotationChanged(original, world);
+    });
+
+    it("a retry after a successful walk-in claim returns the same work item", () => {
+      const before = worldWithWalkIn("b", [agent("a", 1), walkInAgent("b", 2)]);
+      const first = claimIntakeThroughQueue(before, {
+        actorId: "b",
+        intakeId: "intake-1",
+      });
+      const retry = claimIntakeThroughQueue(first.world, {
+        actorId: "b",
+        intakeId: "intake-1",
+      });
+
+      expect(retry.error).toBeUndefined();
+      expect(retry.result).toBe(first.result);
+      expect(retry.world.workItems).toHaveLength(1);
+      expect(retry.world.turnEvents).toHaveLength(1);
+      expect(retry.world.rotations.ringcentral.version).toBe(
+        first.world.rotations.ringcentral.version,
+      );
+    });
+
+    it("manager assignment of a walk-in must target an authorized agent", () => {
+      const before = worldWithWalkIn("a", [agent("a", 1), walkInAgent("b", 2)]);
+
+      const refused = managerAssignIntake(before, {
+        actorId: "mgr",
+        intakeId: "intake-1",
+        targetAgentId: "a",
+      });
+      expect(refused.error?.message).toMatch(/walk-in/i);
+      expect(refused.world.intakes[0].status).toBe("submitted");
+      expectNoRotationChanged(before, refused.world);
+
+      const allowed = managerAssignIntake(before, {
+        actorId: "mgr",
+        intakeId: "intake-1",
+        targetAgentId: "b",
+      });
+      expect(allowed.error).toBeUndefined();
+      expect(allowed.world.intakes[0].claimedBy).toBe("b");
+      expect(allowed.world.intakes[0].intakeChannel).toBe("manual");
+      // Assignment is never a turn-consuming action, walk-in or not.
+      expectNoRotationChanged(before, allowed.world);
+    });
+
+    it("non-walk-in intakes are unaffected by the gate", () => {
+      const before = worldWithIntake([agent("a", 1), agent("b", 2)], "a");
+      const { world: after, error } = claimIntakeThroughQueue(before, {
+        actorId: "a",
+        intakeId: "intake-1",
+      });
+      expect(error).toBeUndefined();
+      expect(after.turnEvents).toHaveLength(1);
+      expectOnlyRotationChanged(before, after, "ringcentral");
+    });
+  });
 });
 
 // ─── Manual quote / requote stays a parallel workflow ───────────────────────

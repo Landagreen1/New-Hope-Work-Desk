@@ -55,8 +55,17 @@ import {
   APP_ROLES,
   canAdministerUsers,
   canManageSales,
+  canViewManagerAlerts,
   roleLabel,
 } from "@/lib/permissions";
+import {
+  FAST_PRICE_SLA_MINUTES,
+  INTAKE_CLAIM_SLA_MINUTES,
+  listManagerSlaAlerts,
+  managerAlertHeadline,
+  type ManagerAlertKind,
+  type ManagerSlaAlert,
+} from "@/features/manager-alerts/api";
 import { createClient } from "@/lib/supabase/client";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
 import IntakeQueue from "@/features/cs-intake/IntakeQueue";
@@ -6369,6 +6378,76 @@ function ManagerView({
       : []),
   ];
 
+  // ── Red SLA alerts (managers and supervisors only) ────────────────────────
+  //
+  // Both rules are evaluated server-side by public.manager_sla_alerts() so the
+  // 15-minute and 7-minute windows stay correct without a ticking clock in the
+  // browser, and so an agent who calls the RPC directly is refused. `managerNow`
+  // above stays frozen on purpose — it feeds the report memos, which are
+  // expensive to recompute.
+  const canSeeSlaAlerts = canViewManagerAlerts(actorRole);
+  const [slaAlerts, setSlaAlerts] = useState<ManagerSlaAlert[]>([]);
+  const [slaAlertError, setSlaAlertError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // `actorRole` comes from the session and cannot change while mounted, so
+    // there is nothing to clear on the false branch — the state simply stays
+    // empty for anyone who is not a manager or supervisor.
+    if (!canSeeSlaAlerts) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const rows = await listManagerSlaAlerts();
+        if (cancelled) return;
+        setSlaAlerts(rows);
+        setSlaAlertError(null);
+      } catch (caught) {
+        if (cancelled) return;
+        setSlaAlertError(
+          caught instanceof Error
+            ? caught.message
+            : "Unable to load operational alerts.",
+        );
+      }
+    };
+    void load();
+    const interval = window.setInterval(() => void load(), 60_000);
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [canSeeSlaAlerts]);
+
+  const slaAlertGroups = useMemo(() => {
+    const groups: Array<{
+      kind: ManagerAlertKind;
+      title: string;
+      why: string;
+      rows: ManagerSlaAlert[];
+    }> = [
+      {
+        kind: "unclaimed_personal_intake",
+        title: "Personal intake not claimed",
+        why: `Submitted more than ${INTAKE_CLAIM_SLA_MINUTES} minutes ago and still unassigned.`,
+        rows: slaAlerts.filter(
+          (alert) => alert.alert_kind === "unclaimed_personal_intake",
+        ),
+      },
+      {
+        kind: "fast_price_sent",
+        title: "Price sent too fast",
+        why: `Price was sent less than ${FAST_PRICE_SLA_MINUTES} minutes after the quote was created. Last 24 hours.`,
+        rows: slaAlerts.filter((alert) => alert.alert_kind === "fast_price_sent"),
+      },
+    ];
+    return groups.filter((group) => group.rows.length > 0);
+  }, [slaAlerts]);
+
   const quoteRecords = useMemo(
     () =>
       buildQuoteRecords(
@@ -7655,41 +7734,167 @@ function ManagerView({
             <button onClick={onOpenAssignQuote} className="inline-flex items-center gap-2 rounded-xl bg-[#223f7a] px-4 py-2.5 text-xs font-black text-white hover:bg-[#17305f]"><UserPlus className="h-4 w-4" />Create & Assign</button>
           </section>
 
-          <details className="rounded-[28px] border border-amber-200 bg-amber-50 shadow-sm">
+          <details
+            open={slaAlerts.length > 0}
+            className={cn(
+              "rounded-[28px] shadow-sm",
+              slaAlerts.length
+                ? "border-2 border-red-300 bg-red-50"
+                : "border border-amber-200 bg-amber-50",
+            )}
+          >
             <summary className="cursor-pointer list-none p-5 [&::-webkit-details-marker]:hidden">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <Bell className="mt-0.5 h-5 w-5 text-amber-700" />
+                  {slaAlerts.length ? (
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 animate-pulse text-red-600" />
+                  ) : (
+                    <Bell className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                  )}
                   <div>
-                    <p className="font-black text-amber-950">Manager alerts</p>
-                    <p className="mt-1 text-xs font-semibold text-amber-700">
-                      {managerAlerts.length
-                        ? `${managerAlerts.length} item${managerAlerts.length === 1 ? "" : "s"} need review. Click to expand.`
-                        : "No operational alerts right now."}
+                    <p
+                      className={cn(
+                        "font-black",
+                        slaAlerts.length ? "text-red-950" : "text-amber-950",
+                      )}
+                    >
+                      Manager alerts
+                    </p>
+                    <p
+                      className={cn(
+                        "mt-1 text-xs font-semibold",
+                        slaAlerts.length ? "text-red-700" : "text-amber-700",
+                      )}
+                    >
+                      {slaAlerts.length
+                        ? `${slaAlerts.length} critical item${slaAlerts.length === 1 ? "" : "s"} need immediate attention${managerAlerts.length ? ` · ${managerAlerts.length} routine` : ""}.`
+                        : managerAlerts.length
+                          ? `${managerAlerts.length} item${managerAlerts.length === 1 ? "" : "s"} need review. Click to expand.`
+                          : "No operational alerts right now."}
                     </p>
                   </div>
                 </div>
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/70 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 ring-1 ring-amber-200">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                  Live
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  {slaAlerts.length ? (
+                    <span className="inline-flex items-center gap-2 rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white">
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                      {slaAlerts.length} Critical
+                    </span>
+                  ) : null}
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-2 rounded-full bg-white/70 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 ring-1",
+                      slaAlerts.length ? "ring-red-200" : "ring-amber-200",
+                    )}
+                  >
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                    Live
+                  </span>
+                </div>
               </div>
             </summary>
-            <div className="border-t border-amber-200 px-5 pb-5">
+            <div
+              className={cn(
+                "border-t px-5 pb-5",
+                slaAlerts.length ? "border-red-200" : "border-amber-200",
+              )}
+            >
+              {slaAlertError ? (
+                <p className="mt-4 rounded-2xl border border-red-200 bg-white/80 p-3 text-xs font-bold text-red-700">
+                  {slaAlertError}
+                </p>
+              ) : null}
+
+              {/* Critical: server-evaluated SLA breaches. Managers and supervisors only. */}
+              {slaAlertGroups.map((group) => (
+                <section key={group.kind} className="mt-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-red-800">
+                      {group.title} · {group.rows.length}
+                    </p>
+                    <p className="text-[11px] font-semibold text-red-600">
+                      {group.why}
+                    </p>
+                  </div>
+                  <ul className="mt-2 grid max-h-72 gap-2 overflow-y-auto pr-1">
+                    {group.rows.map((alert) => (
+                      <li
+                        key={alert.alert_key}
+                        className="flex flex-wrap items-start gap-x-3 gap-y-1 rounded-2xl border border-red-200 bg-white p-3"
+                      >
+                        <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-black text-slate-900">
+                            {alert.customer_name}
+                            {alert.agent_name ? (
+                              <span className="ml-2 text-xs font-bold text-slate-500">
+                                {alert.alert_kind === "fast_price_sent"
+                                  ? alert.agent_name
+                                  : `Next up: ${alert.agent_name}`}
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="mt-0.5 text-xs font-bold text-red-700">
+                            {managerAlertHeadline(alert)}
+                          </p>
+                          {alert.detail ? (
+                            <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                              {alert.detail} ·{" "}
+                              {new Date(alert.occurred_at).toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          ) : null}
+                        </div>
+                        {alert.source_work_item_id ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onOpenQuoteLog(alert.source_work_item_id!)
+                            }
+                            className="shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-black text-red-700 hover:bg-red-100"
+                          >
+                            <FileText className="mr-1 inline h-3.5 w-3.5" />
+                            Log
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+
+              {/* Routine workload signals. Unchanged. */}
               {managerAlerts.length ? (
-                <ul className="mt-4 grid gap-3 text-sm font-semibold text-amber-900 md:grid-cols-2">
-                  {managerAlerts.map((alert) => (
-                    <li key={alert} className="flex gap-2 rounded-2xl bg-white/65 p-3">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                      {alert}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
+                <>
+                  {slaAlertGroups.length ? (
+                    <p className="mt-5 text-xs font-black uppercase tracking-[0.14em] text-amber-800">
+                      Routine · {managerAlerts.length}
+                    </p>
+                  ) : null}
+                  <ul className="mt-2 grid gap-3 text-sm font-semibold text-amber-900 md:grid-cols-2">
+                    {managerAlerts.map((alert) => (
+                      <li
+                        key={alert}
+                        className={cn(
+                          "flex gap-2 rounded-2xl p-3",
+                          slaAlerts.length ? "bg-amber-50" : "bg-white/65",
+                        )}
+                      >
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                        {alert}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : !slaAlertGroups.length && !slaAlertError ? (
                 <p className="mt-4 rounded-2xl bg-white/65 p-4 text-sm font-bold text-emerald-700">
                   No operational alerts right now.
                 </p>
-              )}
+              ) : null}
             </div>
           </details>
 

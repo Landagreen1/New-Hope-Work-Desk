@@ -235,6 +235,42 @@ export default function IntakeQueue({
   const canManageCs = canManageCustomerService(profile.role) || canManageSales(profile.role);
   const canClaimRc = isCurrentRcAgent;
 
+  // ── Walk-in eligibility ───────────────────────────────────────────────────
+  //
+  // Walk-in customers (row.is_walk_in) are handled only by the designated
+  // walk-in agents. The rule is enforced server-side inside cs_intake_claim,
+  // cs_intake_claim_ringcentral, and cs_intake_manager_assign; the gating below
+  // exists so an agent sees a disabled button with the reason instead of
+  // discovering it through a failed claim.
+  const walkInClaimers = useMemo(
+    () => allProfiles.filter((candidate) => candidate.can_claim_walk_in === true),
+    [allProfiles],
+  );
+  const walkInClaimerNames = useMemo(
+    () =>
+      walkInClaimers.length
+        ? walkInClaimers.map((candidate) => candidate.display_name).join(' or ')
+        : 'the designated walk-in agents',
+    [walkInClaimers],
+  );
+  const canClaimWalkIn = useMemo(
+    () => walkInClaimers.some((candidate) => candidate.id === profile.id),
+    [walkInClaimers, profile.id],
+  );
+  /** True when the current user is allowed to take this specific row. */
+  const mayClaimRow = useCallback(
+    (row: CsIntakeSubmission) => !row.is_walk_in || canClaimWalkIn,
+    [canClaimWalkIn],
+  );
+  /** Agents a manager may route this row to. */
+  const assignableAgents = useCallback(
+    (row: CsIntakeSubmission) =>
+      row.is_walk_in
+        ? agents.filter((agent) => agent.can_claim_walk_in === true)
+        : agents,
+    [agents],
+  );
+
   // Resolve RC turn holder display name
   const rcTurnHolderName = useMemo(() => {
     if (!rcTurnHolderId) return 'Not assigned';
@@ -297,9 +333,14 @@ export default function IntakeQueue({
   }
 
   async function handleClaimRc(row: CsIntakeSubmission) {
+    // A walk-in taken out of turn does not consume the RingCentral turn, so say
+    // so rather than reporting an advance that did not happen (v1.11.2).
+    const consumesTurn = !row.is_walk_in || isCurrentRcAgent;
     await action(row.id, async () => {
       await claimRingcentralQueueIntake(row.id);
-    }, 'RingCentral intake claimed. Your active quote was created and the turn advanced.');
+    }, consumesTurn
+      ? 'RingCentral intake claimed. Your active quote was created and the turn advanced.'
+      : `Walk-in claimed. Your active quote was created and the RingCentral queue order did not change — ${rcTurnHolderName} still has the turn.`);
   }
 
   async function handleClaimGeneral(row: CsIntakeSubmission) {
@@ -475,6 +516,14 @@ export default function IntakeQueue({
                 const hasLinkedQuote = Boolean(row.converted_at);
                 // Req 24.6: If intake already has a linked quote, don't allow duplicate assignment
                 const canAssign = canManageCs && row.status === 'submitted' && !hasLinkedQuote;
+                // v1.11.2: a walk-in customer is in the office, so an authorized
+                // walk-in agent takes them whether or not it is their turn. It
+                // only consumes their RingCentral turn when it actually is.
+                // Restricted to `agent` here because cs_intake_claim_ringcentral
+                // requires is_agent(); a flagged supervisor would be rejected
+                // server-side, so the button must not be offered.
+                const isWalkInTakeable = row.is_walk_in && canClaimWalkIn && profile.role === 'agent';
+                const walkInOutOfTurn = isWalkInTakeable && isRc && !isCurrentRcAgent;
 
                 return (
                   <tr key={row.id} className={`hover:bg-[#f8faff] ${isDeleted ? 'opacity-60' : ''}`}>
@@ -611,20 +660,44 @@ export default function IntakeQueue({
                           </button>
                         ) : null}
 
-                        {/* RC-sourced unclaimed: claim only if current RC turn holder or manager */}
-                        {isRc && row.status === 'submitted' && canClaimRc && !isDeleted ? (
+                        {/* Walk-in row the current user is not authorized to take */}
+                        {row.status === 'submitted' && !isDeleted && row.is_walk_in && !canClaimWalkIn
+                          && (profile.role === 'agent' || profile.role === 'sales_supervisor') ? (
                           <button
                             type="button"
                             className={ui.btnPrimary}
-                            disabled={busyId === row.id}
-                            onClick={() => void handleClaimRc(row)}
+                            disabled
+                            title={`Walk-in customer. Only ${walkInClaimerNames} can take walk-in intakes.`}
                           >
-                            <UserCheck className="h-4 w-4" />Claim
+                            <UserCheck className="h-4 w-4" />Walk-in only
                           </button>
                         ) : null}
 
-                        {/* RC-sourced unclaimed but NOT current turn: show disabled */}
-                        {isRc && row.status === 'submitted' && !canClaimRc && !canManageCs && !isDeleted ? (
+                        {/* RC-sourced unclaimed: the current turn holder, or an
+                            authorized walk-in agent regardless of turn. */}
+                        {isRc && row.status === 'submitted' && !isDeleted
+                          && (isWalkInTakeable || (canClaimRc && mayClaimRow(row))) ? (
+                          <button
+                            type="button"
+                            className={walkInOutOfTurn ? ui.btnSecondary : ui.btnPrimary}
+                            disabled={busyId === row.id}
+                            title={
+                              walkInOutOfTurn
+                                ? `Walk-in customer. You can take this now even though it is ${rcTurnHolderName}'s turn — the RingCentral queue order will not change.`
+                                : row.is_walk_in
+                                  ? 'Walk-in customer. This is your turn, so claiming it will advance the RingCentral queue.'
+                                  : undefined
+                            }
+                            onClick={() => void handleClaimRc(row)}
+                          >
+                            <UserCheck className="h-4 w-4" />{walkInOutOfTurn ? 'Claim walk-in' : 'Claim'}
+                          </button>
+                        ) : null}
+
+                        {/* RC-sourced unclaimed but NOT current turn: show disabled.
+                            Walk-ins never land here — they are takeable out of turn. */}
+                        {isRc && row.status === 'submitted' && !canClaimRc && !canManageCs && !isDeleted
+                          && !row.is_walk_in && mayClaimRow(row) ? (
                           <button
                             type="button"
                             className={ui.btnPrimary}
@@ -636,7 +709,7 @@ export default function IntakeQueue({
                         ) : null}
 
                         {/* Non-RC unclaimed: agents and sales_supervisors can claim */}
-                        {!isRc && row.status === 'submitted' && (profile.role === 'agent' || profile.role === 'sales_supervisor') && !isDeleted ? (
+                        {!isRc && row.status === 'submitted' && (profile.role === 'agent' || profile.role === 'sales_supervisor') && !isDeleted && mayClaimRow(row) ? (
                           <button
                             type="button"
                             className={ui.btnPrimary}
@@ -658,11 +731,16 @@ export default function IntakeQueue({
                           </button>
                         ) : null}
 
-                        {/* Manager: Assign */}
+                        {/* Manager: Assign. Walk-in rows only list the authorized walk-in agents. */}
                         {canAssign ? (
-                          <select className="rounded-xl border border-[#c9d5e9] bg-white px-3 py-2 text-xs font-black text-[#223f7a]" defaultValue="" onChange={(event) => void assign(row, event.target.value)}>
-                            <option value="" disabled>Assign to…</option>
-                            {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.display_name}</option>)}
+                          <select
+                            className="rounded-xl border border-[#c9d5e9] bg-white px-3 py-2 text-xs font-black text-[#223f7a]"
+                            defaultValue=""
+                            title={row.is_walk_in ? `Walk-in customer. Only ${walkInClaimerNames} can take walk-in intakes.` : undefined}
+                            onChange={(event) => void assign(row, event.target.value)}
+                          >
+                            <option value="" disabled>{row.is_walk_in ? 'Assign walk-in to…' : 'Assign to…'}</option>
+                            {assignableAgents(row).map((agent) => <option key={agent.id} value={agent.id}>{agent.display_name}</option>)}
                           </select>
                         ) : null}
 
@@ -703,12 +781,37 @@ export default function IntakeQueue({
               <>
                 <IntakeForm profileId={profile.id} initial={selected} readOnly onDone={closeModal} />
                 <div className="sticky bottom-4 flex flex-wrap justify-end gap-2 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
-                  {/* RC claim in modal */}
-                  {isRingcentralSource(selected.submission) && selected.submission.status === 'submitted' && canClaimRc ? (
-                    <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void handleClaimRc(selected.submission)}><UserCheck className="h-4 w-4" />Claim Intake</button>
+                  {/* Walk-in the current user is not authorized to take */}
+                  {selected.submission.status === 'submitted' && selected.submission.is_walk_in && !canClaimWalkIn
+                    && (profile.role === 'agent' || profile.role === 'sales_supervisor') ? (
+                    <button
+                      className={ui.btnPrimary}
+                      disabled
+                      title={`Walk-in customer. Only ${walkInClaimerNames} can take walk-in intakes.`}
+                    >
+                      <UserCheck className="h-4 w-4" />Walk-in only
+                    </button>
+                  ) : null}
+                  {/* RC claim in modal: the turn holder, or an authorized walk-in
+                      agent regardless of turn (v1.11.2). */}
+                  {isRingcentralSource(selected.submission) && selected.submission.status === 'submitted'
+                    && ((selected.submission.is_walk_in && canClaimWalkIn && profile.role === 'agent') || (canClaimRc && mayClaimRow(selected.submission))) ? (
+                    <button
+                      className={ui.btnPrimary}
+                      disabled={busyId === selected.submission.id}
+                      title={
+                        selected.submission.is_walk_in && !isCurrentRcAgent
+                          ? `Walk-in customer. Taking this now will not change the RingCentral queue order (${rcTurnHolderName} keeps the turn).`
+                          : undefined
+                      }
+                      onClick={() => void handleClaimRc(selected.submission)}
+                    >
+                      <UserCheck className="h-4 w-4" />
+                      {selected.submission.is_walk_in && !isCurrentRcAgent ? 'Claim Walk-in' : 'Claim Intake'}
+                    </button>
                   ) : null}
                   {/* General claim in modal */}
-                  {!isRingcentralSource(selected.submission) && selected.submission.status === 'submitted' && (profile.role === 'agent' || profile.role === 'sales_supervisor') ? (
+                  {!isRingcentralSource(selected.submission) && selected.submission.status === 'submitted' && (profile.role === 'agent' || profile.role === 'sales_supervisor') && mayClaimRow(selected.submission) ? (
                     <button className={ui.btnPrimary} disabled={busyId === selected.submission.id} onClick={() => void handleClaimGeneral(selected.submission)}><UserCheck className="h-4 w-4" />Claim Intake</button>
                   ) : null}
                   {(selected.submission.claimed_by === profile.id || canManageCs) && selected.submission.status === 'claimed' ? (

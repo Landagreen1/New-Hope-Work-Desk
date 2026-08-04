@@ -24,6 +24,14 @@ export interface ProfileLite {
   initials: string;
   role: AppRole;
   is_active: boolean;
+  /**
+   * Authorized to take walk-in Customer Service intakes
+   * (`cs_intake_submissions.is_walk_in`). Enforced server-side by
+   * public.profile_can_claim_walk_in() — see
+   * supabase/migrations/v1.11.0-walk-in-claim-eligibility.sql. Optional here
+   * because some callers build a ProfileLite from a narrower select.
+   */
+  can_claim_walk_in?: boolean;
 }
 
 // Re-export status types from quotes feature for shared access

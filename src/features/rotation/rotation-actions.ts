@@ -57,6 +57,11 @@ export interface Intake {
   intakeChannel: "ringcentral" | "manual";
   claimedBy: string | null;
   workItemId: string | null;
+  /**
+   * Customer is physically in the office (`cs_intake_submissions.is_walk_in`).
+   * Only profiles with `canClaimWalkIn` may take these — see v1.11.0.
+   */
+  isWalkIn?: boolean;
 }
 
 /** Everything a transaction may read or write. */
@@ -362,6 +367,17 @@ export function claimIntakeThroughQueue(
       );
     }
 
+    // v1.11.0 walk-in gate. Placed after the idempotency return (a retry of a
+    // committed walk-in claim still succeeds) and before the rotation is read,
+    // so a refusal cannot move, null, or otherwise disturb the turn.
+    const isWalkIn = intake.isWalkIn === true;
+    const caller = draft.profiles.find((p) => p.id === opts.actorId);
+    if (isWalkIn && !caller?.canClaimWalkIn) {
+      throw new RotationError(
+        "This is a walk-in customer. Only the designated walk-in agents can take it",
+      );
+    }
+
     const recovering =
       intake.status === "claimed" &&
       intake.claimedBy === opts.actorId &&
@@ -371,11 +387,46 @@ export function claimIntakeThroughQueue(
       throw new RotationError("This intake is no longer available to claim");
     }
 
-    const me = requireCaller(draft, opts.actorId, "ringcentral");
-    applyEnsureValid(draft, "ringcentral", opts.actorId);
+    // v1.11.2: a walk-in customer is physically present, so an authorized agent
+    // takes them regardless of whose turn it is. Two consequences:
+    //
+    //   * Rotation membership (`ringcentralActive`) is not required, because an
+    //     out-of-turn claim does not use the rotation. Only being clocked in is.
+    //   * `ensureRotationValid` is deliberately NOT run on the walk-in path. The
+    //     SQL does not call it either — it only locks and reads rotation_state —
+    //     and running it here could self-heal the turn to a different agent,
+    //     which would be a queue change on a claim that must produce none.
+    let me: RotationProfile;
+    let consumesTurn: boolean;
 
-    if (draft.rotations.ringcentral.currentProfileId !== me.id) {
-      throw new RotationError("This queue turn belongs to another agent");
+    if (isWalkIn) {
+      if (!caller || !caller.isActive) {
+        throw new RotationError("Active profile not found");
+      }
+      if (caller.role !== "agent") {
+        throw new RotationError("Agent permission required");
+      }
+      if (caller.availability !== "available") {
+        throw new RotationError(
+          "Mark yourself Available before taking a walk-in customer",
+        );
+      }
+      me = caller;
+
+      // Consume the turn only when it genuinely is this agent's turn and their
+      // rotation position is well defined, so advancing from it is unambiguous.
+      consumesTurn =
+        draft.rotations.ringcentral.currentProfileId === me.id &&
+        me.ringcentralActive &&
+        rotationPosition(me, "ringcentral") !== null;
+    } else {
+      me = requireCaller(draft, opts.actorId, "ringcentral");
+      applyEnsureValid(draft, "ringcentral", opts.actorId);
+
+      if (draft.rotations.ringcentral.currentProfileId !== me.id) {
+        throw new RotationError("This queue turn belongs to another agent");
+      }
+      consumesTurn = true;
     }
 
     intake.status = "claimed";
@@ -385,8 +436,13 @@ export function claimIntakeThroughQueue(
       id: newId("wi"),
       customerName: `intake-${intake.id}`,
       assignedProfileId: me.id,
+      // Stays a ringcentral_turn item in both branches so the agent keeps quote
+      // credit; turn counts come from turnEvents, which the out-of-turn branch
+      // never writes.
       assignmentMethod: "ringcentral_turn",
-      receivedThrough: "Customer Service Intake Queue",
+      receivedThrough: isWalkIn
+        ? "Walk-in / Customer Service Intake Queue"
+        : "Customer Service Intake Queue",
       workType: "new_quote",
       sourceIntakeId: intake.id,
     };
@@ -395,13 +451,17 @@ export function claimIntakeThroughQueue(
     intake.status = "converted";
     intake.workItemId = item.id;
 
-    applyAdvance(draft, "ringcentral", {
-      actorId: me.id,
-      afterPosition: rotationPosition(me, "ringcentral"),
-      action: "claim",
-      workItemId: item.id,
-      reason: "Customer Service intake claimed and converted",
-    });
+    if (consumesTurn) {
+      applyAdvance(draft, "ringcentral", {
+        actorId: me.id,
+        afterPosition: rotationPosition(me, "ringcentral"),
+        action: "claim",
+        workItemId: item.id,
+        reason: isWalkIn
+          ? "Walk-in customer claimed during this agent's queue turn"
+          : "Customer Service intake claimed and converted",
+      });
+    }
 
     return item.id;
   });
@@ -464,6 +524,12 @@ export function managerAssignIntake(
     const target = draft.profiles.find((p) => p.id === opts.targetAgentId);
     if (!target || !target.isActive) {
       throw new RotationError("Choose an active Sales Agent");
+    }
+    // v1.11.0: a walk-in may only be routed to an authorized walk-in agent.
+    if (intake.isWalkIn && !target.canClaimWalkIn) {
+      throw new RotationError(
+        "This is a walk-in customer. Assign it to a designated walk-in agent",
+      );
     }
     intake.status = "claimed";
     intake.claimedBy = opts.targetAgentId;

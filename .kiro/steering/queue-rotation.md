@@ -51,6 +51,37 @@ Customer Service quote intakes with the RingCentral channel use the RingCentral 
 
 Manager/manual intake assignments do not consume the RingCentral turn.
 
+#### Walk-in intakes (exception, v1.11.0 + v1.11.2)
+
+A Customer Service intake with `cs_intake_submissions.is_walk_in = true` is a
+documented exception to the rules above. Do not "fix" it back.
+
+- Only a profile with `profiles.can_claim_walk_in` may claim it. Everyone else is
+  refused on every path, including manager/supervisor assignment, which must
+  target an authorized walk-in agent.
+- An authorized walk-in agent claims it **regardless of whose turn it is**. The
+  customer is physically in the office and cannot wait for the rotation.
+- The RingCentral turn is consumed and advanced **only when the claiming agent
+  actually holds it**. Taken out of turn, the claim must leave
+  `rotation_state.current_profile_id` and `rotation_state.version` unchanged and
+  must write **no** `turn_events` row — it belongs to the non-consuming family
+  alongside `cs_intake_manager_assign`.
+- `rotation_state` is still locked `for update` before the consume/do-not-consume
+  branch is chosen, so a concurrent normal claim cannot make the decision stale.
+- `availability = 'available'` is required. `ringcentral_active` is **not**, since
+  an out-of-turn walk-in claim does not use the rotation.
+- `assignment_method` stays `ringcentral_turn` so the agent keeps quote credit in
+  `daily_agent_performance.ringcentral_quotes`. Turn counts come from
+  `turn_events`, which the out-of-turn branch does not write, so no phantom turn
+  appears.
+- The audit trail records the distinction: `cs_intake_events.event_type` is
+  `walk_in_claimed_on_turn` or `walk_in_claimed_out_of_turn`, and both that row
+  and the `work_item_events` row carry `held_turn` and `consumed_turn` in their
+  JSON detail.
+
+Byron owns this rule and has said it may change. Confirm the current intent
+before altering it.
+
 ### Additional Workload
 
 Normal linked and unlinked workload claims taken through the workload queue advance only the Additional Workload rotation.
@@ -90,6 +121,10 @@ Queue changes require tests covering:
 - WhatsApp claims.
 - RingCentral claims.
 - Customer Service intake claims.
+- Walk-in intake claims, on turn and out of turn, including proof that the
+  out-of-turn case changes neither `current_profile_id`, nor `version`, nor
+  `turn_events`, and that the next normal claim still passes the turn to the same
+  agent it would have gone to anyway.
 - Workload claims.
 - Pass.
 - Timed quote claim.
@@ -122,7 +157,7 @@ An agent is eligible for a rotation when all of the following hold on `public.pr
 
 - `claim_whatsapp_quote` — WhatsApp only
 - `claim_ringcentral_quote` — RingCentral only
-- `cs_intake_claim_ringcentral` — CS intake on the RingCentral queue; performs the full atomic claim/convert/assign/advance sequence
+- `cs_intake_claim_ringcentral` — CS intake on the RingCentral queue; performs the full atomic claim/convert/assign/advance sequence. Conditionally consuming since v1.11.2: a walk-in intake advances the turn only when the claiming agent holds it (see "Walk-in intakes" above)
 - `claim_linked_workload_turn`, `claim_unlinked_workload_turn` — Additional Workload only
 - `take_quote_turn` — timed/Take action
 - `claim_timed_quote`, `steal_timed_quote` — timed quote claim and Recover (`steal_timed_quote` is surfaced in the UI as "Recover")

@@ -36,7 +36,7 @@ export async function getCurrentProfile(): Promise<ProfileLite | null> {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,display_name,initials,role,is_active")
+    .select("id,display_name,initials,role,is_active,can_claim_walk_in")
     .eq("id", authData.user.id)
     .maybeSingle();
 
@@ -51,7 +51,7 @@ export async function listActiveAgents(): Promise<ProfileLite[]> {
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,display_name,initials,role,is_active")
+    .select("id,display_name,initials,role,is_active,can_claim_walk_in")
     .eq("is_active", true)
     .in("role", ["agent", "sales_supervisor"])
     .order("display_name");
@@ -72,7 +72,7 @@ export async function listAllActiveProfiles(): Promise<ProfileLite[]> {
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,display_name,initials,role,is_active")
+    .select("id,display_name,initials,role,is_active,can_claim_walk_in")
     .eq("is_active", true)
     .order("display_name");
 
@@ -93,7 +93,7 @@ export async function listRenewalAssignees(): Promise<ProfileLite[]> {
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,display_name,initials,role,is_active")
+    .select("id,display_name,initials,role,is_active,can_claim_walk_in")
     .eq("is_active", true)
     .in("role", ["agent", "customer_service"])
     .order("role")
