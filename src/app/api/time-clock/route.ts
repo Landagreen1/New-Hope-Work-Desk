@@ -1,14 +1,13 @@
+import {
+  asAttendancePayload,
+  attendanceFailureBody,
+  closedActionAnswer,
+  openedActionAnswer,
+} from "@/features/time-attendance/server/attendance-rpc";
 import { canAdministerAttendance } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
-
-/**
- * Postgres unique-violation SQLSTATE. Raised here by the partial unique index
- * `uniq_time_clock_open_entry` (migration v1.9.1) when a second open clock
- * entry is inserted for one profile.
- */
-const UNIQUE_VIOLATION = "23505";
 
 /**
  * GET /api/time-clock
@@ -88,12 +87,16 @@ export async function GET(request: Request) {
  * POST /api/time-clock
  * Clock in. Body: { status?: 'available' | 'lunch' | 'unavailable' }
  *
- * The one-open-entry rule is enforced by `uniq_time_clock_open_entry`, not by a
- * select-then-insert check: two concurrent clock-ins can both pass a select and
- * both insert. The insert that loses the race reads the existing open entry and
- * returns it as a success with `already_open: true`, because the caller's intent
- * — to be clocked in — is satisfied (Requirement 4.21). A failure that is not
- * that race is still reported as a failure (Requirement 4.20).
+ * One RPC into `public.attendance_clock_in`, which owns the whole transaction.
+ * The one-open-entry rule is still enforced by `uniq_time_clock_open_entry`
+ * rather than by a select-then-insert check; the unique-violation branch moved
+ * into SQL, and the loser of the race is still answered with the open entry it
+ * lost to as a success with `already_open: true` (Requirement 3.13).
+ *
+ * Clock-in never changes sales-queue status, in either mode. What changes here is
+ * disclosure: the response carries the queue status read back from the database
+ * and offers the explicit `Join Sales Queues` action when the employee is at work
+ * but not receiving sales work (Requirements 2.1, 2.18).
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -110,35 +113,42 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid status." }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from("time_clock_entries")
-    .insert({ profile_id: user.id, clock_status: status })
-    .select("id, clock_in, clock_status")
-    .single();
+  const { data, error } = await supabase.rpc("attendance_clock_in", { p_status: status });
 
+  // Requirement 2.7: every RPC result is inspected, and a failure names the
+  // portion that failed with both statuses as the database holds them.
   if (error) {
-    if (error.code === UNIQUE_VIOLATION) {
-      const { data: openEntry } = await supabase
-        .from("time_clock_entries")
-        .select("id, clock_in, clock_status")
-        .eq("profile_id", user.id)
-        .is("clock_out", null)
-        .maybeSingle();
-
-      // A readable open entry is what makes this a duplicate rather than a
-      // failure. Without one, report the original error instead of inventing
-      // a success.
-      if (openEntry) return Response.json({ entry: openEntry, already_open: true });
-    }
-    return Response.json({ error: error.message }, { status: 400 });
+    return Response.json(await attendanceFailureBody(supabase, user.id, error), { status: 400 });
   }
 
-  return Response.json({ entry: data, already_open: false }, { status: 201 });
+  const payload = asAttendancePayload(data);
+  if (!payload) {
+    return Response.json(
+      { error: "The clock-in did not report a state." },
+      { status: 500 },
+    );
+  }
+
+  const answer = openedActionAnswer(payload, "entry");
+  return Response.json(answer.body, { status: answer.status });
 }
 
 /**
  * PATCH /api/time-clock
- * Clock out or update status. Body: { action: 'clock_out' | 'change_status', status?: string }
+ * Clock out or edit an entry. Body: { action: 'clock_out' | 'edit', ... }
+ *
+ * `clock_out` is one RPC into `public.attendance_clock_out`. The manual
+ * break-closing update, the `total_hours` arithmetic and the availability call
+ * all moved into SQL, and the `if (onBreak)` condition that used to gate the
+ * availability write is gone: clock-out removes an `attendance_assisted` agent
+ * from the sales queues whether or not a break was open (Requirement 2.2).
+ *
+ * A retried or concurrent clock-out is answered with the committed state and
+ * `already_applied: true` rather than the HTTP 400 it used to produce
+ * (Requirements 2.10, 1.11).
+ *
+ * `action: 'edit'` is untouched. It writes no availability today and must not
+ * start (Requirement 3.11).
  */
 export async function PATCH(request: Request) {
   const supabase = await createClient();
@@ -204,44 +214,23 @@ export async function PATCH(request: Request) {
     return Response.json({ success: true });
   }
 
-  // Get active clock entry (for clock_out and change_status actions)
-  const { data: activeEntry } = await supabase
-    .from("time_clock_entries")
-    .select("id, clock_in, break_minutes")
-    .eq("profile_id", user.id)
-    .is("clock_out", null)
-    .maybeSingle();
-
-  if (!activeEntry) {
-    return Response.json({ error: "Not clocked in." }, { status: 400 });
-  }
-
   if (action === "clock_out") {
-    const now = new Date();
-    const clockIn = new Date(activeEntry.clock_in);
-    const totalMinutes = (now.getTime() - clockIn.getTime()) / 60000;
-    const workMinutes = totalMinutes - (activeEntry.break_minutes || 0);
-    const totalHours = Math.round((workMinutes / 60) * 100) / 100;
+    const { data, error } = await supabase.rpc("attendance_clock_out");
 
-    // End any active breaks
-    await supabase
-      .from("time_clock_breaks")
-      .update({ break_end: now.toISOString(), duration_minutes: 0 })
-      .eq("clock_entry_id", activeEntry.id)
-      .is("break_end", null);
+    if (error) {
+      return Response.json(await attendanceFailureBody(supabase, user.id, error), { status: 400 });
+    }
 
-    const { error } = await supabase
-      .from("time_clock_entries")
-      .update({ clock_out: now.toISOString(), total_hours: totalHours })
-      .eq("id", activeEntry.id);
+    const payload = asAttendancePayload(data);
+    if (!payload) {
+      return Response.json({ error: "The clock-out did not report a state." }, { status: 500 });
+    }
 
-    if (error) return Response.json({ error: error.message }, { status: 400 });
-
-    // Always set to unavailable on clock-out — the agent is leaving for the day
-    // and must not remain in the rotation queue.
-    await supabase.rpc("set_my_availability", { p_status: "unavailable" });
-
-    return Response.json({ success: true, total_hours: totalHours });
+    const answer = closedActionAnswer(payload, {
+      total_hours: payload.total_hours,
+      entry: payload.entry,
+    });
+    return Response.json(answer.body, { status: answer.status });
   }
 
   return Response.json({ error: "Invalid action. Use 'clock_out' or 'edit'." }, { status: 400 });

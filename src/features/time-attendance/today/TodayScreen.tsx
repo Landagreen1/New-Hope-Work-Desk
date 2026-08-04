@@ -78,17 +78,25 @@ import { canAdministerAttendance } from '@/lib/permissions';
 import type { ProfileLite } from '../../nhwd-shared/types';
 import { statusLabel } from '../../nhwd-shared/ui';
 import type { RecordQuery, RecordSubjectIndex } from '../domain/attendance';
+import {
+  QUEUE_ACTION_STATUS,
+  toStatusView,
+  type ActiveClockResponse,
+  type QueueStatusAction,
+} from '../domain/queue-status';
 import type { DailyAttendanceRecord } from '../domain/types';
 import type { AttendanceEmployee, DayResponse, RecordPage } from '../server/attendance-service';
 import { attendanceJson } from '../shared/api-failure';
 import { AsyncStateBlock } from '../shared/AsyncStateBlock';
 import { formatTimeOfDay, formatWorkDateLong } from '../shared/format';
+import { setMyQueueStatus } from '../shared/queue-status-client';
 import { recordQueryUrl } from '../shared/record-query';
 import { useAttendancePoll } from '../shared/useAttendancePoll';
-import type { ActiveFilter } from '../shared/useAsyncResource';
+import { useAsyncResource, type ActiveFilter } from '../shared/useAsyncResource';
 import { EmployeeDayDrawer } from './EmployeeDayDrawer';
 import { LiveCoveragePanel } from './LiveCoveragePanel';
 import { MyDayPanel, emptyDayRecord } from './MyDayPanel';
+import { SalesQueueStatus } from './SalesQueueStatus';
 import { TeamTodayHeader } from './TeamTodayHeader';
 import {
   TeamTodaySummary,
@@ -221,15 +229,60 @@ function TeamToday({ profile }: { profile: ProfileLite }) {
     },
   );
 
+  // The administrator's own two statuses, from the same read My Day uses, so the
+  // header control reports attendance and sales-queue status as two separately
+  // labelled values rather than one ambiguous word (Requirements 2.14, 2.18).
+  const clockStatus = useAsyncResource<ActiveClockResponse>(
+    (signal) => attendanceJson<ActiveClockResponse>('/api/time-clock/active', { signal }),
+    { subject: 'clock status', isEmpty: () => false },
+  );
+
+  const [queueBusy, setQueueBusy] = useState(false);
+  const [queueFailure, setQueueFailure] = useState<string | null>(null);
+
   const refreshDay = day.refresh;
   const refreshRecords = records.refresh;
+  const refreshClockStatus = clockStatus.refresh;
 
   // A clock action, a correction, or any other write moves both reads, because the
-  // counters and the rows describe the same records from two angles.
+  // counters and the rows describe the same records from two angles. The status
+  // read moves with them: a clock action can change the queue status too.
   const refreshAll = useCallback(() => {
     refreshDay();
     refreshRecords();
-  }, [refreshDay, refreshRecords]);
+    refreshClockStatus();
+  }, [refreshDay, refreshRecords, refreshClockStatus]);
+
+  const onQueueAction = useCallback(
+    (action: QueueStatusAction) => {
+      if (queueBusy) return;
+      setQueueBusy(true);
+      setQueueFailure(null);
+
+      void (async () => {
+        try {
+          await setMyQueueStatus(
+            QUEUE_ACTION_STATUS[action],
+            action === 'join_sales_queues' ? 'Joined the sales queues' : 'Left the sales queues',
+          );
+          refreshClockStatus();
+          refreshDay();
+        } catch (error) {
+          setQueueFailure(
+            error instanceof Error ? error.message : 'The sales queue status could not be changed.',
+          );
+        } finally {
+          setQueueBusy(false);
+        }
+      })();
+    },
+    [queueBusy, refreshClockStatus, refreshDay],
+  );
+
+  const statusView = useMemo(
+    () => (clockStatus.data === null ? null : toStatusView(clockStatus.data)),
+    [clockStatus.data],
+  );
 
   const setDayData = day.setData;
   const setRecordsData = records.setData;
@@ -340,6 +393,18 @@ function TeamToday({ profile }: { profile: ProfileLite }) {
           displayName={profile.display_name}
           timeZone={ownTimeZone}
           onRecorded={refreshAll}
+        />
+      )}
+
+      {/* Requirement 2.14: the administrator's own attendance status and sales-queue
+          status, each under its own label. The sales-queue line is absent for a
+          non-agent, for whom queue status governs nothing. */}
+      {statusView !== null && (
+        <SalesQueueStatus
+          {...statusView}
+          busy={queueBusy}
+          failure={queueFailure}
+          onAction={onQueueAction}
         />
       )}
 

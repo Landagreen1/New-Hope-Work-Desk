@@ -32,6 +32,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ClockAction } from '../domain/presentation';
+import type {
+  AttendanceStatusValue,
+  QueueStatusMode,
+  QueueStatusValue,
+} from '../domain/queue-status';
 import { asApiFailure, attendanceJson, jsonRequest, type ApiFailure } from './api-failure';
 
 /**
@@ -55,6 +60,35 @@ export const CLOCK_ACTION_REQUEST: Record<ClockAction, { url: string; init: Requ
   clock_out: { url: '/api/time-clock', init: jsonRequest('PATCH', { action: 'clock_out' }) },
 };
 
+/**
+ * What the four clock routes answer with.
+ *
+ * Both statuses are read back from the database inside the transaction that
+ * applied the change, so a caller renders the returned values rather than
+ * refetching blind or assuming what the action did (Requirement 2.18). Every
+ * field is optional because the two clock routes answer four actions between
+ * them and not all of them carry every field — a break end carries
+ * `duration_minutes`, a clock-out carries `total_hours`.
+ *
+ * Requirements: 2.14, 2.18
+ */
+export interface ClockActionResponse {
+  attendance_status?: AttendanceStatusValue;
+  queue_status?: QueueStatusValue | null;
+  queue_status_mode?: QueueStatusMode | null;
+  is_agent?: boolean;
+  /** The clock-in or break-start lost a race and the open row is returned. */
+  already_open?: boolean;
+  /** The clock-out or break-end had already been applied (2.10, 1.11). */
+  already_applied?: boolean;
+  /** Whether the queue portion moved the queue status. */
+  changed_queue?: boolean;
+  /** Whether the panel should offer `Join Sales Queues` (2.1, 2.6, 2.15). */
+  offers_join_sales_queues?: boolean;
+  total_hours?: number | null;
+  duration_minutes?: number | null;
+}
+
 export interface ClockActionState {
   /** The action in flight, or null. A caller disables its controls on this. */
   busy: ClockAction | null;
@@ -73,7 +107,9 @@ export interface ClockActionState {
  *
  * Requirements: 4.20, 4.21
  */
-export function useClockAction(onRecorded?: () => void): ClockActionState {
+export function useClockAction(
+  onRecorded?: (result: ClockActionResponse) => void,
+): ClockActionState {
   const [busy, setBusy] = useState<ClockAction | null>(null);
   const [failure, setFailure] = useState<ApiFailure | null>(null);
 
@@ -105,10 +141,12 @@ export function useClockAction(onRecorded?: () => void): ClockActionState {
     void (async () => {
       try {
         const request = CLOCK_ACTION_REQUEST[action];
-        await attendanceJson(request.url, request.init);
+        const result = await attendanceJson<ClockActionResponse>(request.url, request.init);
         // Criterion 20: the displayed state moves only on a success, and it moves
         // to what the service reports rather than to what the browser assumed.
-        if (mountedRef.current) recordedRef.current?.();
+        // The payload is handed on, so a caller renders both statuses as the
+        // database reported them instead of refetching blind (Requirement 2.18).
+        if (mountedRef.current) recordedRef.current?.(result);
       } catch (error) {
         if (mountedRef.current) setFailure(asApiFailure(error));
       } finally {

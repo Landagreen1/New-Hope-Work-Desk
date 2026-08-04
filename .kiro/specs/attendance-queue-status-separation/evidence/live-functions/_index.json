@@ -1,0 +1,95 @@
+{
+  "project": "kfbgftkjvtynfdwgcgeb",
+  "captured_at": "2026-08-04T19:04:17.672Z",
+  "functions": [
+    {
+      "name": "admin_deactivate_profile",
+      "args": "p_profile_id uuid, p_manager_id uuid, p_reason text",
+      "file": "admin_deactivate_profile.sql",
+      "security_definer": true,
+      "language": "plpgsql",
+      "bytes": 4139
+    },
+    {
+      "name": "advance_rotation",
+      "args": "p_rotation rotation_kind, p_actor uuid, p_after_position integer, p_action text, p_previous uuid, p_fallback uuid, p_work_item_id uuid, p_reason text",
+      "file": "advance_rotation.sql",
+      "security_definer": true,
+      "language": "plpgsql",
+      "bytes": 1979
+    },
+    {
+      "name": "can_manage_sales",
+      "args": "",
+      "file": "can_manage_sales.sql",
+      "security_definer": true,
+      "language": "sql",
+      "bytes": 338
+    },
+    {
+      "name": "ensure_daily_availability_reset",
+      "args": "",
+      "file": "ensure_daily_availability_reset.sql",
+      "security_definer": true,
+      "language": "plpgsql",
+      "bytes": 1344
+    },
+    {
+      "name": "ensure_rotation_valid",
+      "args": "p_rotation rotation_kind, p_actor uuid",
+      "file": "ensure_rotation_valid.sql",
+      "security_definer": true,
+      "language": "plpgsql",
+      "bytes": 2328
+    },
+    {
+      "name": "is_agent",
+      "args": "",
+      "file": "is_agent.sql",
+      "security_definer": true,
+      "language": "sql",
+      "bytes": 276
+    },
+    {
+      "name": "is_manager",
+      "args": "",
+      "file": "is_manager.sql",
+      "security_definer": true,
+      "language": "sql",
+      "bytes": 312
+    },
+    {
+      "name": "is_rotation_eligible",
+      "args": "p_profile_id uuid, p_rotation rotation_kind",
+      "file": "is_rotation_eligible.sql",
+      "security_definer": true,
+      "language": "sql",
+      "bytes": 853
+    },
+    {
+      "name": "manager_set_rotation_eligibility",
+      "args": "p_profile_id uuid, p_rotation rotation_kind, p_active boolean, p_reason text",
+      "file": "manager_set_rotation_eligibility.sql",
+      "security_definer": true,
+      "language": "plpgsql",
+      "bytes": 1638
+    },
+    {
+      "name": "next_eligible_profile",
+      "args": "p_rotation rotation_kind, p_after_position integer",
+      "file": "next_eligible_profile.sql",
+      "security_definer": true,
+      "language": "sql",
+      "bytes": 1739
+    },
+    {
+      "name": "set_my_availability",
+      "args": "p_status availability_status",
+      "file": "set_my_availability.sql",
+      "security_definer": true,
+      "language": "plpgsql",
+      "bytes": 3625
+    }
+  ],
+  "missing": []
+}
