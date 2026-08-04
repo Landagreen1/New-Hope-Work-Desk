@@ -73,6 +73,8 @@ node --env-file=.env.local scripts/run-sql.mjs supabase/migrations/v1.12.6-repor
 node --env-file=.env.local scripts/run-sql.mjs supabase/migrations/v1.12.8-fix-reporting-excluded-null.sql
 node --env-file=.env.local scripts/run-sql.mjs supabase/migrations/v1.12.9-fix-queue-mismatch-signal.sql
 node --env-file=.env.local scripts/run-sql.mjs supabase/migrations/v1.12.10-reporting-awaiting-decision.sql
+node --env-file=.env.local scripts/run-sql.mjs supabase/migrations/v1.12.11-fix-ambiguous-column-references.sql
+node --env-file=.env.local scripts/run-sql.mjs supabase/migrations/v1.12.12-reporting-filter-performance.sql
 ```
 
 `v1.12.7` runs **first** on purpose. It asserts that the seven live-only tables, the four live-only `work_items` columns, `attendance_policy.business_timezone`, and `can_manage_sales()` all exist, and names whichever is missing. Running it first turns a missing dependency into one clear error instead of a failure inside a view definition five files later.
@@ -85,9 +87,17 @@ node --env-file=.env.local scripts/run-sql.mjs supabase/migrations/v1.12.10-repo
 node --env-file=.env.local scripts/run-sql.mjs supabase/verification/v1.12-reporting-checks.sql
 node --env-file=.env.local scripts/run-sql.mjs supabase/verification/v1.12-reporting-rpc-checks.sql
 node --env-file=.env.local scripts/run-sql.mjs supabase/verification/v1.12-reporting-authorization-checks.sql
+node --env-file=.env.local scripts/run-sql.mjs supabase/verification/v1.12-reporting-execution-checks.sql
+node --env-file=.env.local scripts/run-sql.mjs supabase/verification/v1.12-reporting-drilldown-checks.sql
 ```
 
-Expect 17 PASS, 14 matching pairs, and 21 PASS. A single FAIL means stop.
+Expect 17 PASS, 14 matching pairs, 21 PASS, 12 PASS with none SLOW, and 40 PASS. A single
+FAIL means stop.
+
+**Run the last two.** They are the ones that catch a function that is reachable but
+raises. The first three would have passed while two functions were broken on every call,
+because an anonymous probe returns before the query body runs. Reachability is not
+execution.
 
 The three files simulate a session by setting `request.jwt.claims`, because the Management API connects with no JWT and the reporting functions correctly refuse an anonymous caller. **The profile ids in those files are specific to this project** and need substituting elsewhere: a `manager`, a `sales_supervisor`, and the `agent` with the most assigned quotes.
 

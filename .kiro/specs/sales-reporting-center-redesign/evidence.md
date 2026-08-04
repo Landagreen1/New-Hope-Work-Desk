@@ -13,12 +13,14 @@ Sales Reporting Center redesign. Branch `feature/sales-reporting-center`, branch
 | `supabase/verification/v1.12-reporting-checks.sql` | **17 of 17 PASS** |
 | `supabase/verification/v1.12-reporting-rpc-checks.sql` | **14 of 14 match** |
 | `supabase/verification/v1.12-reporting-authorization-checks.sql` | **21 of 21 PASS** |
+| `supabase/verification/v1.12-reporting-execution-checks.sql` | **12 of 12 PASS**, none SLOW |
+| `supabase/verification/v1.12-reporting-drilldown-checks.sql` | **40 of 40 PASS** |
 
 The two repository-wide failures are in `src/features/cancellations/__tests__/cancellations-summary-bar.test.tsx`, from the in-progress Policy Follow-up work that was already in the working tree before this branch existed. Nothing outside `src/features/reporting` imports this feature, and neither failing file references it.
 
 ## Database objects added
 
-Ten forward-only migrations. No existing migration file was edited. No existing table, column, view, function, policy, or row that a legacy report reads was altered.
+Twelve forward-only migrations. No existing migration file was edited. No existing table, column, view, function, policy, or row that a legacy report reads was altered.
 
 | Migration | Objects |
 | --- | --- |
@@ -33,6 +35,8 @@ Ten forward-only migrations. No existing migration file was edited. No existing 
 | `v1.12.8-fix-reporting-excluded-null.sql` | Replaces `reporting_quote_facts` (defect fix) |
 | `v1.12.9-fix-queue-mismatch-signal.sql` | `queue_link_coverage_minimum_percent` column, `reporting_detect_queue_mismatches()`, replaces `reporting_detect_integrity_flags()` |
 | `v1.12.10-reporting-awaiting-decision.sql` | Replaces `reporting_summary_for_window()` (adds the companion figure) |
+| `v1.12.11-fix-ambiguous-column-references.sql` | Replaces `report_needs_attention()` and `report_records()` (defect fix), adds `reporting_filtered_quotes_in_window()` |
+| `v1.12.12-reporting-filter-performance.sql` | Replaces `reporting_filtered_quotes()` and `reporting_filtered_workloads()` (10x speed-up) |
 
 `public.can_manage_sales()` already existed live and already matched `canManageSales` in `src/lib/permissions.ts`. It was reused, not recreated.
 
@@ -115,7 +119,44 @@ Selecting **After Hours** in the filter bar applies to all four views. Live tota
 
 The Business Hours and After Hours segments were verified to partition the quote set exactly: 1,276 = 1,276.
 
-## Defects found and fixed during implementation
+## Defects found after deploy
+
+Two shipped. Byron hit the first one within minutes of the report going live.
+
+**`report_needs_attention` and `report_records` both raised "column reference is ambiguous" on every call.** In plpgsql the names in `returns table (...)` are variables in scope throughout the body, so an unqualified column reference matching one is ambiguous — and Postgres raises that at run time, not at create time. `report_needs_attention` had it on `severity` in an `ORDER BY`; `report_records` had it on `created_at` in a CTE's `WHERE`. The second is the worse one: it broke **every drill-down**, all 21 metric keys, so no number in the report could be opened. Fixed in `v1.12.11`.
+
+**The filter function re-parsed its jsonb per row.** `reporting_filtered_quotes` held nine predicates that each ran `jsonb_array_length` plus a `jsonb_array_elements_text` subquery for every candidate quote — over eleven thousand expansions per call. The Overview fires six aggregates in parallel, so the page took about sixteen seconds. Fixed in `v1.12.12` by expanding each filter list into a local array once and comparing with `= any(array)`.
+
+| Function | Before | After |
+| --- | --- | --- |
+| `report_summary` | 6,677 ms | 660 ms |
+| `report_summary` with compare | 12,899 ms | 1,062 ms |
+| `report_lifecycle` | 6,467 ms | 533 ms |
+| `report_needs_attention` | 7,105 ms | 577 ms |
+| `report_agent_rows` | 6,046 ms | 697 ms |
+| `report_source_rows` | 5,183 ms | 500 ms |
+| `report_after_hours_summary` | 15,582 ms | 1,514 ms |
+
+### Why the verification missed all of it
+
+This is the part worth remembering. Every reporting function opens with an authorization guard that returns early:
+
+```sql
+if not public.reporting_can_read() then return; end if;
+```
+
+The REST probe called all nine functions over PostgREST as an anonymous caller and got `200 []` from each. That proved they existed and were reachable. It proved **nothing** about their bodies, because the guard returned before any query ran, and an empty result from a broken query is indistinguishable from an empty result from a refused caller.
+
+The SQL verification files did exercise `report_summary`, `report_lifecycle`, `report_agent_rows` and `report_integrity_flags` with a real session — and those four are exactly the four that worked. `report_needs_attention`, `report_records`, `report_source_rows` and `report_after_hours_summary` were never executed authenticated. I read reachability as proof of correctness, and it is not.
+
+Two verification files now close the gap permanently:
+
+- `v1.12-reporting-execution-checks.sql` executes every function in both report modes and flags anything over three seconds as SLOW.
+- `v1.12-reporting-drilldown-checks.sql` exercises all 21 drill-down metric keys, all five sort orders and all fourteen saved review filters.
+
+Both were run against live data after the fix: **12 of 12 and 40 of 40.**
+
+## Defects found during implementation
 
 Both were caught by verification before any UI was built on them.
 
