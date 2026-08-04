@@ -101,6 +101,23 @@ import type {
 
 import IntakeDataDisplay, { type IntakeDataDetails } from "@/features/cs-intake/IntakeDataDisplay";
 
+/**
+ * The My status control governs sales-queue participation, not attendance, and
+ * every label on it says so.
+ *
+ * `profiles.availability` used to be shown as the bare words `Available`,
+ * `Break / Lunch` and `Unavailable`, with nothing stating that those values decide
+ * whether live sales work is routed to this agent — while Time & Attendance showed
+ * a separate attendance status on another screen. Requirement 2.14 of
+ * .kiro/specs/attendance-queue-status-separation asks for the two to be labelled
+ * apart, and for `Available` never to stand alone.
+ */
+const QUEUE_STATUS_LABELS: Record<AvailabilityStatus, string> = {
+  available: "Sales Queues: Available",
+  break: "Sales Queues: Break / Lunch",
+  unavailable: "Sales Queues: Unavailable",
+};
+
 const workTypeLabels: Record<WorkType, string> = {
   new_quote: "New Quote",
   requote: "Requote",
@@ -3572,11 +3589,23 @@ export function WorkDeskApp({
     if (success) setNotificationPanelOpen(false);
   }
 
+  /**
+   * The agent's own sales-queue status.
+   *
+   * Goes through `set_my_queue_status` rather than `set_my_availability`, which it
+   * wraps: the profile write, the rotation handoff, the recovery and the
+   * `turn_events` rows are unchanged, and the addition is the one `manual_agent`
+   * availability event that makes the change attributable (Requirements 2.9, 2.12).
+   *
+   * The label names sales queues rather than saying `Available` on its own, because
+   * this control governs sales-queue participation and not attendance
+   * (Requirement 2.14).
+   */
   async function handleAvailability(status: AvailabilityStatus) {
     await runRpc(
-      "set_my_availability",
+      "set_my_queue_status",
       { p_status: status },
-      `Status changed to ${status === "break" ? "Break / Lunch" : status}.`,
+      `${QUEUE_STATUS_LABELS[status]}.`,
     );
   }
 
@@ -4428,13 +4457,13 @@ export function WorkDeskApp({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="mr-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-400">
-                  <Activity className="h-4 w-4" /> My status
+                  <Activity className="h-4 w-4" /> Sales queues
                 </div>
                 {(
                   [
-                    ["available", "Available", "bg-emerald-600 text-white"],
-                    ["break", "Break / Lunch", "bg-amber-500 text-white"],
-                    ["unavailable", "Unavailable", "bg-slate-700 text-white"],
+                    ["available", QUEUE_STATUS_LABELS.available, "bg-emerald-600 text-white"],
+                    ["break", QUEUE_STATUS_LABELS.break, "bg-amber-500 text-white"],
+                    ["unavailable", QUEUE_STATUS_LABELS.unavailable, "bg-slate-700 text-white"],
                   ] as const
                 ).map(([status, label, activeClass]) => (
                   <button
@@ -4451,8 +4480,9 @@ export function WorkDeskApp({
                   </button>
                 ))}
                 <p className="w-full pt-1 text-[11px] font-semibold text-slate-400 lg:text-right">
-                  Daily start: the first eligible agent to click Available
-                  starts each queue for the day.
+                  This is your sales queue status, not your attendance. Daily
+                  start: the first eligible agent to click Sales Queues:
+                  Available starts each queue for the day.
                 </p>
               </div>
             </section>

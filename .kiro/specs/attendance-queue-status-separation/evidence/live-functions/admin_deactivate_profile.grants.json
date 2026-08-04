@@ -1,0 +1,57 @@
+{
+  "project": "kfbgftkjvtynfdwgcgeb",
+  "captured_at": "2026-08-04T19:04:19.885Z",
+  "function": "public.admin_deactivate_profile",
+  "note": "pg_get_functiondef emits no grants. proacl is the authoritative ACL; role_routine_grants is the expanded view of the same thing. A `create or replace function` preserves these; a drop/create would silently drop them.",
+  "overload_count": 1,
+  "exactly_one_overload": true,
+  "routines": [
+    {
+      "oid": "18493",
+      "name": "admin_deactivate_profile",
+      "identity_arguments": "p_profile_id uuid, p_manager_id uuid, p_reason text",
+      "full_arguments": "p_profile_id uuid, p_manager_id uuid, p_reason text",
+      "result_type": "void",
+      "security_definer": true,
+      "volatility": "v",
+      "parallel": "u",
+      "leakproof": false,
+      "config_settings": [
+        "search_path=public"
+      ],
+      "owner": "postgres",
+      "proacl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "overload_count": 1
+    }
+  ],
+  "role_routine_grants": [
+    {
+      "grantor": "postgres",
+      "grantee": "authenticated",
+      "specific_name": "admin_deactivate_profile_18493",
+      "routine_name": "admin_deactivate_profile",
+      "privilege_type": "EXECUTE",
+      "is_grantable": "NO"
+    },
+    {
+      "grantor": "postgres",
+      "grantee": "postgres",
+      "specific_name": "admin_deactivate_profile_18493",
+      "routine_name": "admin_deactivate_profile",
+      "privilege_type": "EXECUTE",
+      "is_grantable": "YES"
+    },
+    {
+      "grantor": "postgres",
+      "grantee": "service_role",
+      "specific_name": "admin_deactivate_profile_18493",
+      "routine_name": "admin_deactivate_profile",
+      "privilege_type": "EXECUTE",
+      "is_grantable": "NO"
+    }
+  ]
+}

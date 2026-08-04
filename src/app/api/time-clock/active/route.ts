@@ -1,10 +1,21 @@
+import { readStatusSnapshot } from "@/features/time-attendance/server/attendance-rpc";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/time-clock/active
- * Get the current user's active clock entry (if clocked in) + active break.
+ * The current user's active clock entry (if clocked in), active break, and both
+ * statuses.
+ *
+ * Attendance status and sales-queue status are two different facts, so this read
+ * answers both: `attendance_status` for the `Attendance:` label and
+ * `queue_status`, `queue_status_mode` and `is_agent` for the `Sales Queues:`
+ * label. Every panel then renders two labelled values from a database read rather
+ * than from an assumption, and the bare word `Available` never has to stand alone
+ * (Requirements 2.14, 2.18).
+ *
+ * `clocked_in`, `entry` and `active_break` keep their existing shape.
  */
 export async function GET() {
   const supabase = await createClient();
@@ -13,28 +24,15 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
-  const { data: activeEntry } = await supabase
-    .from("time_clock_entries")
-    .select("id, clock_in, clock_status, break_minutes")
-    .eq("profile_id", user.id)
-    .is("clock_out", null)
-    .maybeSingle();
-
-  if (!activeEntry) {
-    return Response.json({ clocked_in: false, entry: null, active_break: null });
-  }
-
-  // Check for active break
-  const { data: activeBreak } = await supabase
-    .from("time_clock_breaks")
-    .select("id, break_start, break_type")
-    .eq("clock_entry_id", activeEntry.id)
-    .is("break_end", null)
-    .maybeSingle();
+  const snapshot = await readStatusSnapshot(supabase, user.id);
 
   return Response.json({
-    clocked_in: true,
-    entry: activeEntry,
-    active_break: activeBreak,
+    clocked_in: snapshot.clocked_in,
+    entry: snapshot.entry,
+    active_break: snapshot.active_break,
+    attendance_status: snapshot.attendance_status,
+    queue_status: snapshot.queue_status,
+    queue_status_mode: snapshot.queue_status_mode,
+    is_agent: snapshot.is_agent,
   });
 }

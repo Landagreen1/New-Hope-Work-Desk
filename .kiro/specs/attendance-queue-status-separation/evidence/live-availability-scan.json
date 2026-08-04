@@ -1,0 +1,496 @@
+{
+  "project": "kfbgftkjvtynfdwgcgeb",
+  "captured_at": "2026-08-04T18:33:41.823Z",
+  "functions_mentioning_availability_count": 17,
+  "functions_mentioning_availability": [
+    {
+      "name": "admin_deactivate_profile",
+      "args": "p_profile_id uuid, p_manager_id uuid, p_reason text",
+      "security_definer": true,
+      "writes_availability_directly": true,
+      "calls_availability_writer": [],
+      "reads_only": false,
+      "availability_lines": [
+        {
+          "n": 69,
+          "line": "availability = 'unavailable',"
+        },
+        {
+          "n": 128,
+          "line": "jsonb_build_object('is_active', false, 'availability', 'unavailable'),"
+        }
+      ]
+    },
+    {
+      "name": "claim_linked_workload_turn",
+      "args": "p_related_quote_source_work_item_id uuid, p_work_type work_type, p_change_type text, p_note text",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [
+        "ensure_daily_availability_reset"
+      ],
+      "reads_only": false,
+      "availability_lines": [
+        {
+          "n": 21,
+          "line": "perform public.ensure_daily_availability_reset();"
+        },
+        {
+          "n": 25,
+          "line": "if v_me.availability <> 'available' or not v_me.workload_active then raise exception 'Set your status to Available before taking Additional Workload'; end if;"
+        }
+      ]
+    },
+    {
+      "name": "claim_ringcentral_intake",
+      "args": "p_intake_id uuid",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [],
+      "reads_only": true,
+      "availability_lines": [
+        {
+          "n": 72,
+          "line": "-- Managers/super_admins are exempt from availability check"
+        },
+        {
+          "n": 73,
+          "line": "if v_caller_profile.role not in ('manager', 'super_admin') and v_caller_profile.availability != 'available' then"
+        }
+      ]
+    },
+    {
+      "name": "claim_ringcentral_quote",
+      "args": "p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [
+        "ensure_daily_availability_reset"
+      ],
+      "reads_only": false,
+      "availability_lines": [
+        {
+          "n": 15,
+          "line": "perform public.ensure_daily_availability_reset();"
+        },
+        {
+          "n": 19,
+          "line": "if v_me.availability <> 'available' or not v_me.ringcentral_active then raise exception 'Set your status to Available before taking a RingCentral quote'; end if;"
+        }
+      ]
+    },
+    {
+      "name": "claim_unlinked_workload_turn",
+      "args": "p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text, p_note text",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [
+        "ensure_daily_availability_reset"
+      ],
+      "reads_only": false,
+      "availability_lines": [
+        {
+          "n": 19,
+          "line": "perform public.ensure_daily_availability_reset();"
+        },
+        {
+          "n": 23,
+          "line": "if v_me.availability <> 'available' or not v_me.workload_active then raise exception 'Set your status to Available before taking Additional Workload'; end if;"
+        }
+      ]
+    },
+    {
+      "name": "claim_whatsapp_quote",
+      "args": "p_customer_name text, p_dealer_id uuid, p_note text",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [
+        "ensure_daily_availability_reset"
+      ],
+      "reads_only": false,
+      "availability_lines": [
+        {
+          "n": 14,
+          "line": "perform public.ensure_daily_availability_reset();"
+        },
+        {
+          "n": 18,
+          "line": "if v_me.availability <> 'available' or not v_me.whatsapp_active then raise exception 'Set your status to Available before taking a WhatsApp quote'; end if;"
+        }
+      ]
+    },
+    {
+      "name": "claim_workload_turn",
+      "args": "p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [],
+      "reads_only": true,
+      "availability_lines": [
+        {
+          "n": 18,
+          "line": "if v_me.availability <> 'available' or not v_me.workload_active then raise exception 'You are not eligible for the Additional Workload rotation'; end if;"
+        }
+      ]
+    },
+    {
+      "name": "cs_intake_claim_ringcentral",
+      "args": "p_submission_id uuid",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [],
+      "reads_only": true,
+      "availability_lines": [
+        {
+          "n": 92,
+          "line": "if v_me.availability::text <> 'available' then"
+        },
+        {
+          "n": 103,
+          "line": "if v_me.availability::text <> 'available'"
+        }
+      ]
+    },
+    {
+      "name": "ensure_daily_availability_reset",
+      "args": "",
+      "security_definer": true,
+      "writes_availability_directly": true,
+      "calls_availability_writer": [],
+      "reads_only": false,
+      "availability_lines": [
+        {
+          "n": 1,
+          "line": "CREATE OR REPLACE FUNCTION public.ensure_daily_availability_reset()"
+        },
+        {
+          "n": 13,
+          "line": "insert into public.availability_day_state(singleton_key, business_date, reset_at)"
+        },
+        {
+          "n": 19,
+          "line": "from public.availability_day_state"
+        },
+        {
+          "n": 25,
+          "line": "set availability = 'unavailable'"
+        },
+        {
+          "n": 41,
+          "line": "update public.availability_day_state"
+        }
+      ]
+    },
+    {
+      "name": "is_rotation_eligible",
+      "args": "p_profile_id uuid, p_rotation rotation_kind",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [],
+      "reads_only": true,
+      "availability_lines": [
+        {
+          "n": 10,
+          "line": "and p.availability = 'available'"
+        }
+      ]
+    },
+    {
+      "name": "next_eligible_profile",
+      "args": "p_rotation rotation_kind, p_after_position integer",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [],
+      "reads_only": true,
+      "availability_lines": [
+        {
+          "n": 11,
+          "line": "and p.availability = 'available'"
+        }
+      ]
+    },
+    {
+      "name": "pass_my_turn",
+      "args": "p_rotation rotation_kind, p_reason text",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [
+        "ensure_daily_availability_reset"
+      ],
+      "reads_only": false,
+      "availability_lines": [
+        {
+          "n": 22,
+          "line": "perform public.ensure_daily_availability_reset();"
+        }
+      ]
+    },
+    {
+      "name": "rotation_empty_reason",
+      "args": "p_rotation rotation_kind",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [],
+      "reads_only": true,
+      "availability_lines": [
+        {
+          "n": 31,
+          "line": "p.availability = 'available' as avail,"
+        }
+      ]
+    },
+    {
+      "name": "set_my_availability",
+      "args": "p_status availability_status",
+      "security_definer": true,
+      "writes_availability_directly": true,
+      "calls_availability_writer": [
+        "ensure_daily_availability_reset"
+      ],
+      "reads_only": false,
+      "availability_lines": [
+        {
+          "n": 1,
+          "line": "CREATE OR REPLACE FUNCTION public.set_my_availability(p_status availability_status)"
+        },
+        {
+          "n": 16,
+          "line": "perform public.ensure_daily_availability_reset();"
+        },
+        {
+          "n": 21,
+          "line": "update public.profiles set availability = p_status where id = v_me.id;"
+        }
+      ]
+    },
+    {
+      "name": "start_quote_take_timer",
+      "args": "p_rotation rotation_kind, p_received_at timestamp with time zone, p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [
+        "ensure_daily_availability_reset"
+      ],
+      "reads_only": false,
+      "availability_lines": [
+        {
+          "n": 23,
+          "line": "perform public.ensure_daily_availability_reset();"
+        },
+        {
+          "n": 30,
+          "line": "if v_me.availability <> 'available' then raise exception 'Set your status to Available before starting a rescue timer'; end if;"
+        }
+      ]
+    },
+    {
+      "name": "steal_timed_quote",
+      "args": "p_timer_id uuid",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [],
+      "reads_only": true,
+      "availability_lines": [
+        {
+          "n": 31,
+          "line": "if v_me.availability <> 'available' then"
+        }
+      ]
+    },
+    {
+      "name": "take_quote_turn",
+      "args": "p_rotation rotation_kind, p_received_at timestamp with time zone, p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text",
+      "security_definer": true,
+      "writes_availability_directly": false,
+      "calls_availability_writer": [
+        "ensure_daily_availability_reset"
+      ],
+      "reads_only": false,
+      "availability_lines": [
+        {
+          "n": 30,
+          "line": "perform public.ensure_daily_availability_reset();"
+        },
+        {
+          "n": 34,
+          "line": "if v_me.availability <> 'available' then raise exception 'Set your status to Available before using Take'; end if;"
+        },
+        {
+          "n": 57,
+          "line": "and p.availability = 'available'"
+        }
+      ]
+    }
+  ],
+  "claim_and_queue_functions": [
+    {
+      "name": "claim_linked_workload_turn",
+      "args": "p_related_quote_source_work_item_id uuid, p_work_type work_type, p_change_type text, p_note text",
+      "mentions_availability": true,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": [
+        "perform public.ensure_daily_availability_reset();",
+        "if v_me.availability <> 'available' or not v_me.workload_active then raise exception 'Set your status to Available before taking Additional Workload'; end if;"
+      ]
+    },
+    {
+      "name": "claim_ringcentral_quote",
+      "args": "p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text",
+      "mentions_availability": true,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": [
+        "perform public.ensure_daily_availability_reset();",
+        "if v_me.availability <> 'available' or not v_me.ringcentral_active then raise exception 'Set your status to Available before taking a RingCentral quote'; end if;"
+      ]
+    },
+    {
+      "name": "claim_ringcentral_quote_v094",
+      "args": "p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_note text",
+      "mentions_availability": false,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": []
+    },
+    {
+      "name": "claim_timed_quote",
+      "args": "p_timer_id uuid",
+      "mentions_availability": false,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": []
+    },
+    {
+      "name": "claim_unlinked_workload_turn",
+      "args": "p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_original_owner_profile_id uuid, p_change_type text, p_note text",
+      "mentions_availability": true,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": [
+        "perform public.ensure_daily_availability_reset();",
+        "if v_me.availability <> 'available' or not v_me.workload_active then raise exception 'Set your status to Available before taking Additional Workload'; end if;"
+      ]
+    },
+    {
+      "name": "claim_whatsapp_quote",
+      "args": "p_customer_name text, p_dealer_id uuid, p_note text",
+      "mentions_availability": true,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": [
+        "perform public.ensure_daily_availability_reset();",
+        "if v_me.availability <> 'available' or not v_me.whatsapp_active then raise exception 'Set your status to Available before taking a WhatsApp quote'; end if;"
+      ]
+    },
+    {
+      "name": "claim_whatsapp_quote_v094",
+      "args": "p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_note text",
+      "mentions_availability": false,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": []
+    },
+    {
+      "name": "cs_intake_claim_ringcentral",
+      "args": "p_submission_id uuid",
+      "mentions_availability": true,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": [
+        "if v_me.availability::text <> 'available' then",
+        "if v_me.availability::text <> 'available'"
+      ]
+    },
+    {
+      "name": "pass_my_turn",
+      "args": "p_rotation rotation_kind, p_reason text",
+      "mentions_availability": true,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": [
+        "perform public.ensure_daily_availability_reset();"
+      ]
+    },
+    {
+      "name": "start_quote_take_timer_v094",
+      "args": "p_rotation rotation_kind, p_received_at timestamp with time zone, p_customer_name text, p_dealer_id uuid, p_salesperson_id uuid, p_work_type work_type, p_note text",
+      "mentions_availability": false,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": []
+    },
+    {
+      "name": "steal_timed_quote",
+      "args": "p_timer_id uuid",
+      "mentions_availability": true,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": [
+        "if v_me.availability <> 'available' then"
+      ]
+    },
+    {
+      "name": "take_quote_turn",
+      "args": "p_rotation rotation_kind, p_received_at timestamp with time zone, p_customer_name text, p_dealer_id uuid, p_work_type work_type, p_note text",
+      "mentions_availability": true,
+      "writes_availability_directly": false,
+      "calls_set_my_availability": false,
+      "availability_lines": [
+        "perform public.ensure_daily_availability_reset();",
+        "if v_me.availability <> 'available' then raise exception 'Set your status to Available before using Take'; end if;",
+        "and p.availability = 'available'"
+      ]
+    }
+  ],
+  "triggers_whose_function_mentions_availability": [],
+  "enums": [
+    {
+      "enum_name": "availability_status",
+      "label": "available",
+      "sort": 1
+    },
+    {
+      "enum_name": "availability_status",
+      "label": "break",
+      "sort": 2
+    },
+    {
+      "enum_name": "availability_status",
+      "label": "unavailable",
+      "sort": 3
+    },
+    {
+      "enum_name": "rotation_kind",
+      "label": "whatsapp",
+      "sort": 1
+    },
+    {
+      "enum_name": "rotation_kind",
+      "label": "ringcentral",
+      "sort": 2
+    },
+    {
+      "enum_name": "rotation_kind",
+      "label": "workload",
+      "sort": 3
+    }
+  ],
+  "absence_checks": {
+    "enum_queue_status_mode": 0,
+    "table_availability_events": 0,
+    "col_profiles_queue_status_mode": 0,
+    "col_breaks_pre_break_queue_status": 0,
+    "fns_from_this_bugfix": 0
+  },
+  "profiles_availability_column": {
+    "column_name": "availability",
+    "data_type": "USER-DEFINED",
+    "udt_name": "availability_status",
+    "is_nullable": "NO",
+    "column_default": "'unavailable'::availability_status"
+  },
+  "recorded_migrations_latest_10": {
+    "error": "Failed (400): {\"message\":\"Failed to run sql query: ERROR:  42P01: relation \\\"supabase_migrations.schema_migrations\\\" does not exist\\nLINE 3:     from supabase_migrations.schema_migrations\\n                 ^\\n\"}"
+  }
+}

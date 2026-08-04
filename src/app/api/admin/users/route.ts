@@ -94,7 +94,7 @@ export async function GET() {
   const { data, error } = await authorization.admin
     .from("profiles")
     .select(
-      "id,username,display_name,initials,role,rotation_position,availability,is_active,must_change_password,created_at",
+      "id,username,display_name,initials,role,rotation_position,availability,queue_status_mode,is_active,must_change_password,created_at",
     )
     .order("is_active", { ascending: false })
     .order("rotation_position");
@@ -316,6 +316,54 @@ export async function PATCH(request: Request) {
   if (parsed instanceof Response) return parsed;
 
   const userId = String(parsed.userId ?? "").trim();
+
+  // Queue-status control mode: the per-agent opt-in that decides whether an
+  // attendance action may move sales-queue status at all (Requirement 2.11). A
+  // separate branch from the password reset below because the two share only the
+  // target user, and the mode change carries no password.
+  //
+  // The RPC runs on the caller's own session rather than on the service-role
+  // client: `manager_set_queue_status_mode` is guarded by `public.is_manager()`,
+  // which reads `auth.uid()`, and a service-role call has no `auth.uid()` to
+  // read. The route's own `canAdministerUsers` guard has already run.
+  if (parsed.queue_status_mode !== undefined) {
+    if (!userId)
+      return Response.json({ error: "User ID is required." }, { status: 400 });
+
+    const mode = String(parsed.queue_status_mode);
+    if (!["manual", "attendance_assisted"].includes(mode)) {
+      return Response.json(
+        { error: "Queue status mode must be 'manual' or 'attendance_assisted'." },
+        { status: 400 },
+      );
+    }
+
+    const reason = String(parsed.reason ?? "").trim();
+    if (!reason) {
+      return Response.json(
+        { error: "A reason is required to change the queue status mode." },
+        { status: 400 },
+      );
+    }
+
+    const sessionClient = await createSessionClient();
+    if (!sessionClient) {
+      return Response.json(
+        { error: "Supabase is not configured." },
+        { status: 503 },
+      );
+    }
+
+    const { data, error } = await sessionClient.rpc(
+      "manager_set_queue_status_mode",
+      { p_profile_id: userId, p_mode: mode, p_reason: reason },
+    );
+
+    if (error) return Response.json({ error: error.message }, { status: 400 });
+
+    return Response.json({ userId, queue_status_mode: data ?? mode });
+  }
+
   const password = String(parsed.temporaryPassword ?? "");
   if (!userId)
     return Response.json({ error: "User ID is required." }, { status: 400 });

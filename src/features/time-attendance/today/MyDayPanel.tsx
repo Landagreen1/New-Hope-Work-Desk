@@ -56,7 +56,7 @@
 
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import type { ProfileLite } from '../../nhwd-shared/types';
 import { ui } from '../../nhwd-shared/ui';
@@ -68,6 +68,12 @@ import {
   secondaryClockActions,
   type MyDayAlert,
 } from '../domain/presentation';
+import {
+  QUEUE_ACTION_STATUS,
+  toStatusView,
+  type ActiveClockResponse,
+  type QueueStatusAction,
+} from '../domain/queue-status';
 import type { DailyAttendanceRecord } from '../domain/types';
 import { addCalendarDays, consecutiveDates } from '../domain/work-date';
 import type { DayResponse, RecordPage } from '../server/attendance-service';
@@ -84,10 +90,12 @@ import {
 import { StatusIcon } from '../shared/StatusIcon';
 import { StatusPill } from '../shared/StatusPill';
 import { colorRoleToken } from '../shared/tokens';
+import { setMyQueueStatus } from '../shared/queue-status-client';
 import { useAsyncResource } from '../shared/useAsyncResource';
 import { useAttendancePoll } from '../shared/useAttendancePoll';
-import { useClockAction } from '../shared/useClockAction';
+import { useClockAction, type ClockActionResponse } from '../shared/useClockAction';
 import { MyDayHistory } from './MyDayHistory';
+import { SalesQueueStatus } from './SalesQueueStatus';
 
 /**
  * How many dates the history section lists: fourteen, the floor Requirement 4,
@@ -303,18 +311,92 @@ export function MyDayPanel({ profile }: MyDayPanelProps) {
     }
   }, [record, historyRecords, day.data]);
 
+  // Both statuses, from one read. Attendance status and sales-queue status are two
+  // different facts, and this is the read that reports the second one — the panel
+  // never infers it from the first (Requirements 2.14, 2.18).
+  const clockStatus = useAsyncResource<ActiveClockResponse>(
+    (signal) => attendanceJson<ActiveClockResponse>('/api/time-clock/active', { signal }),
+    { subject: 'clock status', isEmpty: () => false },
+  );
+
+  const [queueBusy, setQueueBusy] = useState(false);
+  const [queueFailure, setQueueFailure] = useState<string | null>(null);
+
   const refreshAll = day.refresh;
   const refreshHistory = historyPage.refresh;
+  const refreshClockStatus = clockStatus.refresh;
+  const setClockStatus = clockStatus.setData;
 
   // Criteria 20 and 21 — one action at a time, and the displayed state moves only
   // on a success — live in `useClockAction`, which Team Today's header control
   // posts through as well, so there is one implementation of a clock action.
-  const onRecorded = useCallback(() => {
-    refreshAll();
-    refreshHistory();
-  }, [refreshAll, refreshHistory]);
+  //
+  // The response carries both statuses as the database reported them at the end of
+  // the transaction, so they are displayed from the payload rather than from a
+  // second request that could read a different moment (Requirement 2.18). The
+  // refresh that follows catches the figures a status cannot carry.
+  const onRecorded = useCallback(
+    (result: ClockActionResponse) => {
+      if (result.attendance_status !== undefined) {
+        setClockStatus((previous) => ({
+          clocked_in: result.attendance_status !== 'clocked_out',
+          entry: previous?.entry ?? null,
+          active_break: previous?.active_break ?? null,
+          attendance_status: result.attendance_status ?? 'clocked_out',
+          queue_status: result.queue_status ?? null,
+          queue_status_mode: result.queue_status_mode ?? null,
+          is_agent: result.is_agent ?? false,
+        }));
+      }
+      setQueueFailure(null);
+      refreshAll();
+      refreshHistory();
+      refreshClockStatus();
+    },
+    [refreshAll, refreshHistory, refreshClockStatus, setClockStatus],
+  );
 
   const clock = useClockAction(onRecorded);
+
+  /**
+   * The one explicit path in and out of the sales queues from this panel.
+   *
+   * `set_my_queue_status` is inspected rather than fired and forgotten, and the
+   * message it raises is displayed beside the unchanged figures (Requirements 2.9,
+   * 2.15, 2.17, 3.10).
+   */
+  const onQueueAction = useCallback(
+    (action: QueueStatusAction) => {
+      if (queueBusy) return;
+      setQueueBusy(true);
+      setQueueFailure(null);
+
+      void (async () => {
+        try {
+          await setMyQueueStatus(
+            QUEUE_ACTION_STATUS[action],
+            action === 'join_sales_queues' ? 'Joined the sales queues' : 'Left the sales queues',
+          );
+          refreshClockStatus();
+          refreshAll();
+        } catch (error) {
+          setQueueFailure(
+            error instanceof Error
+              ? error.message
+              : 'The sales queue status could not be changed.',
+          );
+        } finally {
+          setQueueBusy(false);
+        }
+      })();
+    },
+    [queueBusy, refreshAll, refreshClockStatus],
+  );
+
+  const statusView = useMemo(
+    () => (clockStatus.data === null ? null : toStatusView(clockStatus.data)),
+    [clockStatus.data],
+  );
 
   const primary = record === null ? null : primaryClockAction(record);
   const secondary = record === null ? [] : secondaryClockActions(record);
@@ -361,6 +443,18 @@ export function MyDayPanel({ profile }: MyDayPanelProps) {
             onRetry={day.retry}
             subject={'today\u2019s shift'}
           />
+
+          {/* Requirement 2.14: attendance status and sales-queue status as two
+              separately labelled values, with the sentence and the explicit action
+              that 2.15, 2.16 and 2.17 attach to the state they describe. */}
+          {statusView !== null && (
+            <SalesQueueStatus
+              {...statusView}
+              busy={queueBusy}
+              failure={queueFailure}
+              onAction={onQueueAction}
+            />
+          )}
 
           {record !== null && (
             <>
