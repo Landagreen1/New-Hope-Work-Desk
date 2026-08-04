@@ -317,6 +317,14 @@ export interface KpiWindow {
   conversion_rate: number | null;
   quote_to_sale_rate: number | null;
   median_time_to_pricing_minutes: number | null;
+  /**
+   * Priced, and no outcome yet.
+   *
+   * The companion to `pending_pricing`, which is the opposite population: no pricing
+   * sent at all. The legacy report's card labelled "Pending Pricing" counted this one,
+   * undated. Both appear on the same KPI card so the shared name cannot mislead.
+   */
+  awaiting_customer_decision: number;
 }
 
 export interface ReportSummary {

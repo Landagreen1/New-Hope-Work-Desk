@@ -19,7 +19,14 @@ import { useState } from 'react';
 
 import { ui } from '../nhwd-shared-bridge';
 import { KPI_RIBBON_METRICS, METRIC_DEFINITIONS, metricTimestampLabel } from '../definitions';
-import { computeDelta, formatDelta, formatKpi, isPercentMetric, kpiValue } from '../derive';
+import {
+  computeDelta,
+  formatCount,
+  formatDelta,
+  formatKpi,
+  isPercentMetric,
+  kpiValue,
+} from '../derive';
 import type { MetricId, ReportSummary } from '../types';
 
 function DefinitionPopover({ metricId }: { metricId: MetricId }) {
@@ -96,6 +103,17 @@ export function KpiRibbon({
                 <DefinitionPopover metricId={metricId} />
               </span>
               <span className={ui.statValue}>{formatKpi(current, metricId)}</span>
+              {/*
+                The companion figure. "Pending Pricing" named the opposite population in
+                the legacy report, so showing only one of the two invites a manager to
+                read a 1 where they expect a 60 and conclude the report is broken.
+              */}
+              {metricId === 'pending_pricing' ? (
+                <span className="mt-1 block text-[11px] font-black text-amber-700">
+                  {formatCount(summary?.current?.awaiting_customer_decision)} awaiting
+                  customer decision (priced)
+                </span>
+              ) : null}
               <span className="mt-1 block text-[11px] font-bold text-slate-400">
                 by {metricTimestampLabel(metricId)}
               </span>
@@ -121,7 +139,10 @@ export function KpiRibbon({
       <p className="mt-2 text-[11px] font-semibold text-slate-400">
         Conversion Rate is Sold divided by Finalized. Quote-to-Sale Rate, which divides
         Sold by every quote received, is a different measure and is shown separately in
-        Quote Cohort mode.
+        Quote Cohort mode. <strong className="text-slate-500">Awaiting Pricing</strong>{' '}
+        counts quotes with no pricing sent yet; the legacy report&rsquo;s
+        &ldquo;Pending Pricing&rdquo; card counted the opposite group, shown here as
+        awaiting customer decision.
       </p>
     </section>
   );

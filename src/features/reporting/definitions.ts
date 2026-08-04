@@ -119,9 +119,11 @@ export const METRIC_DEFINITIONS: Record<MetricId, MetricDefinition> = {
   },
   pending_pricing: {
     id: 'pending_pricing',
-    label: 'Pending Pricing',
+    // "Awaiting Pricing" rather than the bare "Pending Pricing", because the legacy
+    // report used that phrase for the opposite population. See the note below.
+    label: 'Awaiting Pricing',
     definition:
-      'Quotes that, as of the end of the selected period, exist, are not finalized, and have had no verified pricing sent. An as-of-date count, not a count of records created during the period.',
+      'Quotes that, as of the end of the selected period, exist, are not finalized, and have had NO verified pricing sent. An as-of-date count, not a count of records created during the period. Note: the legacy report\u2019s card labelled "Pending Pricing" counted the opposite group \u2014 quotes that HAVE been priced and are waiting on the customer. That figure is shown here as Awaiting Customer Decision.',
     countedBy: 'report_end_instant',
     modes: ['activity', 'cohort'],
     denominator: null,

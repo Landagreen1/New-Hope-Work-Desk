@@ -3,8 +3,20 @@
 -- Spec: .kiro/specs/sales-reporting-center-redesign
 -- Run with: node scripts/run-sql.mjs supabase/verification/v1.12-reporting-checks.sql
 --
--- Read-only. Every check returns a verdict column so a failure is visible without
--- having to interpret the numbers.
+-- Read-only apart from the session-local setting. Every check returns a verdict column
+-- so a failure is visible without having to interpret the numbers.
+--
+-- The Management API connects with no JWT, so auth.uid() is null and the reporting
+-- functions correctly refuse. That refusal is the behaviour Requirement 19.6 asks for,
+-- and it also means the three checks that call a reporting function would report FAIL for
+-- the right reason. request.jwt.claims is what auth.uid() reads, so a manager session is
+-- stood in for here. Authorization itself is checked in
+-- v1.12-reporting-rpc-checks.sql.
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"5608dfc2-e63c-4f0d-beb4-12b41458aa50","role":"authenticated"}',
+  false
+) as simulated_manager_session;
 
 with
 

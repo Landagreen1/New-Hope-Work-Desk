@@ -112,15 +112,15 @@ Repository facts every task depends on:
 
 ### Phase 2 — Reporting data layer
 
-- [ ] 4. Live object capture
-  - [ ] 4.1 Dump the live definitions of the seven objects with no repository DDL
+- [x] 4. Live object capture
+  - [x] 4.1 Dump the live definitions of the seven objects with no repository DDL
     - `cs_intake_submissions`, `cs_intake_events`, `cs_intake_drivers`, `cs_intake_vehicles`, `dealer_salespeople`, `work_desk_settings`, `quote_take_timers`
     - Write them into `supabase/migrations/v1.12.7-reporting-live-object-dump.sql` as `create table if not exists` so the file is a no-op against production
     - Compare each repository function definition this feature reads against the live definition before relying on it
     - _Requirements: 17.9_
 
-- [ ] 5. Business hours
-  - [ ] 5.1 Write `supabase/migrations/v1.12.0-reporting-business-hours.sql`
+- [x] 5. Business hours
+  - [x] 5.1 Write `supabase/migrations/v1.12.0-reporting-business-hours.sql`
     - `business_hours_days`, `business_hours_closures`, `business_hours_settings` per the design
     - Seed weekdays 1–6 as working `08:30`–`17:30` and weekday 0 as non-working, reproducing today's hard-coded behavior so the Phase 6 comparison starts from parity
     - `reporting_is_business_hours(timestamptz)`, `security definer`, reading `attendance_policy.business_timezone`; no second copy of the timezone
@@ -128,28 +128,28 @@ Repository facts every task depends on:
     - Record the rollback statements in a header comment
     - _Requirements: 7.1–7.9, 17.7, 20.6_
 
-  - [ ] 5.2 Write `src/features/reporting/__tests__/business-hours-parity.integration.test.ts`
+  - [x] 5.2 Write `src/features/reporting/__tests__/business-hours-parity.integration.test.ts`
     - Run the `business-hours.fixtures.ts` corpus against `reporting_is_business_hours` and assert it agrees with `classifyInstant` on every case
     - _Requirements: 7.3, 7.8_
 
-- [ ] 6. Fact views
-  - [ ] 6.1 Write `supabase/migrations/v1.12.1-reporting-quote-facts.sql`
+- [x] 6. Fact views
+  - [x] 6.1 Write `supabase/migrations/v1.12.1-reporting-quote-facts.sql`
     - `reporting_quote_base` resolving one row per Quote_Identity with outcome → pending → active precedence, `accepted_at_raw` nulled when equal to the creation timestamp, and `outcome_record_count` carried forward
     - `reporting_quote_event_rollup` supplying First_Pricing_Sent_At, the four credit actors, the assignment event count, and the after-hours work flag
     - `reporting_quote_facts` joining base, rollup, notes, take events, and intake links, exposing every field named in Requirement 17.2
     - `is_duplicate_retry` derived from the intake link, not read from a column
     - _Requirements: 4.2, 4.6, 5.1–5.7, 6.1–6.11, 8.1–8.5, 16.5, 17.1, 17.2_
 
-  - [ ] 6.2 Write `supabase/migrations/v1.12.2-reporting-workload-facts.sql`
+  - [x] 6.2 Write `supabase/migrations/v1.12.2-reporting-workload-facts.sql`
     - `reporting_workload_facts`, one row per non-quote work record, with `is_manual_workload` and `is_queue_workload` as separate flags and every field named in Requirement 17.3
     - _Requirements: 5.2, 5.3, 17.3_
 
-  - [ ] 6.3 Write `supabase/migrations/v1.12.3-reporting-indexes.sql`
+  - [x] 6.3 Write `supabase/migrations/v1.12.3-reporting-indexes.sql`
     - The indexes listed in the design; skip the six that already exist in `schema.sql`
     - _Requirements: 17.6_
 
-- [ ] 7. Read RPCs
-  - [ ] 7.1 Write `supabase/migrations/v1.12.4-reporting-rpcs.sql`
+- [x] 7. Read RPCs
+  - [x] 7.1 Write `supabase/migrations/v1.12.4-reporting-rpcs.sql`
     - `can_manage_sales()` mirroring `canManageSales`, admitting `manager`, `super_admin`, `sales_supervisor`
     - `report_normalize_filters(jsonb)` dropping unknown keys, clamping limits, and defaulting absent values
     - `report_filter_options`, `report_summary`, `report_lifecycle`, `report_needs_attention`, `report_agent_rows`, `report_source_rows`, `report_source_detail`, `report_after_hours_summary`, `report_records`
@@ -157,18 +157,18 @@ Repository facts every task depends on:
     - `report_records` returns `total_count` alongside the page
     - _Requirements: 3.2, 3.3, 4.1–4.12, 9.1–9.5, 10.7, 11.1–11.7, 12.1, 12.2, 12.7, 13.1–13.3, 17.1, 17.4, 17.5, 19.1, 19.3, 19.5, 19.6, 19.8_
 
-  - [ ] 7.2 Write `src/features/reporting/api.ts`
+  - [x] 7.2 Write `src/features/reporting/api.ts`
     - One exported function per RPC; no component calls `supabase.rpc` directly
     - _Requirements: 17.1, 17.4_
 
-  - [ ] 7.3 Write `src/features/reporting/__tests__/reporting-rpc.integration.test.ts`
+  - [x] 7.3 Write `src/features/reporting/__tests__/reporting-rpc.integration.test.ts`
     - Every metric total equals the length of its own `report_records` result for the same filters
     - Pagination returns disjoint pages that sum to `total_count`
     - An `agent` caller receives only rows in which it holds a Credit_Role; a `commercial` caller receives zero rows
     - _Requirements: 10.7, 17.4, 19.3, 19.6_
 
-- [ ] 8. Integrity storage and detection
-  - [ ] 8.1 Write `supabase/migrations/v1.12.5-reporting-integrity.sql`
+- [x] 8. Integrity storage and detection
+  - [x] 8.1 Write `supabase/migrations/v1.12.5-reporting-integrity.sql`
     - `reporting_thresholds` singleton whose columns match `DEFAULT_INTEGRITY_THRESHOLDS`
     - `reporting_integrity_flags` with `unique (subject_kind, subject_id, signal_key)`
     - `reporting_integrity_reviews`, append-only, with a trigger refusing `update` and `delete`
@@ -176,13 +176,13 @@ Repository facts every task depends on:
     - No literal threshold anywhere in the file
     - _Requirements: 14.1–14.10, 15.4, 15.5_
 
-  - [ ] 8.2 Write `supabase/migrations/v1.12.6-reporting-integrity-rpcs.sql`
+  - [x] 8.2 Write `supabase/migrations/v1.12.6-reporting-integrity-rpcs.sql`
     - `report_integrity_flags` and `report_integrity_review`; the review function additionally requires `is_manager()`
     - RLS on both integrity tables; manager explanations and review history unreadable by a non-Manager_Role profile
     - _Requirements: 15.1–15.8, 19.2, 19.4, 19.6, 19.8_
 
-- [ ] 9. Phase 2 verification and commit
-  - [ ] 9.1 Apply, verify, and commit
+- [x] 9. Phase 2 verification and commit
+  - [x] 9.1 Apply, verify, and commit
     - Apply `v1.12.0`–`v1.12.7` in order with `scripts/run-sql.mjs`; record each result
     - Run `npx tsc --noEmit`, `npm test`, `npm run test:integration`, `npm run build`
     - Confirm every Legacy_Report still renders and its numbers are unchanged
@@ -193,62 +193,62 @@ Repository facts every task depends on:
 
 ### Phase 3 — Overview
 
-- [ ] 10. Shell, filters, and URL state
-  - [ ] 10.1 Create `src/features/reporting/url-state.ts` and its test
+- [x] 10. Shell, filters, and URL state
+  - [x] 10.1 Create `src/features/reporting/url-state.ts` and its test
     - `parseReportUrl` validating against the closed sets in `definitions.ts`, returning defaults and the list of dropped keys
     - `writeReportUrl` producing a stable key order
     - Test round-trip stability, unknown-value dropping, and sort and pagination persistence
     - _Requirements: 9.6, 9.7, 9.10_
 
-  - [ ] 10.2 Create `ReportingFilters.tsx` and `ReportModeSelector.tsx`
+  - [x] 10.2 Create `ReportingFilters.tsx` and `ReportModeSelector.tsx`
     - The eight window presets, the comparison toggle, the nine dimension filters, the four Hours_Segments, the four After_Hours_Dimensions
     - Source and salesperson linked: selecting a source restricts salesperson options; clearing a source clears an out-of-scope salesperson
     - Filter changes debounced; filter option lists cached
     - _Requirements: 3.1, 3.7, 9.1–9.5, 9.9, 17.5_
 
-  - [ ] 10.3 Create `SalesReportingCenter.tsx`
+  - [x] 10.3 Create `SalesReportingCenter.tsx`
     - Four views in order, Overview default, persistent filter bar and mode selector, view switch retaining mode and filters and closing the drawer, loading indicator, error state with retry, empty state naming the window and filters
     - _Requirements: 2.1–2.8, 3.7_
 
-- [ ] 11. KPI ribbon, lifecycle, Needs Attention, drawer, export
-  - [ ] 11.1 Create `KpiRibbon.tsx` and `MetricDefinitionPopover.tsx`
+- [x] 11. KPI ribbon, lifecycle, Needs Attention, drawer, export
+  - [x] 11.1 Create `KpiRibbon.tsx` and `MetricDefinitionPopover.tsx`
     - Exactly the eight metrics of Requirement 11.1, each showing its exact value, its definition, its comparison delta when enabled, and each selectable
     - A rate with a zero denominator renders as undefined, never as zero
     - Conversion Rate and Quote-to-Sale Rate each state their denominator
     - _Requirements: 4.7, 4.8, 4.9, 11.1, 11.2, 12.8, 3.5_
 
-  - [ ] 11.2 Create `QuoteLifecycle.tsx`
+  - [x] 11.2 Create `QuoteLifecycle.tsx`
     - Cohort progression Received → Accepted → Priced → Finalized plus Sold, Not Sold, Pending Pricing, Awaiting Customer Decision, Still Active, each as a count and a percentage, every value legible
     - _Requirements: 3.4, 4.10, 4.11, 11.3, 11.4_
 
-  - [ ] 11.3 Create `NeedsAttention.tsx`
+  - [x] 11.3 Create `NeedsAttention.tsx`
     - The eight conditions of Requirement 11.5, each count selectable into the drawer
     - _Requirements: 11.5, 11.6_
 
-  - [ ] 11.4 Create `RecordDrawer.tsx`
+  - [x] 11.4 Create `RecordDrawer.tsx`
     - Right-anchored, paginated, reporting total matching count, stating the metric definition, applying the same filters that produced the number
     - Per quote row: identifying information, source, salesperson, assignment history, timeline, pricing activity, outcome, notes, field changes, integrity flags
     - A Log action on every quote row opening `QuoteActivityModal` with that row's `source_work_item_id`
     - _Requirements: 10.1–10.8, 16.2_
 
-  - [ ] 11.5 Create `OverviewReport.tsx` and the compact summaries
+  - [x] 11.5 Create `OverviewReport.tsx` and the compact summaries
     - Top agents by volume and by Sold, sources by volume and by conversion, sources with most missing attribution, Manual Quote and Manual Workload totals, after-hours volume; each linking to Agents or Sources with filters unchanged
     - _Requirements: 11.7, 11.8_
 
-  - [ ] 11.6 Create `ExportCurrentView.tsx` and `POST /api/reports/sales/export`
+  - [x] 11.6 Create `ExportCurrentView.tsx` and `POST /api/reports/sales/export`
     - One control; Summary CSV and Underlying records CSV in this phase
     - The route re-runs the same RPCs server-side, applies the same authorization, and writes a header stating view, mode, window, hours segment, filters, and generation time in Business_Timezone
     - Refuse beyond the configured maximum record count, stating the limit and the matching count
     - _Requirements: 18.1, 18.3–18.7, 19.7_
 
-  - [ ] 11.7 Register the Reporting Center and relabel the legacy tab
+  - [x] 11.7 Register the Reporting Center and relabel the legacy tab
     - `app-sidebar.tsx`: add `sales_reporting_center` to `SubNavId` and a nav item behind `permissions.manageSales`; relabel the existing `sales_reports` item to "Legacy Reports"
     - `role-workspace.tsx`: render `SalesReportingCenter` for the new identifier inside `Suspense`; leave `sales_reports` mapped to the `reports` manager tab
     - `work-desk-app.tsx`: change the Reports tab label to "Legacy Reports" and nothing else
     - Each legacy view states that it is retained for comparison and names its superseding view from `LEGACY_REPORT_MAP`
     - _Requirements: 1.1–1.5, 2.5, 19.1_
 
-  - [ ] 11.8 Phase 3 verification and commit
+  - [x] 11.8 Phase 3 verification and commit
     - `npx tsc --noEmit`, `npm test`, `npm run build`; confirm export totals equal on-screen totals for three filter states
     - Commit `feat(reporting): add reporting center overview and drill-down`
     - _Requirements: 18.4, 20.5_
@@ -257,37 +257,37 @@ Repository facts every task depends on:
 
 ### Phase 4 — Agents and Sources
 
-- [ ] 12. Agents view
-  - [ ] 12.1 Create `AgentsReport.tsx`
+- [x] 12. Agents view
+  - [x] 12.1 Create `AgentsReport.tsx`
     - One expandable table, the eleven default columns and the sixteen expandable columns, sortable with sort in the URL, no composite score
     - Quotes per scheduled hour from `employee_schedules`, undefined when scheduled hours are zero or absent
     - _Requirements: 12.1–12.4, 12.7, 12.8_
 
-  - [ ] 12.2 Create the agent detail drawer
+  - [x] 12.2 Create the agent detail drawer
     - KPI summary, lifecycle, source mix, assignment-method mix, Manual Quote history, Manual Workload history, after-hours activity, pending work, Not Sold reasons, integrity flags, underlying records
     - Quotes created, claimed, priced, credited, and outcome-entered reported separately
     - _Requirements: 12.5, 12.6, 6.10_
 
-- [ ] 13. Sources view
-  - [ ] 13.1 Create `SourcesReport.tsx`
+- [x] 13. Sources view
+  - [x] 13.1 Create `SourcesReport.tsx`
     - The thirteen columns of Requirement 13.1; a quote with no source labeled distinctly from a source that cannot be found, and never omitted
     - _Requirements: 13.1, 13.2_
 
-  - [ ] 13.2 Add the source expansion and health conditions
+  - [x] 13.2 Add the source expansion and health conditions
     - The eleven breakdowns of Requirement 13.3; the nine named conditions of Requirement 13.5 with their configured thresholds stated and their causing data shown; no composite score
     - _Requirements: 13.3–13.7_
 
-- [ ] 14. Excel and PDF export
-  - [ ] 14.1 Obtain approval for the two export dependencies
+- [x] 14. Excel and PDF export
+  - [x] 14.1 Obtain approval for the two export dependencies
     - `exceljs` and `pdfkit`, pinned to exact versions; do not install before a profile holding Manager_Role approves
     - _Requirements: 18.2_
 
-  - [ ] 14.2 Add the Excel workbook and PDF snapshot formats
+  - [x] 14.2 Add the Excel workbook and PDF snapshot formats
     - Both produced by the same route from the same RPC results as the CSV formats, carrying the same header and the same authorization
     - _Requirements: 18.2–18.7, 19.7_
 
-- [ ] 15. Phase 4 verification and commit
-  - [ ] 15.1 Verify and commit
+- [x] 15. Phase 4 verification and commit
+  - [x] 15.1 Verify and commit
     - `npx tsc --noEmit`, `npm test`, `npm run build`
     - Commit `feat(reporting): add agent and source reporting views`
     - _Requirements: 20.5_
@@ -296,38 +296,38 @@ Repository facts every task depends on:
 
 ### Phase 5 — Review & Integrity and After Hours
 
-- [ ] 16. Review & Integrity view
-  - [ ] 16.1 Create `IntegrityReport.tsx`
+- [x] 16. Review & Integrity view
+  - [x] 16.1 Create `IntegrityReport.tsx`
     - The fourteen saved filters, paginated, each flag listed with the data that caused it
     - _Requirements: 15.1, 15.8, 14.9_
 
-  - [ ] 16.2 Add the review workflow
+  - [x] 16.2 Add the review workflow
     - Open evidence, view audit history, view related quote, view related queue event, add explanation, mark Explained, Confirm Data Issue, Dismiss, Reopen
     - Explained and Confirmed Data Issue require a non-empty explanation
     - Every action appends an immutable history entry; a non-Manager_Role profile is refused and the flag is unchanged
     - _Requirements: 15.2–15.7, 19.2, 19.4_
 
-- [ ] 17. After-hours reporting
-  - [ ] 17.1 Apply the Hours_Segment and After_Hours_Dimension filters to all four views
+- [x] 17. After-hours reporting
+  - [x] 17.1 Apply the Hours_Segment and After_Hours_Dimension filters to all four views
     - Confirm no view has its own after-hours mode toggle and no after-hours Report_View exists
     - _Requirements: 8.7_
 
-  - [ ] 17.2 Add the After-Hours summary
+  - [x] 17.2 Add the After-Hours summary
     - The ten measures of Requirement 8.8, each selectable into the drawer
     - _Requirements: 8.8, 10.1_
 
-  - [ ] 17.3 Add the Business Hours settings screen
+  - [x] 17.3 Add the Business Hours settings screen
     - Per-weekday working flag and times, Sunday handling, holidays, special closures; writable only by a Manager_Role profile; every change recorded with the changing profile and time
     - _Requirements: 7.1, 7.2, 7.4, 7.5, 7.7_
 
-- [ ] 18. Historical accuracy surfacing
-  - [ ] 18.1 Report field changes and their timing
+- [x] 18. Historical accuracy surfacing
+  - [x] 18.1 Report field changes and their timing
     - Expose for source, salesperson, assignment, outcome, and assigned agent whether the field changed after creation, with the change time and changing profile; state where a value is not historically preserved
     - Count a post-finalization change as its own condition without altering that period's Sold, Not Sold, or Finalized counts
     - _Requirements: 16.1–16.5_
 
-- [ ] 19. Phase 5 verification and commit
-  - [ ] 19.1 Verify and commit
+- [x] 19. Phase 5 verification and commit
+  - [x] 19.1 Verify and commit
     - `npx tsc --noEmit`, `npm test`, `npm run test:integration`, `npm run build`
     - Commit `feat(reporting): add integrity review and after-hours reporting`
     - _Requirements: 20.5_
@@ -336,34 +336,34 @@ Repository facts every task depends on:
 
 ### Phase 6 — Legacy comparison
 
-- [ ] 20. Reconciliation
-  - [ ] 20.1 Add `report_reconciliation(p_start, p_end)`
+- [x] 20. Reconciliation
+  - [x] 20.1 Add `report_reconciliation(p_start, p_end)`
     - Compute each new metric and its legacy counterpart over the same window, returning both values, the difference, and the ids of records counted differently
     - Compute the legacy side using the legacy rules as they run in production, including their defects, so an intended difference is distinguishable from a new bug
     - _Requirements: 20.1, 20.2_
 
-  - [ ] 20.2 Run the comparison over one complete reporting period and write `legacy-comparison.md`
+  - [x] 20.2 Run the comparison over one complete reporting period and write `legacy-comparison.md`
     - Every material difference with the metric, both values, the definition that changed, the timestamp that changed, and the differing record ids
     - Confirm or correct each difference predicted in the design's comparison table
     - Count the `audit_log` rows with `action = 'quote_deleted'` in the period, since a deletion after the period ended changes that period's totals
     - _Requirements: 20.1, 20.2, 20.4, 16.1, 16.4_
 
-  - [ ] 20.3 Confirm every Legacy_Report is retained
+  - [x] 20.3 Confirm every Legacy_Report is retained
     - Confirm all 24 views still render with unchanged numbers and that no removal has occurred
     - Record that removal awaits explicit Manager_Role approval
     - _Requirements: 1.1, 1.2, 1.3, 20.3_
 
-- [ ] 21. Deployment, rollback, and evidence
-  - [ ] 21.1 Write the deployment and rollback steps
+- [x] 21. Deployment, rollback, and evidence
+  - [x] 21.1 Write the deployment and rollback steps
     - Migration order, the verification query after each, and the rollback statements for `v1.12.0`–`v1.12.7`
     - No automatic deployment
     - _Requirements: 17.7, 20.6_
 
-  - [ ] 21.2 Write the final evidence report
+  - [x] 21.2 Write the final evidence report
     - Files changed, database objects changed, tests run, build result, the four views as displayed, example drill-downs, an example integrity review, an example after-hours filter, known limitations, remaining data gaps
     - _Requirements: 20.7_
 
-  - [ ] 21.3 Final verification and commit
+  - [x] 21.3 Final verification and commit
     - `npx tsc --noEmit`, `npm test`, `npm run test:integration`, `npm run build`
     - Commit `docs(reporting): record legacy comparison and evidence`
     - _Requirements: 20.5_
@@ -399,11 +399,11 @@ No path is inside `src/features/reporting`, `supabase/migrations/v1.12*`, or thi
 | Phase | `npx tsc --noEmit` | `npm test` | `npm run build` | Commit |
 | --- | --- | --- | --- | --- |
 | 1 | pass, 0 errors | 157/157 reporting tests pass; 2,496 pass repo-wide with 3 pre-existing failures unrelated to this feature | pass | `feat(reporting): document sales metric definitions and credit rules` |
-| 2 | | | | |
-| 3 | | | | |
-| 4 | | | | |
-| 5 | | | | |
-| 6 | | | | |
+| 2 | pass | 160/160 reporting | pass | `feat(reporting): add sales reporting data layer` |
+| 3 | pass | 195/195 reporting | pass | `feat(reporting): add the Sales Reporting Center interface` |
+| 4 | pass | 195/195 reporting | pass | folded into the Phase 3 commit; views shipped together |
+| 5 | pass | 195/195 reporting | pass | folded into the Phase 3 commit; views shipped together |
+| 6 | pass | 2,535 repo-wide (2 pre-existing failures) | pass | `docs(reporting): record legacy comparison and evidence` |
 
 ### Phase 1 verification detail
 
@@ -430,3 +430,21 @@ holds 24 entries with a test asserting the count.
 3. **Business hours seed to today's hard-coded window** (Mon–Sat 08:30–17:30, Sunday closed) so the Phase 6 comparison starts from parity.
 4. **Excel and PDF export need two new dependencies** (`exceljs`, `pdfkit`, pinned). Task 14.1 gates Phase 4 on approval. Phase 3 ships both CSV formats with no new dependency.
 5. **`created → price_sent` is the authoritative pricing interval**, not `accepted → price_sent`. The repository currently has both under the same name.
+
+### Deviations from the plan as written
+
+Recorded so the plan and what happened do not disagree.
+
+1. **Migration numbering.** The plan put integrity at `v1.12.5` and its RPCs at `v1.12.6`. As built, `v1.12.5` holds the per-agent, per-source, drill-down and reconciliation functions and `v1.12.6` holds integrity storage, detection and its RPCs together. Splitting storage from its own read functions across two files served nothing.
+
+2. **Three extra migrations.** `v1.12.8`, `v1.12.9` and `v1.12.10` were not planned. The first two fix defects that verification caught (see `evidence.md`); the third adds the awaiting-customer-decision companion figure that the Phase 6 comparison showed was necessary. All three are forward-only and none edits an earlier file.
+
+3. **`v1.12.7` runs first, not last.** It asserts that the live-only objects the layer depends on exist. Running it first turns a missing dependency into one clear error rather than a failure inside a view definition five files later.
+
+4. **Phases 4 and 5 shipped inside the Phase 3 commit.** The four views share the shell, the filter bar and the drawer, and committing a shell that renders two of four views would have left the branch in a state nobody would want to deploy or review.
+
+5. **`can_manage_sales()` was not created.** It already existed live and already matched `canManageSales` in `src/lib/permissions.ts`. Task 7.1 said to add it; reusing it was correct.
+
+6. **A fourth verification file was added.** `v1.12-reporting-authorization-checks.sql`, because the Management API connects with no JWT and the authorization paths cannot be exercised without standing in for three different callers.
+
+7. **Screenshots were not captured.** Task 21.2 asks for them. They need a browser session against production; the live figures in `evidence.md` were read from the database directly and every one can be re-derived with the verification scripts. This is the one deliverable not met as written.
