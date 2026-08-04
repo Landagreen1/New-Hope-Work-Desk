@@ -110,6 +110,7 @@ const CASE_STATUS_TONE = {
   Resolved: 'success',
   Invalid: 'neutral',
   Duplicate: 'neutral',
+  'Import Review Required': 'warning',
 } as const satisfies Record<CaseStatus, string>;
 
 /** Badge tone per Communication_Status, for the SMS status and email status cells. */

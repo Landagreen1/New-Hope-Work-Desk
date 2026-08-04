@@ -1,11 +1,12 @@
 'use client';
 
-import { Building2 } from 'lucide-react';
+import { Building2, Plus, Trash2, UserRound } from 'lucide-react';
 import { ui } from '../nhwd-shared/ui';
 import DatePicker from '../nhwd-shared/DatePicker';
 import DollarInput from '../nhwd-shared/DollarInput';
 import StatesMultiSelect from '../nhwd-shared/StatesMultiSelect';
 import EinInput from '../nhwd-shared/EinInput';
+import type { CsIntakeOwner } from './api';
 
 const COVERAGE_OPTIONS = [
   { value: 'gl', label: 'General Liability (GL)' },
@@ -25,7 +26,7 @@ export interface CommercialGlData {
   annual_payroll: number | null;
   years_in_business: number | null;
   coverage_types_needed: string[];
-  // Owner info
+  // Legacy single-owner fields (kept for backward compat with insured_* mapping)
   owner_first_name: string;
   owner_middle_name: string;
   owner_last_name: string;
@@ -37,7 +38,22 @@ export interface CommercialGlData {
 interface CommercialGlSectionProps {
   data: CommercialGlData;
   onChange: (patch: Partial<CommercialGlData>) => void;
+  owners: CsIntakeOwner[];
+  onOwnersChange: (owners: CsIntakeOwner[]) => void;
   disabled?: boolean;
+}
+
+export function emptyOwner(position = 1): CsIntakeOwner {
+  return {
+    position,
+    first_name: '',
+    middle_name: null,
+    last_name: '',
+    dob: null,
+    phone: null,
+    email: null,
+    ownership_percentage: null,
+  };
 }
 
 function Field({ label, required, children, hint }: { label: string; required?: boolean; children: React.ReactNode; hint?: string }) {
@@ -50,13 +66,25 @@ function Field({ label, required, children, hint }: { label: string; required?: 
   );
 }
 
-export default function CommercialGlSection({ data, onChange, disabled }: CommercialGlSectionProps) {
+export default function CommercialGlSection({ data, onChange, owners, onOwnersChange, disabled }: CommercialGlSectionProps) {
   function toggleCoverage(value: string) {
     const current = data.coverage_types_needed;
     const updated = current.includes(value)
       ? current.filter((c) => c !== value)
       : [...current, value];
     onChange({ coverage_types_needed: updated });
+  }
+
+  function patchOwner(index: number, values: Partial<CsIntakeOwner>) {
+    onOwnersChange(owners.map((owner, i) => i === index ? { ...owner, ...values } : owner));
+  }
+
+  function removeOwner(index: number) {
+    onOwnersChange(owners.filter((_, i) => i !== index).map((owner, i) => ({ ...owner, position: i + 1 })));
+  }
+
+  function addOwner() {
+    onOwnersChange([...owners, emptyOwner(owners.length + 1)]);
   }
 
   return (
@@ -158,88 +186,119 @@ export default function CommercialGlSection({ data, onChange, disabled }: Commer
         </div>
       </section>
 
-      {/* Owner Information */}
+      {/* Owners Section (multiple) */}
       <section className={ui.card}>
         <div className={ui.cardHeader}>
           <div className="flex items-start gap-3">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#eef3fb] text-[#223f7a]">
-              <Building2 className="h-5 w-5" />
+              <UserRound className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-950">Owner Information</h3>
+              <h3 className="text-lg font-black text-slate-950">Owners ({owners.length})</h3>
               <p className="mt-1 text-sm font-semibold text-slate-500">
-                Business owner contact details (mandatory)
+                Add all business owners. At least one owner is required.
               </p>
             </div>
           </div>
         </div>
         <div className={ui.cardPad}>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Owner First Name" required>
-              <input
-                type="text"
-                className={ui.input}
-                value={data.owner_first_name}
-                onChange={(e) => onChange({ owner_first_name: e.target.value })}
-                placeholder="First name"
-                disabled={disabled}
-              />
-            </Field>
+          <div className="space-y-4">
+            {owners.map((owner, index) => (
+              <div key={owner.id || `owner-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-black text-slate-900">Owner {index + 1}{index === 0 ? ' · Primary' : ''}</p>
+                  {!disabled && index > 0 ? (
+                    <button type="button" className={ui.btnDanger} onClick={() => removeOwner(index)}>
+                      <Trash2 className="h-4 w-4" /> Remove
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Field label="First Name" required>
+                    <input
+                      type="text"
+                      className={ui.input}
+                      value={owner.first_name}
+                      onChange={(e) => patchOwner(index, { first_name: e.target.value })}
+                      placeholder="First name"
+                      disabled={disabled}
+                    />
+                  </Field>
 
-            <Field label="Owner Middle Name">
-              <input
-                type="text"
-                className={ui.input}
-                value={data.owner_middle_name}
-                onChange={(e) => onChange({ owner_middle_name: e.target.value })}
-                placeholder="Middle name (optional)"
-                disabled={disabled}
-              />
-            </Field>
+                  <Field label="Middle Name">
+                    <input
+                      type="text"
+                      className={ui.input}
+                      value={owner.middle_name || ''}
+                      onChange={(e) => patchOwner(index, { middle_name: e.target.value || null })}
+                      placeholder="Middle name (optional)"
+                      disabled={disabled}
+                    />
+                  </Field>
 
-            <Field label="Owner Last Name" required>
-              <input
-                type="text"
-                className={ui.input}
-                value={data.owner_last_name}
-                onChange={(e) => onChange({ owner_last_name: e.target.value })}
-                placeholder="Last name"
-                disabled={disabled}
-              />
-            </Field>
+                  <Field label="Last Name" required>
+                    <input
+                      type="text"
+                      className={ui.input}
+                      value={owner.last_name}
+                      onChange={(e) => patchOwner(index, { last_name: e.target.value })}
+                      placeholder="Last name"
+                      disabled={disabled}
+                    />
+                  </Field>
 
-            <Field label="Owner Date of Birth">
-              <DatePicker
-                value={data.owner_dob}
-                onChange={(val) => onChange({ owner_dob: val })}
-                placeholder="Date of birth"
-                className="mt-2"
-                disabled={disabled}
-              />
-            </Field>
+                  <Field label="Date of Birth">
+                    <DatePicker
+                      value={owner.dob || ''}
+                      onChange={(val) => patchOwner(index, { dob: val || null })}
+                      placeholder="Date of birth"
+                      disabled={disabled}
+                    />
+                  </Field>
 
-            <Field label="Owner Phone" required>
-              <input
-                type="tel"
-                className={ui.input}
-                value={data.owner_phone}
-                onChange={(e) => onChange({ owner_phone: e.target.value })}
-                placeholder="(555) 555-5555"
-                disabled={disabled}
-              />
-            </Field>
+                  <Field label="Phone" required>
+                    <input
+                      type="tel"
+                      className={ui.input}
+                      value={owner.phone || ''}
+                      onChange={(e) => patchOwner(index, { phone: e.target.value || null })}
+                      placeholder="(555) 555-5555"
+                      disabled={disabled}
+                    />
+                  </Field>
 
-            <Field label="Owner Email">
-              <input
-                type="email"
-                className={ui.input}
-                value={data.owner_email}
-                onChange={(e) => onChange({ owner_email: e.target.value })}
-                placeholder="email@example.com"
-                disabled={disabled}
-              />
-            </Field>
+                  <Field label="Email">
+                    <input
+                      type="email"
+                      className={ui.input}
+                      value={owner.email || ''}
+                      onChange={(e) => patchOwner(index, { email: e.target.value || null })}
+                      placeholder="email@example.com"
+                      disabled={disabled}
+                    />
+                  </Field>
+
+                  <Field label="Ownership %" hint="Optional">
+                    <input
+                      type="number"
+                      className={ui.input}
+                      value={owner.ownership_percentage ?? ''}
+                      onChange={(e) => patchOwner(index, { ownership_percentage: e.target.value ? Number(e.target.value) : null })}
+                      placeholder="e.g. 50"
+                      min={0}
+                      max={100}
+                      disabled={disabled}
+                    />
+                  </Field>
+                </div>
+              </div>
+            ))}
           </div>
+          {!disabled ? (
+            <button type="button" className={`${ui.btnSecondary} mt-4`} onClick={addOwner}>
+              <Plus className="h-4 w-4" /> Add another owner
+            </button>
+          ) : null}
         </div>
       </section>
 

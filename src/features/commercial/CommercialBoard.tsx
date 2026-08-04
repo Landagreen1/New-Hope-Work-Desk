@@ -38,6 +38,8 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
   const [activeCard, setActiveCard] = useState<CommercialQuote | null>(null);
   const [showNewCardForm, setShowNewCardForm] = useState<BoardColumn | null>(null);
   const [showArchive, setShowArchive] = useState(false);
+  const [filterAgent, setFilterAgent] = useState<string | 'all'>('all');
+  const [boardAgents, setBoardAgents] = useState<{ id: string; display_name: string; initials: string }[]>([]);
 
   const isManager = canManageCommercial(initialProfile.role);
 
@@ -54,8 +56,12 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
     try {
       const params = new URLSearchParams();
       if (showArchive) params.set('board_column', 'archive');
-      // Board view: agents see only their own cards; managers see all
-      if (!isManager) params.set('assigned_to', initialProfile.id);
+      // Board view: agents see only their own cards; managers see all (or filtered agent)
+      if (!isManager) {
+        params.set('assigned_to', initialProfile.id);
+      } else if (filterAgent !== 'all') {
+        params.set('assigned_to', filterAgent);
+      }
 
       const res = await fetch(`/api/commercial-quotes?${params.toString()}`);
       if (!res.ok) {
@@ -70,7 +76,34 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
     } finally {
       setLoading(false);
     }
-  }, [showArchive, isManager, initialProfile.id]);
+  }, [showArchive, isManager, initialProfile.id, filterAgent]);
+
+  // Load list of agents with board cards (for manager filter dropdown)
+  useEffect(() => {
+    if (!isManager) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/commercial-quotes?include_deleted=false');
+        if (!res.ok) return;
+        const body = await res.json();
+        const allQuotes = body.quotes as CommercialQuote[];
+        // Extract unique agents from cards
+        const agentMap = new Map<string, { id: string; display_name: string; initials: string }>();
+        for (const q of allQuotes) {
+          if (q.assigned_to && q.profiles && !agentMap.has(q.assigned_to)) {
+            agentMap.set(q.assigned_to, {
+              id: q.assigned_to,
+              display_name: q.profiles.display_name,
+              initials: q.profiles.initials,
+            });
+          }
+        }
+        setBoardAgents([...agentMap.values()].sort((a, b) => a.display_name.localeCompare(b.display_name)));
+      } catch {
+        // Non-critical — dropdown just stays empty
+      }
+    })();
+  }, [isManager]);
 
   useEffect(() => {
     void fetchQuotes();
@@ -191,6 +224,26 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
     }
   };
 
+  // ─── Card reassignment (managers only) ───────────────────────────────────────
+
+  const handleReassignCard = async (cardId: string, newAssignee: string) => {
+    if (!isManager) return;
+    try {
+      const res = await fetch(`/api/commercial-quotes/${cardId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assigned_to: newAssignee }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to reassign card.');
+      }
+      await fetchQuotes();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Reassignment failed.');
+    }
+  };
+
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   const getColumnQuotes = (columnId: BoardColumn) =>
@@ -228,6 +281,21 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {/* Agent filter dropdown — managers/super_admins only */}
+          {isManager && boardAgents.length > 0 && (
+            <select
+              value={filterAgent}
+              onChange={(e) => setFilterAgent(e.target.value as string)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 focus:border-[#223f7a] focus:outline-none focus:ring-1 focus:ring-[#223f7a]"
+            >
+              <option value="all">All Agents</option>
+              {boardAgents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.display_name}
+                </option>
+              ))}
+            </select>
+          )}
           {lastUpdated && (
             <p className="text-xs font-bold text-slate-400">
               Last updated{' '}
@@ -295,6 +363,8 @@ export default function CommercialBoard({ initialProfile, embedded = false }: Co
                   isManager={isManager}
                   currentUserId={initialProfile.id}
                   canAddCard={isManager && column.id !== 'quote_intake'}
+                  boardAgents={boardAgents}
+                  onReassign={handleReassignCard}
                 />
               ))}
             </div>

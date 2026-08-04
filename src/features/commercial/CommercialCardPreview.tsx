@@ -14,6 +14,8 @@ interface CommercialCardPreviewProps {
   onRefresh?: () => Promise<void>;
   isManager?: boolean;
   currentUserId?: string;
+  boardAgents?: { id: string; display_name: string; initials: string }[];
+  onReassign?: (cardId: string, newAssignee: string) => Promise<void>;
 }
 
 function getRelativeTime(dateStr: string): string {
@@ -63,8 +65,11 @@ export default function CommercialCardPreview({
   onRefresh,
   isManager,
   currentUserId,
+  boardAgents,
+  onReassign,
 }: CommercialCardPreviewProps) {
   const [showDetail, setShowDetail] = useState(false);
+  const [showReassign, setShowReassign] = useState(false);
 
   const isLocked = !isManager && LOCKED_COLUMNS.includes(quote.board_column);
 
@@ -125,9 +130,22 @@ export default function CommercialCardPreview({
       >
         {/* Agent label */}
         <div className="mb-2 flex items-center justify-between">
-          <span className={`rounded-md px-2 py-0.5 text-[10px] font-black text-white ${labelColor}`}>
-            {agentName.split(' ')[0]}
-          </span>
+          <div className="flex items-center gap-1">
+            <span className={`rounded-md px-2 py-0.5 text-[10px] font-black text-white ${labelColor}`}>
+              {agentName.split(' ')[0]}
+            </span>
+            {/* Reassign button — managers only */}
+            {isManager && onReassign && boardAgents && boardAgents.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowReassign(!showReassign); }}
+                className="rounded px-1 py-0.5 text-[9px] font-bold text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Reassign card"
+              >
+                ↻
+              </button>
+            )}
+          </div>
           {quote.is_mirrored && isManager && (
             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
               Mirrored
@@ -139,6 +157,27 @@ export default function CommercialCardPreview({
             </span>
           )}
         </div>
+
+        {/* Reassign dropdown */}
+        {showReassign && isManager && onReassign && boardAgents && (
+          <div className="mb-2 rounded-lg border border-slate-200 bg-white p-1.5 shadow-sm">
+            <select
+              className="w-full rounded border-slate-200 text-[11px] font-semibold text-slate-700"
+              defaultValue={quote.assigned_to}
+              onChange={(e) => {
+                if (e.target.value !== quote.assigned_to) {
+                  void onReassign(quote.id, e.target.value);
+                }
+                setShowReassign(false);
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {boardAgents.map((a) => (
+                <option key={a.id} value={a.id}>{a.display_name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Business name */}
         <p className="text-sm font-black leading-snug text-slate-900">{quote.business_name}</p>

@@ -315,6 +315,7 @@ export default function IntakeEditForm({
                 <option value="">Select coverage</option>
                 <option value="liability_only">Liability Only</option>
                 <option value="full_coverage">Full Coverage</option>
+                <option value="both_prices">Customer Wants Both Prices</option>
                 <option value="unsure">Customer Unsure</option>
               </select>
             </label>

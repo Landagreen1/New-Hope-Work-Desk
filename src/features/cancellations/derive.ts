@@ -188,6 +188,7 @@ export const COMMUNICATION_FAILED_STATUSES = [
 export const NEEDS_ACTION_DAYS_REMAINING = 1;
 
 export type CancellationSavedFilterId =
+  | 'my-cases'
   | 'needs-action'
   | 'cancellation-today'
   | 'next-3-days'
@@ -200,14 +201,19 @@ export type CancellationSavedFilterId =
   | 'payment-verification-required'
   | 'reinstatement-pending'
   | 'no-successful-contact'
+  | 'unassigned'
+  | 'missing-producer'
   | 'resolved'
   | 'all';
 
-/** The fourteen saved filters in the order Requirement 16.2 lists them, with its labels. */
+/** The saved filters in the order they appear, with labels. */
 export const CANCELLATION_SAVED_FILTERS: readonly {
   id: CancellationSavedFilterId;
   label: string;
+  /** True for filters only visible to managers (REQ-7.2). */
+  managerOnly?: boolean;
 }[] = [
+  { id: 'my-cases', label: 'My Cases' },
   { id: 'needs-action', label: 'Needs Action' },
   { id: 'cancellation-today', label: 'Cancellation Today' },
   { id: 'next-3-days', label: 'Next 3 Days' },
@@ -220,12 +226,20 @@ export const CANCELLATION_SAVED_FILTERS: readonly {
   { id: 'payment-verification-required', label: 'Payment Verification Required' },
   { id: 'reinstatement-pending', label: 'Reinstatement Pending' },
   { id: 'no-successful-contact', label: 'No Successful Contact' },
+  { id: 'unassigned', label: 'Unassigned', managerOnly: true },
+  { id: 'missing-producer', label: 'Missing Producer', managerOnly: true },
   { id: 'resolved', label: 'Resolved' },
   { id: 'all', label: 'All' },
 ];
 
 /** Active until the user selects a saved filter in the current session (Requirement 16.2). */
 export const DEFAULT_CANCELLATION_FILTER: CancellationSavedFilterId = 'needs-action';
+
+/** REQ-7.1: Agent default filter is 'my-cases', manager default is 'needs-action'. */
+export function defaultCancellationFilter(role: AppRole | null | undefined): CancellationSavedFilterId {
+  if (role && isBroadManagerRole(role)) return 'needs-action';
+  return 'my-cases';
+}
 
 /**
  * Requirement 16.5 fixes one total order over the filtered set, so the recommended order is the
@@ -275,6 +289,8 @@ export interface CancellationRowCase extends EscalationCase {
   cancellation_reason?: string | null;
   /** `numeric(12,2)`, which arrives as a number or as a decimal string depending on the client. */
   amount_due?: number | string | null;
+  /** Producer label from the import; used by the 'missing-producer' filter (REQ-7.2). */
+  producer_label?: string | null;
 }
 
 /**
@@ -761,12 +777,15 @@ export function matchesSavedFilter(
   state: CancellationRowState,
   filterId: CancellationSavedFilterId,
   businessDate?: string | null,
+  viewer?: CancellationViewer | null,
 ): boolean {
   const row: CancellationRowState = businessDate === undefined ? state : { ...state, businessDate };
   const caseRow = row.case;
   const active = isActiveCancellationCase(caseRow);
 
   switch (filterId) {
+    case 'my-cases':
+      return active && viewer?.profileId != null && caseRow.assigned_to === viewer.profileId;
     case 'needs-action':
       return active && matchesNeedsAction(row);
     case 'cancellation-today':
@@ -798,6 +817,10 @@ export function matchesSavedFilter(
         !hasSentOrDeliveredRecord(row.communications ?? []) &&
         (row.responses ?? []).length === 0
       );
+    case 'unassigned':
+      return active && caseRow.assigned_to === null;
+    case 'missing-producer':
+      return active && caseRow.producer_label !== null && caseRow.assigned_to === null;
     case 'resolved':
       return RESOLVED_FILTER_CASE_STATUS_SET.has(caseRow.case_status);
     case 'all':
@@ -966,7 +989,7 @@ export function filterCancellationRows(
   return sortCancellationRows(
     readableCancellationRows(rows, query.viewer).filter(
       (row) =>
-        matchesSavedFilter(row, filterId, query.businessDate) && matchesSearch(row, query.searchText),
+        matchesSavedFilter(row, filterId, query.businessDate, query.viewer) && matchesSearch(row, query.searchText),
     ),
   );
 }
@@ -986,7 +1009,7 @@ export function cancellationFilterCounts(
   for (const row of readableCancellationRows(rows, query.viewer)) {
     if (!matchesSearch(row, query.searchText)) continue;
     for (const filter of CANCELLATION_SAVED_FILTERS) {
-      if (matchesSavedFilter(row, filter.id, query.businessDate)) counts[filter.id] += 1;
+      if (matchesSavedFilter(row, filter.id, query.businessDate, query.viewer)) counts[filter.id] += 1;
     }
   }
   return counts;

@@ -81,7 +81,7 @@
 //     focus, when the browser comes back online, and when the reader asks — no interval, and no
 //     realtime subscription, which would need the Supabase client this file may not hold.
 
-import { AlertTriangle, ChevronLeft, ChevronRight, Paperclip, RefreshCw, Save } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, FileUp, Paperclip, RefreshCw, Save } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { canAccessRenewals, isBroadManagerRole } from '@/lib/permissions';
@@ -392,6 +392,7 @@ export default function CancellationsPage({
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [noteState, setNoteState] = useState<NoteDraft | null>(null);
   const [noteBusy, setNoteBusy] = useState(false);
+  const [showImportWizard, setShowImportWizard] = useState(false);
   /** Bumped whenever the attachments are dropped, so the file field clears its own selection. */
   const [noteResetKey, setNoteResetKey] = useState(0);
   /** Reading 8: bumped by a saved note so the drawer re-reads its own notes. Nothing else bumps it. */
@@ -572,7 +573,7 @@ export default function CancellationsPage({
   if (!allowed) {
     return (
       <ModuleShell
-        title="Cancellations"
+        title="Pending Cancellations"
         subtitle="Policy follow-up"
         role={profile.role}
         embedded={embedded}
@@ -584,7 +585,7 @@ export default function CancellationsPage({
 
   return (
     <ModuleShell
-      title="Cancellations"
+      title="Pending Cancellations"
       subtitle="Pick a counter, open the case, contact the customer with proof, and record what came back."
       role={profile.role}
       lastUpdated={lastUpdated}
@@ -609,6 +610,18 @@ export default function CancellationsPage({
 
         {/* Returns zero nodes outside Manager_Role, so no role check is needed here (Req 22.3). */}
         <div className="flex flex-wrap items-center justify-end gap-3">
+          {/* REQ-4.3: Visible Import button for managers in the header area */}
+          {isBroadManagerRole(viewerRole) ? (
+            <button
+              type="button"
+              className={ui.btnPrimary}
+              onClick={() => setShowImportWizard(true)}
+              disabled={loading}
+            >
+              <FileUp className="h-4 w-4" aria-hidden="true" />
+              Import Cancellations
+            </button>
+          ) : null}
           <CancellationManagerActions
             role={viewerRole}
             cases={data.cases}
@@ -621,6 +634,8 @@ export default function CancellationsPage({
             resolveProfileName={resolveProfileName}
             onChanged={() => load()}
             disabled={loading}
+            importWizardOpen={showImportWizard}
+            onImportWizardClose={() => setShowImportWizard(false)}
           />
         </div>
 

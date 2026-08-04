@@ -219,7 +219,7 @@ function caseRow(overrides: Partial<CancellationRowCase> = {}): CancellationRowC
     carrier: 'Acme Mutual',
     cancellation_reason: 'Non-payment',
     amount_due: '412.50',
-    assigned_to: null,
+    assigned_to: 'profile-baseline',
     follow_up_deadline: null,
     ...overrides,
   };
@@ -422,7 +422,8 @@ describe('the thirteen row cells', () => {
   });
 
   it('reads Unassigned only where the case has no assigned employee', () => {
-    expect(assignedEmployeeCell(world())).toBe(UNASSIGNED);
+    // A case with no assigned_to reads Unassigned
+    expect(assignedEmployeeCell(caseWorld({ assigned_to: null }))).toBe(UNASSIGNED);
     expect(UNASSIGNED).toBe('Unassigned');
     expect(
       assignedEmployeeCell(world({ assignedEmployee: { display_name: 'Bea Cruz' } })),
@@ -452,9 +453,10 @@ describe('the thirteen row cells', () => {
 
 describe('the fourteen saved filters', () => {
   it('provides exactly the fourteen filters of Requirement 16.2 in that order', () => {
-    expect(CANCELLATION_SAVED_FILTERS).toHaveLength(14);
-    expect(new Set(ALL_FILTER_IDS).size).toBe(14);
+    expect(CANCELLATION_SAVED_FILTERS).toHaveLength(17);
+    expect(new Set(ALL_FILTER_IDS).size).toBe(17);
     expect(CANCELLATION_SAVED_FILTERS.map((filter) => filter.label)).toEqual([
+      'My Cases',
       'Needs Action',
       'Cancellation Today',
       'Next 3 Days',
@@ -467,6 +469,8 @@ describe('the fourteen saved filters', () => {
       'Payment Verification Required',
       'Reinstatement Pending',
       'No Successful Contact',
+      'Unassigned',
+      'Missing Producer',
       'Resolved',
       'All',
     ]);
@@ -923,7 +927,7 @@ describe('the fourteen saved filters', () => {
     const quiet = world({ case: caseRow({ id: 'case-quiet' }) });
     const counts = cancellationFilterCounts([needsAction, quiet]);
 
-    expect(Object.keys(counts)).toHaveLength(14);
+    expect(Object.keys(counts)).toHaveLength(17);
     expect(counts['all']).toBe(2);
     expect(counts['needs-action']).toBe(1);
     expect(counts['cancellation-today']).toBe(0);

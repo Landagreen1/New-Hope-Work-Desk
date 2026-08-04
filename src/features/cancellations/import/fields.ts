@@ -41,6 +41,7 @@ import {
   type ClassifiedImportFile,
 } from './classify';
 import { IDENTITY_COLUMNS, resolveColumnIndex, type ConfirmedMapping } from './mapping';
+import { deriveImportedStatus } from './status-mapping';
 
 // ---------------------------------------------------------------------------
 // Source column to case field, per column set
@@ -703,6 +704,8 @@ export interface CancellationCaseFields extends LegacyCaseValues {
   readonly source_row_number: number;
   /** Decoded field values in source column order, stored as the `raw_row` JSON array (Req 24.1). */
   readonly raw_row: string[];
+  /** Derived case status for eficacia rows (REQ-2.1); null for avisos (RPC defaults to Imported). */
+  readonly case_status: string | null;
 }
 
 /** The identity a row claims, for in-file duplicate detection before any insert (Requirement 9.4). */
@@ -818,6 +821,13 @@ export function parseCancellationRow(input: CancellationRowInput): CancellationR
       producer_label: producer.label,
       source_row_number: rowNumber,
       raw_row: preservation.rawRow,
+      case_status: columnSet === 'eficacia'
+        ? deriveImportedStatus({
+            enviar: readValue(values, 'Enviar'),
+            estado: readValue(values, 'Estado'),
+            resultado: readValue(values, 'Resultado'),
+          })
+        : null,
       ...legacyPassthrough(values),
     },
     notices: {

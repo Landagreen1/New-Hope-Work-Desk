@@ -24,6 +24,7 @@
 // drag-and-drop arrangement, or a user-defined workflow state, and neither tab exposes one.
 
 import { useCallback, useRef, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 import CancellationsPage from '../cancellations/CancellationsPage';
 import type { CancellationsUiState } from '../cancellations/derive';
@@ -32,10 +33,10 @@ import type { ProfileLite } from '../nhwd-shared/types';
 import type { RenewalsUiState } from './derive';
 import RenewalsPage from './RenewalsPage';
 
-/** Requirement 1.1: exactly two tabs, Renewals first and Cancellations second. */
+/** Requirement 1.1: exactly two tabs, Renewals first and Pending Cancellations second. */
 export const POLICY_FOLLOW_UP_TABS = [
   { id: 'renewals', label: 'Renewals' },
-  { id: 'cancellations', label: 'Cancellations' },
+  { id: 'cancellations', label: 'Pending Cancellations' },
 ] as const;
 
 export type PolicyFollowUpTabId = (typeof POLICY_FOLLOW_UP_TABS)[number]['id'];
@@ -64,7 +65,13 @@ export interface PolicyFollowUpPageProps {
 }
 
 export default function PolicyFollowUpPage({ initialProfile, embedded = false }: PolicyFollowUpPageProps) {
-  const [activeTab, setActiveTab] = useState<PolicyFollowUpTabId>(INITIAL_TAB);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // REQ-4.1: URL-driven tab selection, persisted through refresh and back/forward navigation
+  const tabParam = searchParams.get('tab');
+  const activeTab: PolicyFollowUpTabId =
+    tabParam === 'cancellations' ? 'cancellations' : 'renewals';
 
   /**
    * Requirement 1.3, retention half. The mounted tab reports its three values as the reader changes
@@ -83,12 +90,14 @@ export default function PolicyFollowUpPage({ initialProfile, embedded = false }:
     cancellationsUi.current = next;
   }, []);
 
-  /** Requirement 1.3: the tab being left hands over its three values, and the rest of it unmounts. */
+  /** Requirement 1.3 + REQ-4.1: retain UI state and persist tab selection in URL. */
   const selectTab = useCallback((next: PolicyFollowUpTabId) => {
     setRestoredRenewalsUi(renewalsUi.current);
     setRestoredCancellationsUi(cancellationsUi.current);
-    setActiveTab(next);
-  }, []);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', next);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }, [searchParams, router]);
 
   return (
     <ModuleShell

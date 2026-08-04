@@ -20,7 +20,7 @@ function canAccessModule(moduleId: string, role: AppRole): boolean {
       return canAccessCustomerService(role);
     case 'cs-intake-queue':
       return canAccessSalesIntakeQueue(role);
-    case 'renewals':
+    case 'policy-follow-up':
       return canAccessRenewals(role);
     default:
       return false;
@@ -30,7 +30,7 @@ function canAccessModule(moduleId: string, role: AppRole): boolean {
 const modulePresentation = {
   'cs-intake': { icon: Headphones, tone: 'bg-cyan-50 text-cyan-700 ring-cyan-200' },
   'cs-intake-queue': { icon: ClipboardCheck, tone: 'bg-blue-50 text-blue-700 ring-blue-200' },
-  renewals: { icon: FileSpreadsheet, tone: 'bg-violet-50 text-violet-700 ring-violet-200' },
+  'policy-follow-up': { icon: FileSpreadsheet, tone: 'bg-violet-50 text-violet-700 ring-violet-200' },
 };
 
 export default function ToolsHub({ initialProfile: profile }: { initialProfile: ProfileLite }) {

@@ -270,8 +270,8 @@ const OUT_OF_SET_VALUES: readonly unknown[] = [
 
 describe('stored value domain', () => {
   it('restricts Case_Status to exactly the ten values of Requirement 15.1', () => {
-    expect(CASE_STATUSES).toHaveLength(10);
-    expect(new Set(CASE_STATUSES).size).toBe(10);
+    expect(CASE_STATUSES).toHaveLength(11);
+    expect(new Set(CASE_STATUSES).size).toBe(11);
     expect([...CASE_STATUSES]).toEqual([
       'Imported',
       'Open',
@@ -283,6 +283,7 @@ describe('stored value domain', () => {
       'Resolved',
       'Invalid',
       'Duplicate',
+      'Import Review Required',
     ]);
     for (const status of CASE_STATUSES) expect(isCaseStatus(status)).toBe(true);
   });

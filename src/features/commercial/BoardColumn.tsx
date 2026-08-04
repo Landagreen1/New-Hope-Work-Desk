@@ -15,6 +15,8 @@ interface BoardColumnProps {
   isManager: boolean;
   currentUserId?: string;
   canAddCard?: boolean;
+  boardAgents?: { id: string; display_name: string; initials: string }[];
+  onReassign?: (cardId: string, newAssignee: string) => Promise<void>;
 }
 
 export default function BoardColumnComponent({
@@ -25,6 +27,8 @@ export default function BoardColumnComponent({
   isManager,
   currentUserId,
   canAddCard = true,
+  boardAgents,
+  onReassign,
 }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
@@ -72,6 +76,8 @@ export default function BoardColumnComponent({
               onRefresh={onRefresh}
               isManager={isManager}
               currentUserId={currentUserId}
+              boardAgents={boardAgents}
+              onReassign={onReassign}
             />
           ))}
         </SortableContext>
