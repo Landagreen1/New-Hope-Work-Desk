@@ -77,7 +77,7 @@ After Hours becomes a global filter dimension applied to all four views instead 
 - **Sales_Credit_Owner**: The single employee credited with a sale, defined by Requirement 6.
 - **Report_Reader_Role**: A profile role for which `canManageSales` returns true — `manager`, `super_admin`, `sales_supervisor`.
 - **Manager_Role**: A profile role for which `isBroadManagerRole` returns true — `manager` or `super_admin`.
-- **Integrity_Reviewer_Role**: Manager_Role. Recording a review decision is reserved to these roles.
+- **Integrity_Reviewer_Role**: Report_Reader_Role. Recording a review decision is reserved to these roles. Byron confirmed on 2026-08-03 that sales supervisors may review flags, so this is the same set as Report_Reader_Role rather than the narrower Manager_Role.
 - **Self_Scoped_Reader**: A profile that is not a Report_Reader_Role and may read only its own reporting records.
 
 ---
@@ -198,6 +198,7 @@ After Hours becomes a global filter dimension applied to all four views instead 
 2. THE Business_Hours_Settings SHALL store its times as wall-clock times interpreted in Business_Timezone, and SHALL exclude storing an offset in place of Business_Timezone.
 3. THE Sales_Reporting_Center SHALL read Business_Hours_Settings from stored configuration, and SHALL exclude hard-coded opening times, closing times, working days, and holiday dates from every report component and every reporting query.
 4. THE Sales_Reporting_Center SHALL permit a profile holding Manager_Role to change every value in Business_Hours_Settings, and SHALL refuse such a change from every other role.
+10. THE Business_Hours_Settings SHALL be seeded with Monday through Saturday as working days opening at 08:30 and closing at 17:30, with Sunday not a working day, and SHALL classify every instant outside that window as After_Hours.
 5. THE Sales_Reporting_Center SHALL store Sunday handling as its own setting, and SHALL classify an instant that falls on a Sunday as Sunday in addition to classifying it as Business_Hours or After_Hours according to that setting.
 6. THE Sales_Reporting_Center SHALL classify an instant falling on a holiday or a special office closure as After_Hours regardless of the time of day.
 7. WHEN Business_Hours_Settings changes, THE Sales_Reporting_Center SHALL apply the changed values to every subsequently computed report, SHALL record the change with the changing profile and the change time, and SHALL exclude silently altering a previously exported report without stating that the settings changed.
@@ -340,7 +341,7 @@ After Hours becomes a global filter dimension applied to all four views instead 
 4. WHEN a review action is recorded, THE Review & Integrity Report_View SHALL append an immutable review history entry carrying the acting profile, the action, the resulting Review_Status, the explanation text, and the action time, and SHALL retain every earlier entry.
 5. WHEN an Integrity_Flag is Reopened, THE Review & Integrity Report_View SHALL set its Review_Status to Open, SHALL retain its earlier review history entries, and SHALL retain the explanation recorded before it was reopened.
 6. THE Review & Integrity Report_View SHALL require a non-empty explanation for Explained and for Confirmed Data Issue, and SHALL refuse those two actions when the explanation is empty.
-7. THE Review & Integrity Report_View SHALL exclude from every non-Manager_Role reader the manager explanations and the review history of Integrity_Flags.
+7. THE Review & Integrity Report_View SHALL exclude from every reader not holding Integrity_Reviewer_Role the manager explanations and the review history of Integrity_Flags.
 8. THE Review & Integrity Report_View SHALL present, for each listed Integrity_Flag, the data that caused it, and SHALL exclude presenting a flag without its supporting evidence.
 
 ---

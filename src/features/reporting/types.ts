@@ -185,6 +185,14 @@ export interface CohortInput {
 export interface ExclusionInput {
   /** `work_items.status`; `null` once the quote has left `work_items`. */
   workItemStatus?: string | null;
+  /**
+   * `work_items.is_voided`.
+   *
+   * This column, with `voided_at`, `voided_by`, and `void_reason`, exists in live
+   * Supabase and in no repository migration. It is the real void mechanism, so a
+   * status check alone does not exclude a voided quote.
+   */
+  isVoided?: boolean | null;
   isDuplicateRetry?: boolean;
 }
 

@@ -517,9 +517,33 @@ export function isRequote(
  * row from every quote table, so it cannot reach a metric. That is also why
  * deletion is a documented historical-accuracy limitation rather than something
  * this function can compensate for.
+ *
+ * `isVoided` reads `work_items.is_voided`, which exists live and in no repository
+ * migration. Voiding was therefore invisible to every current report.
  */
 export function isExcludedRecord(input: ExclusionInput): boolean {
-  return input.workItemStatus === 'cancelled' || (input.isDuplicateRetry ?? false);
+  return (
+    input.isVoided === true ||
+    input.workItemStatus === 'cancelled' ||
+    (input.isDuplicateRetry ?? false)
+  );
+}
+
+/**
+ * The `quote_decision` enum carries a stray `Sold` label alongside `sold`.
+ *
+ * No row uses it today — 599 `sold` and 613 `not_sold` as of 2026-08-03 — but the
+ * label exists and can be written, and a `decision = 'sold'` comparison would miss
+ * it. Every decision value passes through here first.
+ */
+export function normalizeDecision(
+  decision: string | null | undefined,
+): 'sold' | 'not_sold' | null {
+  if (decision == null) return null;
+  const lowered = decision.trim().toLowerCase();
+  if (lowered === 'sold') return 'sold';
+  if (lowered === 'not_sold' || lowered === 'not sold') return 'not_sold';
+  return null;
 }
 
 /* -------------------------------------------------------------------------- */

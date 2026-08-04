@@ -215,7 +215,7 @@ group by e.source_work_item_id;
 - `is_requote` = `work_type = 'requote' or related_quote_source_work_item_id is not null`.
 - `is_cs_intake` = an intake row links to this `quote_id`.
 - `is_duplicate_retry` = this quote is not the earliest quote linked to its intake, where that intake links to two or more quotes. This is the Duplicate_Retry exclusion, and it is derived rather than read because the defect recorded in `.kiro/specs/rc-claim-duplicate-quote-fix/bugfix.md` produces two quote records with no flag on either.
-- `is_excluded` = `work_item_status = 'cancelled'` or `is_duplicate_retry`.
+- `is_excluded` = `work_items.is_voided`, or `work_item_status = 'cancelled'`, or `is_duplicate_retry`. `is_voided` / `voided_at` / `voided_by` / `void_reason` exist live and appear in no repository migration; they are the real void mechanism and the reason a status check alone is not enough.
 - `sales_credit_profile_id` = the assigned profile on the outcome record (Requirement 6.7).
 - `received_after_hours`, `worked_after_hours`, `finalized_after_hours`, `manual_entry_after_hours` per Requirement 8.
 - `notes_count`, `follow_up_count`, `source_change_count`, `salesperson_change_count`, `attachment_count`.
@@ -289,11 +289,11 @@ if not public.can_manage_sales() then
 end if;
 ```
 
-`public.can_manage_sales()` is new and mirrors `canManageSales` in `src/lib/permissions.ts`: `manager`, `super_admin`, `sales_supervisor`. `report_integrity_review` additionally requires `public.is_manager()`, which `v1.3.3-fix-is-manager-for-super-admin.sql` already patched to admit `super_admin`. A Self_Scoped_Reader calling any read function receives only rows in which it holds a Credit_Role, enforced inside the function rather than by a filter the client supplies.
+`public.can_manage_sales()` **already exists live** and already matches `canManageSales` in `src/lib/permissions.ts`: `manager`, `sales_supervisor`, `super_admin`. It is reused, not recreated. `report_integrity_review` uses the same `can_manage_sales()` guard: Byron confirmed on 2026-08-03 that sales supervisors may review flags. A Self_Scoped_Reader calling any read function receives only rows in which it holds a Credit_Role, enforced inside the function rather than by a filter the client supplies.
 
 `p_filters` is `jsonb` normalized by `report_normalize_filters()`, which drops unknown keys, clamps `p_limit`, and defaults every absent value. A composite type would need a migration for every new filter; jsonb lets a filter be added without changing eleven signatures.
 
-**Note on the sales-supervisor scope.** The requirements set Report_Reader_Role to `canManageSales`, which includes `sales_supervisor`, because that role reaches the Reports tab today and narrowing it would be an unrequested regression. Integrity review actions are narrower — `manager` and `super_admin` only — matching "Integrity review actions must be manager-only". If sales supervisors should also review flags, that is a one-line change to the guard in `report_integrity_review`.
+**Sales-supervisor scope, settled.** Report_Reader_Role and Integrity_Reviewer_Role are both `can_manage_sales()` — `manager`, `sales_supervisor`, `super_admin`. Byron confirmed on 2026-08-03 that supervisors may review flags. Business_Hours_Settings writes stay narrower, at `is_manager()`, because office hours are an agency-wide setting rather than a sales decision.
 
 ### Indexes
 
@@ -379,7 +379,7 @@ One `RecordDrawer`, opened with a `{ metricId, drillKey, filters }` triple. It c
 Sequencing, because two formats need new dependencies:
 
 - **Phase 3** ships Summary CSV and Underlying records CSV. No new dependency; reuses the `csvEscape` conventions already in the codebase.
-- **Phase 4** adds the Excel workbook and the PDF snapshot. Both need a library the repository does not have. Proposed: `exceljs` and `pdfkit`, pinned to exact versions. **This dependency addition needs approval before Phase 4 begins** — it is the one part of this design that adds third-party code to the project.
+- **Phase 4** adds the Excel workbook and the PDF snapshot through `exceljs` and `pdfkit`, pinned to exact versions. Byron approved both dependencies on 2026-08-03.
 
 Every export carries a header stating the Report_View, Report_Mode, Reporting_Window, Hours_Segment, dimension filters, and generation time in Business_Timezone, and refuses beyond the configured maximum record count rather than streaming an unbounded file.
 

@@ -28,6 +28,7 @@ No metric counts an **Excluded_Record**:
 
 | Exclusion | How it is determined |
 | --- | --- |
+| Voided record | `work_items.is_voided` is true. This column, with `voided_at`, `voided_by`, and `void_reason`, exists live and appears in no repository migration. It is the real void mechanism, so a status check alone is not enough. |
 | Cancelled record | `work_items.status = 'cancelled'` |
 | Duplicate_Retry | The quote is not the earliest quote linked to its `cs_intake_submissions` row, where that intake links to two or more quote records |
 | Deleted record | Requires no clause. `manager_delete_quote` hard-deletes the row from every quote table; only an `audit_log` row with `action = 'quote_deleted'` survives |
@@ -311,6 +312,8 @@ Recorded so no metric silently claims precision it does not have.
 | 9 | Follow-up and attachment counts have no dedicated storage for quotes | Follow-up count is approximated from `quote_notes`; attachment count is zero until quote attachments exist | Quote attachment and follow-up tables, as the renewals module already has |
 | 10 | `employee_schedules` coverage is incomplete for some employees | Quotes per scheduled hour is undefined for them rather than wrong | Schedule coverage for every active employee |
 | 11 | Team membership has no column | The team filter must be derived from role and department | A team column on `profiles`, or a teams table |
+| 12 | The `quote_decision` enum carries a stray `Sold` label alongside `sold` | A `decision = 'sold'` filter would miss any row using it. Zero rows use it today (599 `sold`, 613 `not_sold`), but the label exists and can be written | Drop the label once confirmed unused. Until then every reporting comparison lowercases the decision |
+| 13 | `work_items.is_voided` is live-only | Voiding was invisible to the repository schema and to every current report | Task 4.1 records it in `v1.12.7` |
 
 ---
 

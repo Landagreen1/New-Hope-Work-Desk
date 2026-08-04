@@ -28,6 +28,7 @@ import {
   metricDenominatorLabel,
   metricTimestampLabel,
   normalizeAcceptedAt,
+  normalizeDecision,
   quoteToSaleRate,
   resolveFirstPricingSentAt,
   safeRate,
@@ -132,6 +133,14 @@ describe('Quotes Received', () => {
 
   it('excludes a cancelled record', () => {
     expect(isExcludedRecord({ workItemStatus: 'cancelled' })).toBe(true);
+  });
+
+  it('excludes a voided record', () => {
+    // work_items.is_voided exists live and in no repository migration, so voiding
+    // was invisible to every current report.
+    expect(isExcludedRecord({ workItemStatus: 'active', isVoided: true })).toBe(true);
+    expect(isExcludedRecord({ workItemStatus: 'active', isVoided: false })).toBe(false);
+    expect(isExcludedRecord({ workItemStatus: 'active', isVoided: null })).toBe(false);
   });
 
   it('excludes a duplicate retry', () => {
@@ -262,6 +271,24 @@ describe('Sold, Not Sold, Finalized', () => {
     )[0];
     expect(authoritative.decision).toBe('sold');
     expect(outcomes).toHaveLength(2); // the superseded record still exists, and is flagged
+  });
+});
+
+describe('normalizeDecision', () => {
+  it('folds the stray Sold enum label onto sold', () => {
+    // The live quote_decision enum carries 'Sold' alongside 'sold'. No row uses it
+    // today, but a decision = 'sold' comparison would miss it if one did.
+    expect(normalizeDecision('Sold')).toBe('sold');
+    expect(normalizeDecision('sold')).toBe('sold');
+    expect(normalizeDecision('not_sold')).toBe('not_sold');
+    expect(normalizeDecision('Not Sold')).toBe('not_sold');
+  });
+
+  it('returns null for an absent or unrecognized decision', () => {
+    expect(normalizeDecision(null)).toBeNull();
+    expect(normalizeDecision(undefined)).toBeNull();
+    expect(normalizeDecision('')).toBeNull();
+    expect(normalizeDecision('pending')).toBeNull();
   });
 });
 
