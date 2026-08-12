@@ -3602,6 +3602,24 @@ export function WorkDeskApp({
    * (Requirement 2.14).
    */
   async function handleAvailability(status: AvailabilityStatus) {
+    // If agent is going available, or is already not available, no confirmation needed
+    if (status !== "available" && currentUser?.availability === "available") {
+      // Check if they hold any rotation turns
+      const heldTurns: string[] = [];
+      if (whatsappCurrentId === currentUserId) heldTurns.push(rotationConfig.whatsapp.shortTitle);
+      if (ringCentralCurrentId === currentUserId) heldTurns.push(rotationConfig.ringcentral.shortTitle);
+      if (workloadCurrentId === currentUserId) heldTurns.push(rotationConfig.workload.shortTitle);
+
+      if (heldTurns.length > 0) {
+        const turnList = heldTurns.join(" and ");
+        const targetLabel = QUEUE_STATUS_LABELS[status].replace("Sales Queues: ", "");
+        const confirmed = window.confirm(
+          `You currently hold the ${turnList} turn${heldTurns.length > 1 ? "s" : ""}. Changing to ${targetLabel} will hand off your turn(s) to the next agent.\n\nAre you sure?`,
+        );
+        if (!confirmed) return;
+      }
+    }
+
     await runRpc(
       "set_my_queue_status",
       { p_status: status },
