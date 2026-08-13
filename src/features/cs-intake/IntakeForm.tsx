@@ -439,6 +439,9 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   // LOB picker handler
   function handleLobSelect(lob: ExtendedLob) {
     patch({ line_of_business: lob as CsIntakeLob });
+    if (lob === 'non_owners') {
+      patch({ desired_coverage: 'liability_only' } as Partial<DraftSubmission>);
+    }
     setLobPicked(true);
   }
 
@@ -490,7 +493,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   const nonOwnersData: NonOwnersData = {
     sr22_filing_state: submission.sr22_filing_state || '',
     court_order_date: submission.court_order_date || '',
-    desired_coverage: submission.desired_coverage || '',
+    liability_limit: ((submission as Record<string, unknown>).liability_limit as string) || '',
     document_type: ((submission as Record<string, unknown>).no_document_type as string) || '',
     document_number: ((submission as Record<string, unknown>).no_document_number as string) || '',
     document_state: ((submission as Record<string, unknown>).no_document_state as string) || '',
@@ -813,7 +816,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
             const mapped: Record<string, unknown> = {};
             if ('sr22_filing_state' in noPatch) mapped.sr22_filing_state = noPatch.sr22_filing_state || null;
             if ('court_order_date' in noPatch) mapped.court_order_date = noPatch.court_order_date || null;
-            if ('desired_coverage' in noPatch) mapped.desired_coverage = noPatch.desired_coverage || null;
+            if ('liability_limit' in noPatch) mapped.liability_limit = noPatch.liability_limit || null;
             if ('document_type' in noPatch) mapped.no_document_type = noPatch.document_type || null;
             if ('document_number' in noPatch) mapped.no_document_number = noPatch.document_number || null;
             if ('document_state' in noPatch) mapped.no_document_state = noPatch.document_state || null;

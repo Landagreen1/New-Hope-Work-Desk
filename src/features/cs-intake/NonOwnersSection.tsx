@@ -11,7 +11,7 @@ const US_STATES = [
 export interface NonOwnersData {
   sr22_filing_state: string;
   court_order_date: string;
-  desired_coverage: string;
+  liability_limit: string;
   // ID / Passport fields
   document_type: string;
   document_number: string;
@@ -82,8 +82,8 @@ export default function NonOwnersSection({ data, onChange, disabled }: NonOwners
             <Field label="Desired Liability Limits">
               <select
                 className={ui.select}
-                value={data.desired_coverage}
-                onChange={(e) => onChange({ desired_coverage: e.target.value })}
+                value={data.liability_limit}
+                onChange={(e) => onChange({ liability_limit: e.target.value })}
                 disabled={disabled}
               >
                 <option value="">Select...</option>
