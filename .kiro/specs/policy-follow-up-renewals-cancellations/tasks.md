@@ -481,7 +481,7 @@ Repository facts used by every task: `npm test` is `vitest --run`; `npm run test
     - Record all four outcomes plus the run identifier in the Verification Record section, and confirm the run contains a passing case for every item named in Requirement 25 criteria 2 through 7; any non-zero error count or failing test voids the record and the whole sequence is re-run after the fix
     - _Requirements: 25.2, 25.3, 25.4, 25.5, 25.6, 25.7, 25.9_
 
-  - [ ] 19.2 Commit Phase 2
+  - [x] 19.2 Commit Phase 2
     - Stage only the Phase 2 paths (`supabase/migrations/v1.10.*`, `src/features/cancellations/**`, `src/lib/email.ts`, `src/lib/__tests__/email.test.ts`, `src/app/api/cancellations/**`, `src/features/renewals/PolicyFollowUpPage.tsx`, `.env.example`, this tasks file) by name, leaving the unrelated changes from 0.1 unstaged
     - Commit with the title `feat(cancellations): add reminder and tracking workflow`, producing exactly two commits on `feature/renewals-cancellations`
     - _Requirements: 26.7_
