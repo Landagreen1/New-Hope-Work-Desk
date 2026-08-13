@@ -81,7 +81,7 @@
 //     removed from both values. Both comparisons are made, so `+1305` and `(305)` each still find
 //     the same row.
 
-import { canAccessRenewals, isBroadManagerRole } from '@/lib/permissions';
+import { canAccessRenewals, canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import {
@@ -212,8 +212,10 @@ export const CANCELLATION_SAVED_FILTERS: readonly {
   label: string;
   /** True for filters only visible to managers (REQ-7.2). */
   managerOnly?: boolean;
+  /** True for supplementary filters beyond the spec's fourteen (not shown unless opted in). */
+  supplementary?: boolean;
 }[] = [
-  { id: 'my-cases', label: 'My Cases' },
+  { id: 'my-cases', label: 'My Cases', supplementary: true },
   { id: 'needs-action', label: 'Needs Action' },
   { id: 'cancellation-today', label: 'Cancellation Today' },
   { id: 'next-3-days', label: 'Next 3 Days' },
@@ -226,18 +228,23 @@ export const CANCELLATION_SAVED_FILTERS: readonly {
   { id: 'payment-verification-required', label: 'Payment Verification Required' },
   { id: 'reinstatement-pending', label: 'Reinstatement Pending' },
   { id: 'no-successful-contact', label: 'No Successful Contact' },
-  { id: 'unassigned', label: 'Unassigned', managerOnly: true },
-  { id: 'missing-producer', label: 'Missing Producer', managerOnly: true },
+  { id: 'unassigned', label: 'Unassigned', managerOnly: true, supplementary: true },
+  { id: 'missing-producer', label: 'Missing Producer', managerOnly: true, supplementary: true },
   { id: 'resolved', label: 'Resolved' },
   { id: 'all', label: 'All' },
 ];
+
+/** The fourteen saved filters the spec requires (Requirement 16.2). */
+export const STANDARD_CANCELLATION_SAVED_FILTERS = CANCELLATION_SAVED_FILTERS.filter(
+  (filter) => !filter.supplementary,
+);
 
 /** Active until the user selects a saved filter in the current session (Requirement 16.2). */
 export const DEFAULT_CANCELLATION_FILTER: CancellationSavedFilterId = 'needs-action';
 
 /** REQ-7.1: Agent default filter is 'my-cases', manager default is 'needs-action'. */
 export function defaultCancellationFilter(role: AppRole | null | undefined): CancellationSavedFilterId {
-  if (role && isBroadManagerRole(role)) return 'needs-action';
+  if (role && canManageRenewals(role)) return 'needs-action';
   return 'my-cases';
 }
 
@@ -601,7 +608,7 @@ export function isActionVisibleToRole(
   role: AppRole | null | undefined,
 ): boolean {
   if (!MANAGER_ONLY_ACTION_SET.has(action)) return true;
-  return isBroadManagerRole(role ?? 'manager');
+  return canManageRenewals(role ?? 'manager');
 }
 
 /** The controls of Requirement 17.3 a role is shown, in the order that criterion lists them. */
@@ -902,7 +909,7 @@ export function canReadCancellationCase(
   caseRow: Pick<CancellationRowCase, 'assigned_to'>,
 ): boolean {
   if (!canAccessRenewals(viewer.role)) return false;
-  if (isBroadManagerRole(viewer.role)) return true;
+  if (canManageRenewals(viewer.role)) return true;
   if (viewer.role !== 'agent') return true;
   const assignedTo = trimToNull(caseRow.assigned_to);
   if (assignedTo === null) return true;

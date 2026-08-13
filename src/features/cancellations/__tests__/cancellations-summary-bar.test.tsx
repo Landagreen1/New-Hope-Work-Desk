@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import CancellationsSummaryBar from '../CancellationsSummaryBar';
 import type { CancellationsSummaryBarProps } from '../CancellationsSummaryBar';
-import { CANCELLATION_SAVED_FILTERS, MAX_SEARCH_LENGTH } from '../derive';
+import { STANDARD_CANCELLATION_SAVED_FILTERS as CANCELLATION_SAVED_FILTERS, MAX_SEARCH_LENGTH } from '../derive';
 import type { CancellationFilterCounts } from '../derive';
 
 afterEach(cleanup);

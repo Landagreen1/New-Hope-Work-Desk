@@ -114,7 +114,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { canAccessRenewals, isBroadManagerRole } from '@/lib/permissions';
+import { canAccessRenewals, canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import { currentBusinessDate, AGENCY_TIME_ZONE } from '../../renewals/derive';
@@ -182,7 +182,7 @@ export const SEND_NOW_ACTION: ManualSendAction = 'send_now';
 export const RETRY_FAILED_ACTION: ManualSendAction = 'retry_failed';
 
 /** `cancellation_events.event_type` for the Requirement 17.6 retry entry. */
-export const COMMUNICATION_RETRIED_EVENT_TYPE = 'communication_retried';
+export const COMMUNICATION_RETRIED_EVENT_TYPE = 'communication_retry';
 
 // ---------------------------------------------------------------------------
 // Messages
@@ -231,7 +231,7 @@ export interface ManualSendActor {
 
 /** True for `manager` and `super_admin`, which hold every Manager_Role permission. */
 export function isManagerActor(actor: ManualSendActor): boolean {
-  return isBroadManagerRole(actor.role);
+  return canManageRenewals(actor.role);
 }
 
 /**
@@ -1180,7 +1180,7 @@ export async function handleManualSendRequest(
   }
 
   // Requirement 17.10: the retry gate fails closed, before any client exists to write with.
-  if (body.body.action === RETRY_FAILED_ACTION && !isBroadManagerRole(role)) {
+  if (body.body.action === RETRY_FAILED_ACTION && !canManageRenewals(role)) {
     return Response.json(
       {
         error: RETRY_REQUIRES_MANAGER_MESSAGE,

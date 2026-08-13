@@ -450,7 +450,7 @@ begin
     insert into public.cancellation_events (
       case_id, actor_id, event_type, detail, event_time
     ) values (
-      v_case, v_manager, 'audit_immutability_probe',
+      v_case, v_manager, 'note_added',
       jsonb_build_object('run', '${RUN_ID}'), v_send_time
     ) returning id into v_event;
 
@@ -777,7 +777,7 @@ describeAgainstProject('cancellation audit immutability', () => {
       expect(probe.eventAfter).not.toBeNull();
       expect(probe.eventAfter).toEqual(probe.eventBefore);
       expect(probe.eventAfter.id).toBe(probe.eventId);
-      expect(probe.eventAfter.event_type).toBe('audit_immutability_probe');
+      expect(probe.eventAfter.event_type).toBe('note_added');
     });
   });
 
