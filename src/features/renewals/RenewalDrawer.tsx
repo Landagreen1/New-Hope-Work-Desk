@@ -21,7 +21,8 @@
 // every one of them on the record holding an open status (Req 2.4).
 
 import {
-  AlertTriangle, CalendarClock, CheckCircle2, LoaderCircle, RefreshCw, Send, Smartphone, UserCheck, X,
+  AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, LoaderCircle, RefreshCw, Send,
+  ShieldAlert, Smartphone, UserCheck, X,
 } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
@@ -35,7 +36,7 @@ import RenewalContactComposer from './RenewalContactComposer';
 import RenewalTimeline from './RenewalTimeline';
 import {
   REQUOTE_EVENT_TYPES, addDays, currentBusinessDate, daysRemaining, isOpenRenewal, premiumChange,
-  recommendedNextAction,
+  recommendedNextAction, renewalNormalizedStatus, renewalWaitingReason,
 } from './derive';
 import type { RenewalNextAction } from './derive';
 // Absent values render as an em dash, an absent assigned employee reads Unassigned, and the
@@ -61,9 +62,15 @@ const INTERNAL_IMPORT_EVENTS = new Set([
 ]);
 const REQUOTE_TYPES = new Set<string>(REQUOTE_EVENT_TYPES);
 
-/** Which section holds the single prominent control for each recommended action (Req 5.3). */
+/**
+ * Which section holds the single prominent control for each recommended action (Req 5.3).
+ *
+ * `Review renewal` belongs to the contact section: reviewing the renewal terms with the customer is
+ * a conversation, and the control the agent needs is the contact composer — the same one
+ * `Complete follow-up` points at.
+ */
 const PRIMARY_SECTION: Record<RenewalNextAction, 'contact' | 'requote' | 'outcome'> = {
-  'Make first contact': 'contact', 'Complete follow-up': 'contact',
+  'Make first contact': 'contact', 'Complete follow-up': 'contact', 'Review renewal': 'contact',
   'Prepare requote': 'requote', 'Review requote': 'requote',
   'Record customer decision': 'outcome', 'Close renewal': 'outcome',
 };
@@ -243,30 +250,83 @@ export default function RenewalDrawer({
     update((current) => ({ ...current, draft: { ...current.draft, ...part }, fieldError: {} }));
   const fail = (next: DrawerForm['fieldError']) => update((current) => ({ ...current, fieldError: next }));
 
-  /** Every Requirement 5.1 label-and-value field, including the requote activity, from one map. */
+  /**
+   * The operational header of Requirement 6.5 and task 8.1: the six things an agent needs before
+   * doing anything, at the top, in operational language.
+   *
+   * `normalizedStatus` is not `statusLabel(record.status)`: a Carrier Non-Renewal record has to read
+   * `Carrier Non-Renewal / Requote Required` however its workflow status happens to be stored,
+   * because that is the fact the work turns on (Requirement 7.2).
+   */
+  const normalizedStatus = renewalNormalizedStatus(record);
+  const waitingReason = renewalWaitingReason(record);
+  const lastContactAt = contacts.reduce<string | null>((latest, contact) => {
+    const at = Date.parse(contact.occurred_at ?? '');
+    if (Number.isNaN(at)) return latest;
+    const held = latest === null ? Number.NEGATIVE_INFINITY : Date.parse(latest);
+    return at > held ? contact.occurred_at : latest;
+  }, null);
+
+  const headerFacts: readonly [string, string][] = [
+    ['Renewal date', `${calendarText(record.renewal_date)} · ${wholeNumber(days)} days`],
+    ['Assigned employee', assignedText(assignedName)],
+    ['Last contact', calendarText(lastContactAt, true)],
+    ['Next follow-up', calendarText(record.next_follow_up_at, true)],
+  ];
+
+  /**
+   * The Requirement 5.1 operational fields.
+   *
+   * Requirement 6.5 and task 8.2 moved the imported source values out of this grid and under the
+   * `Imported source data` disclosure below: they are audit answers, not the work, and eighteen
+   * cells of equal weight is how the next action got lost in the first place.
+   */
   const fields: readonly [string, string][] = [
     ['Carrier', text(record.carrier)],
     ['Line of business', text(record.line_of_business)],
-    ['Renewal date', calendarText(record.renewal_date)],
-    ['Days remaining', wholeNumber(days)],
     ['Current premium', money(record.premium_current)],
     ['Renewal premium', money(record.premium_renewal)],
     ['Premium change', signedMoney(change)],
     ['Premium change percentage', signedPercent(change?.percent)],
     ['Customer phone', text(record.customer_phone)],
     ['Customer email', text(record.customer_email)],
-    ['Assigned employee', assignedText(assignedName)],
-    ['Current status', statusLabel(record.status)],
-    ['Recommended next action', action],
-    ['Next follow-up date', calendarText(record.next_follow_up_at, true)],
+    ['Stored workflow status', statusLabel(record.status)],
     ['Requote activity', [record.requote_requested ? 'Requested' : 'Not requested',
       record.requote_sent_at ? `sent ${calendarText(record.requote_sent_at)}` : null,
       record.requote_work_item_id ? 'quote created' : null,
       `${requoteEvents.length} ${requoteEvents.length === 1 ? 'entry' : 'entries'}`].filter(Boolean).join(' · ')],
     ['Recorded outcome note', text(record.outcome_reason)],
-    // Imported Power BI values, manager-visible as before the revision (Req 2.4).
+  ];
+
+  /**
+   * The imported source values, behind a disclosure (Requirement 6.5, task 8.2).
+   *
+   * Requirement 1.1 keeps every raw collector value for audit and Requirement 11.3 lets a manager
+   * inspect the file name, the row number, the raw status, the match result, and the warning. All of
+   * that belongs here rather than in the agent's way — and the raw value is shown *beside* the
+   * interpretation, so the answer to "what did the carrier actually say" is one glance away.
+   */
+  const sourceFields: readonly [string, string][] = [
+    ...(record.source_system
+      ? ([
+        ['Imported by', record.source_system === 'renewal_collector'
+          ? 'Renewals collector export' : record.source_system],
+        ['Source file', text(record.source_file_name)],
+        ['Source row', wholeNumber(record.source_row_number ?? null)],
+        ['Raw record type (TipoRegistro)', text(record.source_record_type)],
+        ['Read as', normalizedStatus],
+        ['Raw carrier status (EstadoEnReporte)', text(record.source_status_raw)],
+        ['Raw customer match (Cruce)', text(record.source_match_status_raw)],
+        ['Match read as', text(record.source_match_status)],
+        ['Match method (MetodoCruce)', text(record.source_match_method)],
+        ['Collector warning', text(record.source_warning)],
+      ] as [string, string][])
+      : []),
+    // The legacy Power BI / HawkSoft values, manager-visible as before the revision (Req 2.4).
     ...(canManage ? ([
       ['Imported responsible name', text(record.assigned_import_label)],
+      ['Producer label', text(record.producer_label)],
+      ['Assignment source', text(record.assignment_source)],
       ['Aviso call date', calendarText(record.notice_call_at)],
       ['EFT', text(record.eft_enabled)],
       ['Imported notes', text(record.import_notes)],
@@ -384,13 +444,43 @@ export default function RenewalDrawer({
           <p aria-live="polite" className="sr-only">{form.notice ?? ''}</p>
           {form.notice ? <p className={ui.success}>{form.notice}</p> : null}
 
+          {/* The operational header (Requirement 6.5, task 8.1). Status, the one next action, the
+              event date and days remaining, the owner, the last contact, and the next follow-up —
+              before anything imported and before any other field. */}
           <section className={`${ui.card} ${ui.cardPad}`}>
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`${ui.badge} ${ui.badgeTone[renewalStatusTone[record.status] || 'neutral']}`}>{statusLabel(record.status)}</span>
-              <span className={`${ui.badge} ${ui.badgeTone.info}`}>Next action: {action}</span>
+              <span className={`${ui.badge} ${ui.badgeTone[renewalStatusTone[record.status] || 'neutral']}`}>
+                {normalizedStatus}
+              </span>
               {isOpenRecord ? null : <span className={`${ui.badge} ${ui.badgeTone.neutral}`}>Closed renewal</span>}
+              {record.source_review_required ? (
+                <span className={`${ui.badge} ${ui.badgeTone.progress}`}>
+                  <ShieldAlert className="mr-1 h-3 w-3" aria-hidden="true" />Manager review required
+                </span>
+              ) : null}
+              {record.source_communication_blocked ? (
+                <span className={`${ui.badge} ${ui.badgeTone.neutral}`}>Automatic messaging held</span>
+              ) : null}
             </div>
-            <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+
+            <p className="mt-3 flex items-center gap-2 text-lg font-black text-[#223f7a]">
+              <ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" />
+              Next: {action}
+            </p>
+            {waitingReason === null ? null : (
+              <p className="mt-1 text-sm font-bold text-slate-500">{waitingReason}</p>
+            )}
+
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {headerFacts.map(([label, value]) => (
+                <div key={label} className="rounded-2xl bg-[#eef3fb] px-3 py-2.5">
+                  <dt className="text-[10px] font-black tracking-wider text-[#5b6f96] uppercase">{label}</dt>
+                  <dd className="mt-1 text-sm font-black break-words text-slate-900">{value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {fields.map(([label, value]) => (
                 <div key={label} className="rounded-2xl bg-slate-50 px-3 py-2.5">
                   <dt className="text-[10px] font-black tracking-wider text-slate-400 uppercase">{label}</dt>
@@ -398,6 +488,27 @@ export default function RenewalDrawer({
                 </div>
               ))}
             </dl>
+
+            {/* Requirements 1.1, 11.3, 6.5: the raw source values stay reachable and stay out of
+                the way. Collapsed by default; the raw value sits beside its interpretation. */}
+            {sourceFields.length > 0 ? (
+              <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                <summary className="cursor-pointer text-xs font-black text-slate-700">
+                  Imported source data
+                </summary>
+                <p className="mt-2 text-xs font-semibold text-slate-500">
+                  What the collector and the carrier actually wrote, kept exactly as received.
+                </p>
+                <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {sourceFields.map(([label, value]) => (
+                    <div key={label} className="rounded-2xl bg-white px-3 py-2.5">
+                      <dt className="text-[10px] font-black tracking-wider text-slate-400 uppercase">{label}</dt>
+                      <dd className="mt-1 text-sm font-black break-words text-slate-900">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            ) : null}
           </section>
 
           {record.customer_phone && record.customer_email ? null : (

@@ -83,6 +83,7 @@
 
 import {
   AlertTriangle,
+  ArrowRight,
   BellOff,
   CalendarClock,
   CheckCircle2,
@@ -103,7 +104,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import { ui } from '../nhwd-shared/ui';
@@ -1065,27 +1066,42 @@ export default function CancellationDrawer({
     (contact) => contact.channel === 'phone' && contact.validation_status === 'valid',
   );
 
-  const manager = isBroadManagerRole(role ?? 'manager');
+  const manager = canManageRenewals(role ?? 'manager');
   const locked = busy || loading;
+
+  /**
+   * The four facts that decide what to do, promoted above the rest (task 8.3).
+   *
+   * Every value is read from `cells` and `rowState`, which `cancellationRowCells` already derived —
+   * nothing here re-walks the eight-step ladder, re-derives a communication status, or touches the
+   * action engine. This is a layout change: the same facts, in the order somebody working the case
+   * needs them.
+   */
+  const headerFields: readonly [string, string][] =
+    cells === null || rowState === null
+      ? []
+      : [
+          [
+            'Cancels',
+            `${calendarText(cells.cancellationEffectiveDate)} · ${wholeNumber(rowDaysRemaining(rowState))} days`,
+          ],
+          ['Assigned employee', cells.assignedEmployee],
+          ['Last contact', calendarText(cells.lastContact, true)],
+          ['Follow-up deadline', calendarText(caseRow?.follow_up_deadline, true)],
+        ];
 
   const summaryFields: readonly [string, string][] =
     cells === null || rowState === null
       ? []
       : [
           ['Carrier', cells.carrier],
-          ['Cancellation effective date', calendarText(cells.cancellationEffectiveDate)],
-          ['Days remaining', wholeNumber(rowDaysRemaining(rowState))],
           ['Cancellation reason', cells.cancellationReason],
           ['Amount due', cells.amountDue],
-          ['Assigned employee', cells.assignedEmployee],
           ['Preferred language', preferredLanguages.join(', ') || EM_DASH],
           ['SMS status', cells.smsStatus],
           ['Email status', cells.emailStatus],
-          ['Last contact', calendarText(cells.lastContact, true)],
           ['Case status', cells.caseStatus],
           ['Communication status', caseRow?.communication_status ?? EM_DASH],
-          ['Next required action', cells.nextRequiredAction],
-          ['Follow-up deadline', calendarText(caseRow?.follow_up_deadline, true)],
         ];
 
   /** Escape closes the drawer; Tab cycles inside it, so focus never leaves while it is open. */
@@ -1198,7 +1214,6 @@ export default function CancellationDrawer({
                     COMMUNICATION_STATUS_TONE[caseRow.communication_status],
                     caseRow.communication_status,
                   )}
-                  {badge('info', `Next action: ${cells.nextRequiredAction}`)}
                   {caseRow.assistance_requested ? badge('progress', 'Assistance requested') : null}
                   {openEscalations.map((row) => (
                     <span key={row.id} className={`${ui.badge} ${ui.badgeTone.danger}`}>
@@ -1206,7 +1221,32 @@ export default function CancellationDrawer({
                     </span>
                   ))}
                 </div>
-                <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+
+                {/* task 8.3: the same next action the list cell and the prominent control name,
+                    read once from `cells` and simply given the weight it deserves. */}
+                <p className="mt-3 flex items-center gap-2 text-lg font-black text-[#223f7a]">
+                  <ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  Next: {cells.nextRequiredAction}
+                </p>
+
+                <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {headerFields.map(([label, value]) => (
+                    <div key={label} className="rounded-2xl bg-[#eef3fb] px-3 py-2.5">
+                      <dt className="text-[10px] font-black tracking-wider text-[#5b6f96] uppercase">
+                        {label}
+                      </dt>
+                      <dd
+                        className={`mt-1 text-sm font-black break-words ${
+                          value === EM_DASH ? 'text-slate-400' : 'text-slate-900'
+                        }`}
+                      >
+                        {value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+
+                <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {summaryFields.map(([label, value]) => (
                     <div key={label} className="rounded-2xl bg-slate-50 px-3 py-2.5">
                       <dt className="text-[10px] font-black tracking-wider text-slate-400 uppercase">

@@ -49,7 +49,7 @@
 
 import { createClient as createServiceRoleSupabase, type SupabaseClient } from '@supabase/supabase-js';
 
-import { APP_ROLES, isBroadManagerRole } from '@/lib/permissions';
+import { APP_ROLES, canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ export async function authorizeSchedulerRequest(
 
   const resolve = options.resolveSession ?? resolveSessionProfile;
   const session = await resolve();
-  if (session === null || session.role === null || !isBroadManagerRole(session.role)) {
+  if (session === null || session.role === null || !canManageRenewals(session.role)) {
     return { ok: false, response: schedulerForbidden() };
   }
 

@@ -3,7 +3,7 @@
 // Manager-only. Returns a structured report of environment configuration, template
 // readiness, scheduler history, and current sending state. Never returns credential values.
 
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,7 +52,7 @@ export async function POST(request: Request): Promise<Response> {
       .eq('id', userData.user.id)
       .maybeSingle();
 
-    if (!profile || !isBroadManagerRole(profile.role)) {
+    if (!profile || !canManageRenewals(profile.role)) {
       return Response.json({ error: 'Manager role required' }, { status: 403 });
     }
 

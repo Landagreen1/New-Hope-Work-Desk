@@ -170,7 +170,7 @@ import {
 } from './send';
 
 import { isEmailConfigured } from '@/lib/email';
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
@@ -756,7 +756,7 @@ export async function runScheduler(input: SchedulerRunInput): Promise<SchedulerR
   const prohibitedPhrases = phraseRead.rows;
   const profilesById = new Map(profileRead.rows.map((row) => [row.id, row]));
   const managerProfiles: EscalationRecipientProfile[] = profileRead.rows
-    .filter((row) => isBroadManagerRole(row.role))
+    .filter((row) => canManageRenewals(row.role))
     .map((row) => ({ id: row.id, role: row.role }));
   const escalationsByCase = groupBy(escalationRead.rows, (row) => row.case_id ?? '');
   const responsesByCase = groupBy(responseRead.rows, (row) => row.case_id ?? '');

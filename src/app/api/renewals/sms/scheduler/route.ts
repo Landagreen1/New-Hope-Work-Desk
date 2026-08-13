@@ -1,5 +1,6 @@
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 
+import { canManageRenewals } from '@/lib/permissions';
 import {
   isRingCentralConfigured,
   sendSms,
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
       .select('role')
       .eq('id', userData.user.id)
       .single();
-    if (!profile || (profile.role !== 'manager' && profile.role !== 'super_admin')) {
+    if (!profile || !canManageRenewals(profile.role)) {
       return Response.json({ error: 'Manager permission required.' }, { status: 403 });
     }
   }

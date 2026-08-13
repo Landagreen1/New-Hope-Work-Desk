@@ -80,7 +80,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import { ui } from '../nhwd-shared/ui';
@@ -556,7 +556,7 @@ export default function CancellationManagerActions({
   importWizardOpen = false,
   onImportWizardClose,
 }: CancellationManagerActionsProps) {
-  const isManager = isBroadManagerRole(role);
+  const isManager = canManageRenewals(role);
   const baseId = useId();
   const menuId = `${baseId}-menu`;
 

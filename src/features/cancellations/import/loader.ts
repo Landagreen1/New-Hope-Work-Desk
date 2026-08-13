@@ -70,7 +70,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 import { currentBusinessDate } from '@/features/renewals/derive';
 
@@ -298,7 +298,7 @@ export async function readImporterProfile(
       failure: failure('unauthorized', 'The signed-in profile could not be read.', null),
     };
   }
-  if (!isBroadManagerRole(profile.role)) {
+  if (!canManageRenewals(profile.role)) {
     return {
       ok: false,
       failure: failure(

@@ -20,7 +20,7 @@
  *      attempted — a refused read under row level security returns zero rows rather than an
  *      error, so naming the role up front is the only way the UI can say why (Requirement 22.6).
  *      `super_admin` holds every `manager` permission, so every check goes through
- *      `isBroadManagerRole` (Requirement 22.5).
+ *      `canManageRenewals` (Requirement 22.5).
  *   2. It reads no provider credential and returns none. Messaging and email credentials are
  *      read only in route handlers and `src/lib/*`; nothing selected here is a credential, and
  *      evidence leaves storage as a short-lived signed URL, never a public URL
@@ -31,7 +31,7 @@
  *      structurally, with no conversion step in the page container.
  */
 
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import { getSupabase } from '../nhwd-shared/client';
@@ -336,7 +336,14 @@ export interface CancellationSuppression {
 export interface CancellationImportRun {
   id: string;
   file_name: string;
-  column_set: 'eficacia' | 'avisos';
+  /**
+   * Which report format the run loaded.
+   *
+   * `eficacia` and `avisos` are the legacy two-file pair. `collector` is the consolidated
+   * PendingCancellation collector export added by `v1.13.2` and `v1.13.6`, which owns every field
+   * both legacy halves owned because it carries both.
+   */
+  column_set: 'eficacia' | 'avisos' | 'collector';
   imported_by: string;
   confirmed_mapping: unknown;
   rows_total: number;
@@ -637,7 +644,7 @@ async function requireActor(action: string): Promise<CancellationActor> {
 /** The signed-in profile, refused unless it holds Manager_Role (`manager` or `super_admin`). */
 async function requireManager(action: string): Promise<CancellationActor> {
   const actor = await requireActor(action);
-  if (!isBroadManagerRole(actor.role)) {
+  if (!canManageRenewals(actor.role)) {
     reject(`${action} requires a manager or super admin. Nothing was changed.`);
   }
   return actor;
@@ -2003,7 +2010,7 @@ export async function overrideCaseStatus(
   }
 
   const stored = await readCaseStatus(input.caseId, 'change a case status');
-  const manager = isBroadManagerRole(actor.role);
+  const manager = canManageRenewals(actor.role);
 
   if (!manager) {
     if ((TERMINAL_CASE_STATUSES as readonly CaseStatus[]).includes(stored.case_status)) {
