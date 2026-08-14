@@ -1,4 +1,4 @@
-// The rendered SMS must fit what RingCentral accepts.
+// The rendered SMS must fit what RingCentral accepts, and must carry the sender and the opt-out.
 //
 // RingCentral rejects the SMS `text` parameter above 1000 UTF-16 characters with "Parameter [text]
 // value is invalid", and it rejects the whole request rather than truncating. Before v1.13.8 the
@@ -17,14 +17,17 @@
 // not the stored template text. A stored-length check would pass while the assembled message
 // overflowed.
 //
-// The template text below is asserted to be the text v1.13.8 actually seeded, by matching the
-// migration file, so this cannot pass against wording the database does not have.
+// The template text below is asserted to be the text the migrations actually seeded, by matching
+// the migration files, so this cannot pass against wording the database does not have. v1.13.8
+// owns the schema and the first wording; v1.13.9 owns the live version-2 wording, which puts the
+// agency name first and adds the opt-out line.
 
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { OPT_OUT_KEYWORDS } from '../domain/suppression';
 import {
   MAX_COMBINED_SMS_BODY_LENGTH,
   renderMessage,
@@ -35,13 +38,17 @@ import {
 } from '../render/renderMessage';
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
-const MIGRATION = path.join(ROOT, 'supabase', 'migrations', 'v1.13.8-cancellation-sms-templates.sql');
+const MIGRATIONS = path.join(ROOT, 'supabase', 'migrations');
+/** v1.13.8: the channel column, and the first SMS wording. */
+const SCHEMA_MIGRATION = path.join(MIGRATIONS, 'v1.13.8-cancellation-sms-templates.sql');
+/** v1.13.9: the live version-2 wording. */
+const WORDING_MIGRATION = path.join(MIGRATIONS, 'v1.13.9-cancellation-sms-optout-and-sender-first.sql');
 
 /** RingCentral's hard ceiling on `text`, in UTF-16 characters. Above it the request is refused. */
 const RINGCENTRAL_TEXT_LIMIT = 1000;
 
 // ---------------------------------------------------------------------------
-// The seeded SMS wording (v1.13.8)
+// The seeded SMS wording (v1.13.9, version 2)
 // ---------------------------------------------------------------------------
 
 const STATEMENT: Record<TemplateLanguage, string> = {
@@ -53,6 +60,21 @@ const CONTACT_REQUEST: Record<TemplateLanguage, string> = {
   English: 'Call {{Office_Phone}} by {{Contact_Deadline}} to review your options.',
   Spanish: 'Llame al {{Office_Phone}} antes del {{Contact_Deadline}} para revisar sus opciones.',
 };
+
+/**
+ * The opt-out sentence, per language.
+ *
+ * Both name the literal `STOP`, which is asserted below to be a member of `OPT_OUT_KEYWORDS`.
+ * That list carries no Spanish word, so a translated keyword would be an instruction the inbound
+ * handler does not recognize — worse than none, because the customer believes they opted out.
+ */
+const OPT_OUT: Record<TemplateLanguage, string> = {
+  English: 'Reply STOP to opt out.',
+  Spanish: 'Responda STOP para no recibir más mensajes.',
+};
+
+/** The keyword both sentences instruct the customer to send. */
+const OPT_OUT_KEYWORD = 'STOP';
 
 const LEAD: Record<TemplateLanguage, Record<Touchpoint, string>> = {
   English: { 15: 'Courtesy reminder', 10: 'Reminder', 5: 'Important', 1: 'Final reminder' },
@@ -71,10 +93,12 @@ const AMOUNT_LABEL: Record<TemplateLanguage, string> = {
 
 function smsBody(language: TemplateLanguage, touchpoint: Touchpoint): string {
   return [
+    '{{Agency_Name}}',
     '{{Contact_Name}}',
     `${LEAD[language][touchpoint]}: {{Cancellation_Statement}}`,
     `${AMOUNT_LABEL[language]}: {{Amount_Due}}`,
     '{{Contact_Request}}',
+    OPT_OUT[language],
   ].join('\n');
 }
 
@@ -82,7 +106,7 @@ function smsVersion(language: TemplateLanguage, touchpoint: Touchpoint): Templat
   return {
     id: `sms-${touchpoint}-${language}`,
     template_id: `sms-${touchpoint}`,
-    version: 1,
+    version: 2,
     touchpoint,
     channel: 'sms',
     language,
@@ -112,14 +136,16 @@ const LANGUAGES: readonly TemplateLanguage[] = ['English', 'Spanish'];
 /**
  * The live `cancellation_settings` values. The agency name and the office phone land in every
  * rendered body, so the measurement below is only as good as these; a longer agency name shortens
- * the remaining budget. They are asserted against the live row by
- * `sms-length.integration.test.ts`-style checks nowhere, so keep them in step with the settings row.
+ * the remaining budget. Keep them in step with the settings row.
  */
 const SETTINGS = {
   office_phone: '(704) 824-3130',
   agency_name: 'New Hope Insurance Agency',
   bilingual_separator: '\n---\n',
 };
+
+/** An assigned employee, whose display name is appended as the closing signature (Req 14.13). */
+const ASSIGNED_EMPLOYEE = { display_name: 'Maria Gomez', is_active: true };
 
 function caseRow(amountDue: number | null) {
   return {
@@ -138,6 +164,7 @@ function render(options: {
   amountDue: number | null;
   contactName: string | null;
   channel?: RenderChannel;
+  senderName?: typeof ASSIGNED_EMPLOYEE | null;
   templateVersions?: readonly TemplateVersionRow[];
 }) {
   return renderMessage({
@@ -155,39 +182,123 @@ function render(options: {
     touchpoint: options.touchpoint,
     channel: options.channel ?? 'sms',
     settings: SETTINGS,
-    senderName: null,
+    senderName: options.senderName ?? null,
     combined: false,
     prohibitedPhrases: [],
   });
 }
 
 // ---------------------------------------------------------------------------
-// The wording is the wording the migration seeded
+// The wording is the wording the migrations seeded
 // ---------------------------------------------------------------------------
 
-describe('the SMS template text matches v1.13.8', () => {
-  const sql = fs.readFileSync(MIGRATION, 'utf8');
+describe('the SMS template text matches the migrations', () => {
+  const schemaSql = fs.readFileSync(SCHEMA_MIGRATION, 'utf8');
+  const wordingSql = fs.readFileSync(WORDING_MIGRATION, 'utf8');
+
+  it('gives the SMS channel its own templates and leaves the email templates alone', () => {
+    expect(schemaSql).toContain("check (channel in ('email', 'sms'))");
+    expect(schemaSql).toContain('unique (touchpoint, channel)');
+  });
 
   it('seeds every statement and contact request this test measures', () => {
     for (const language of LANGUAGES) {
-      expect(sql, `${language} statement`).toContain(STATEMENT[language]);
-      expect(sql, `${language} contact request`).toContain(CONTACT_REQUEST[language]);
+      expect(wordingSql, `${language} statement`).toContain(STATEMENT[language]);
+      expect(wordingSql, `${language} contact request`).toContain(CONTACT_REQUEST[language]);
     }
   });
 
-  it('seeds every body this test measures', () => {
+  it('seeds every version-2 body this test measures', () => {
     for (const language of LANGUAGES) {
       for (const touchpoint of TOUCHPOINTS) {
         // The migration writes bodies as E'...' with escaped newlines.
         const escaped = smsBody(language, touchpoint).split('\n').join('\\n');
-        expect(sql, `${language} ${touchpoint}-day body`).toContain(escaped);
+        expect(wordingSql, `${language} ${touchpoint}-day body`).toContain(escaped);
       }
     }
   });
 
-  it('gives the SMS channel its own templates and leaves the email templates alone', () => {
-    expect(sql).toContain("check (channel in ('email', 'sms'))");
-    expect(sql).toContain('unique (touchpoint, channel)');
+  it('inserts a new version rather than rewriting the stored one', () => {
+    // Requirement 14.17: a Communication_Record already sent must keep pointing at its own words.
+    expect(wordingSql).toMatch(/insert into public\.cancellation_template_versions/);
+    expect(wordingSql).not.toMatch(/update\s+public\.cancellation_template_versions/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The opt-out instruction has to be one the inbound handler acts on
+// ---------------------------------------------------------------------------
+
+describe('the opt-out instruction', () => {
+  it('names a keyword the inbound handler recognizes', () => {
+    expect(OPT_OUT_KEYWORDS as readonly string[]).toContain(OPT_OUT_KEYWORD);
+  });
+
+  it('tells the customer that keyword in both languages, untranslated', () => {
+    // OPT_OUT_KEYWORDS carries no Spanish word, so the Spanish sentence must still say STOP.
+    for (const language of LANGUAGES) {
+      expect(OPT_OUT[language], language).toContain(OPT_OUT_KEYWORD);
+    }
+  });
+
+  it('reaches a Spanish-only recipient, not just a bilingual one', () => {
+    for (const language of ['Spanish', 'English', null] as const) {
+      const result = render({ touchpoint: 15, language, amountDue: 275.4, contactName: 'Maria Garcia' });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.body, `${language ?? 'absent'} language`).toContain(OPT_OUT_KEYWORD);
+    }
+  });
+
+  it('gives each language segment of a bilingual body its own sentence', () => {
+    const result = render({ touchpoint: 15, language: null, amountDue: 275.4, contactName: 'Maria Garcia' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.body).toContain(OPT_OUT.English);
+    expect(result.body).toContain(OPT_OUT.Spanish);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The agency name leads the message
+// ---------------------------------------------------------------------------
+
+describe('sender identification', () => {
+  for (const language of [null, 'English', 'Spanish'] as const) {
+    it(`opens with the agency name for ${language ?? 'an absent language'}`, () => {
+      const result = render({ touchpoint: 15, language, amountDue: 275.4, contactName: 'Maria Garcia' });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.body.startsWith(SETTINGS.agency_name)).toBe(true);
+    });
+  }
+
+  it('heads each segment of a bilingual body, so neither half is anonymous', () => {
+    const result = render({ touchpoint: 15, language: null, amountDue: 275.4, contactName: 'Maria Garcia' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.body.split(SETTINGS.agency_name).length - 1).toBe(2);
+  });
+
+  it('still closes with the assigned employee, so it opens agency and closes agent', () => {
+    const result = render({
+      touchpoint: 15,
+      language: null,
+      amountDue: 275.4,
+      contactName: 'Maria Garcia',
+      senderName: ASSIGNED_EMPLOYEE,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.body.startsWith(SETTINGS.agency_name)).toBe(true);
+    expect(result.body.trimEnd().endsWith(ASSIGNED_EMPLOYEE.display_name)).toBe(true);
+  });
+
+  it('does not append a second agency name now that the body carries one', () => {
+    const result = render({ touchpoint: 15, language: 'English', amountDue: 275.4, contactName: 'Maria Garcia' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.body.split(SETTINGS.agency_name).length - 1).toBe(1);
   });
 });
 
@@ -207,14 +318,16 @@ describe('a single-case cancellation SMS fits the provider limit', () => {
     for (const touchpoint of TOUCHPOINTS) {
       it(`stays inside both budgets for ${language ?? 'an absent language'} at ${touchpoint} days`, () => {
         for (const scenario of scenarios) {
-          const result = render({ touchpoint, language, ...scenario });
-          expect(result.ok).toBe(true);
-          if (!result.ok) return;
-          const detail =
-            `${language ?? 'absent'} / ${touchpoint}d / amount ${scenario.amountDue ?? 'absent'}`
-            + ` / name ${scenario.contactName ?? 'absent'}`;
-          expect(result.body.length, `${detail} vs RingCentral`).toBeLessThanOrEqual(RINGCENTRAL_TEXT_LIMIT);
-          expect(result.body.length, `${detail} vs Req 13.3`).toBeLessThanOrEqual(MAX_COMBINED_SMS_BODY_LENGTH);
+          for (const senderName of [null, ASSIGNED_EMPLOYEE]) {
+            const result = render({ touchpoint, language, senderName, ...scenario });
+            expect(result.ok).toBe(true);
+            if (!result.ok) return;
+            const detail =
+              `${language ?? 'absent'} / ${touchpoint}d / amount ${scenario.amountDue ?? 'absent'}`
+              + ` / name ${scenario.contactName ?? 'absent'} / sender ${senderName ? 'assigned' : 'none'}`;
+            expect(result.body.length, `${detail} vs RingCentral`).toBeLessThanOrEqual(RINGCENTRAL_TEXT_LIMIT);
+            expect(result.body.length, `${detail} vs Req 13.3`).toBeLessThanOrEqual(MAX_COMBINED_SMS_BODY_LENGTH);
+          }
         }
       });
     }
@@ -229,16 +342,19 @@ describe('a single-case cancellation SMS fits the provider limit', () => {
     expect(result.body).toContain('programada para cancelarse el 19 de agosto de 2026');
     expect(result.body).toContain('Call (704) 824-3130 by August 19, 2026');
     expect(result.body).toContain('Llame al (704) 824-3130 antes del 19 de agosto de 2026');
-    // Agency name once per body (Req 14.1), not once per segment.
-    expect(result.body.split(SETTINGS.agency_name).length - 1).toBe(1);
   });
 
-  it('drops the greeting line rather than opening with a bare comma', () => {
+  it('drops the greeting line rather than leaving a dangling name line', () => {
     const result = render({ touchpoint: 15, language: 'English', amountDue: 275.4, contactName: null });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.body.startsWith(',')).toBe(false);
-    expect(result.body.startsWith('Courtesy reminder:')).toBe(true);
+    expect(result.body).toBe(
+      `${SETTINGS.agency_name}\n`
+      + 'Courtesy reminder: Your United Auto policy ZZTEST-C-003 is scheduled to cancel on August 19, 2026.\n'
+      + 'Amount due: $275.40\n'
+      + 'Call (704) 824-3130 by August 19, 2026 to review your options.\n'
+      + 'Reply STOP to opt out.',
+    );
   });
 
   it('drops the amount line when the case carries no amount', () => {
