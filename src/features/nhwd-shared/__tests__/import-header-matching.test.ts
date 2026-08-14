@@ -231,33 +231,43 @@ describe('guessMapping on a Spanish renewals export', () => {
     expect(mapping.expiration_date).toBe('FechaVencimiento');
   });
 
-  it('falls back to the producer for the required assignment column', () => {
+  it('never proposes the producer as the assignment label', () => {
+    // `Productor` is the producer on the policy, not the Work Desk employee who owns the follow-up
+    // work. An earlier revision proposed it for `assigned_name` to unblock the required mapping,
+    // which wrote a producer's name into `assigned_import_label` and from there into the alias
+    // mechanism. The file simply carries no agent, and the honest mapping says so.
     const mapping = guessMapping(SPANISH_RENEWAL_HEADER);
     expect(mapping.producer_name).toBe('Productor');
-    expect(mapping.assigned_name).toBe('Productor');
+    expect(mapping.assigned_name).toBeUndefined();
   });
 
-  it('leaves the producer alone when the file does name an assignment column', () => {
+  it('still maps a real assignment column when the file has one', () => {
     const mapping = guessMapping([...SPANISH_RENEWAL_HEADER, 'Asignacion TXT']);
     expect(mapping.assigned_name).toBe('Asignacion TXT');
     expect(mapping.producer_name).toBe('Productor');
   });
 
-  it('proposes no source column to two fields beyond the producer fallback', () => {
-    const mapping = guessMapping(SPANISH_RENEWAL_HEADER);
-    const used = Object.entries(mapping)
-      .filter(([field]) => field !== 'assigned_name')
-      .map(([, header]) => header);
+  it('proposes each source column to at most one field', () => {
+    const used = Object.values(guessMapping(SPANISH_RENEWAL_HEADER));
     expect(new Set(used).size).toBe(used.length);
   });
 
-  it('maps every required column of the Spanish export with no manager override', () => {
+  it('maps every required column the collector export actually carries', () => {
+    // Five of the six. `assigned_name` is absent because the file has no agent column, which is
+    // exactly why this header is routed to the collector importer instead of this wizard.
     const mapping = guessMapping(SPANISH_RENEWAL_HEADER);
     for (const field of [
-      'customer_name', 'carrier', 'line_of_business', 'policy_number', 'renewal_date', 'assigned_name',
+      'customer_name', 'carrier', 'line_of_business', 'policy_number', 'renewal_date',
     ]) {
       expect(mapping[field], field).toBeTruthy();
     }
+  });
+
+  it('is recognized as a collector export, so the wizard never asks for this mapping', () => {
+    // The routing decision and the mapping table read the same header through the same key, so
+    // this is the assertion that ties them together: a file `guessMapping` cannot fully map is a
+    // file the wizard hands to the importer that needs no mapping at all.
+    expect(classifyCollectorHeader(SPANISH_RENEWAL_HEADER)).toBe('renewal');
   });
 
   it('survives accents, spacing, and upper case in the same header', () => {
