@@ -204,7 +204,8 @@ const COMMUNICATION_COLUMNS =
   + 'attempt_count,combined_group_id';
 const ESCALATION_COLUMNS = 'id,case_id,reason,raised_at,cleared_at,cleared_by,notified_at';
 const RESPONSE_COLUMNS = 'id,case_id,response_type,response_time';
-const TEMPLATE_COLUMNS = 'id,touchpoint';
+/** `channel` since v1.13.8: the SMS wording and the email wording are separate template rows. */
+const TEMPLATE_COLUMNS = 'id,touchpoint,channel';
 const TEMPLATE_VERSION_COLUMNS =
   'id,template_id,version,language,subject,body,cancellation_statement,contact_request,fallback_text';
 const PHRASE_COLUMNS = 'id,phrase,language,claim_category,is_active';
@@ -716,7 +717,7 @@ export async function runScheduler(input: SchedulerRunInput): Promise<SchedulerR
   if (!summary.automaticSendingEnabled) return summary;
 
   // ── The remaining reads: templates, phrases, profiles, escalations, responses.
-  const templateRead = await readRows<{ id: string; touchpoint: Touchpoint }>(
+  const templateRead = await readRows<{ id: string; touchpoint: Touchpoint; channel: RenderChannel | null }>(
     () => client.from(TEMPLATES_TABLE).select(TEMPLATE_COLUMNS),
     'read_templates',
   );
@@ -1305,21 +1306,29 @@ function groupBy<TRow>(rows: readonly TRow[], key: (row: TRow) => string): Map<s
 }
 
 /**
- * The template version rows with their template's Touchpoint attached.
+ * The template version rows with their template's Touchpoint and channel attached.
  *
- * `cancellation_template_versions` carries no Touchpoint — the column lives on
- * `cancellation_templates` — and `selectTemplateVersion` needs it to pick the 15, 10, 5, or 1-day
- * template. Joining here keeps that knowledge out of the renderer, which stays pure.
+ * `cancellation_template_versions` carries neither — both columns live on
+ * `cancellation_templates` — and `selectTemplateVersion` needs the Touchpoint to pick the 15, 10, 5,
+ * or 1-day template and the channel to pick the SMS wording rather than the email wording
+ * (v1.13.8). Joining here keeps that knowledge out of the renderer, which stays pure.
+ *
+ * A template row without a channel leaves the version's channel `null`, which
+ * `selectTemplateVersion` reads as "this caller is not channel-aware" and ignores.
  */
 export function joinTemplateTouchpoints(
   versions: readonly TemplateVersionRow[],
-  templates: readonly { id: string; touchpoint: Touchpoint }[],
+  templates: readonly { id: string; touchpoint: Touchpoint; channel?: RenderChannel | null }[],
 ): TemplateVersionRow[] {
-  const touchpointById = new Map(templates.map((row) => [row.id, row.touchpoint]));
-  return versions.map((version) => ({
-    ...version,
-    touchpoint: version.template_id ? touchpointById.get(version.template_id) ?? null : null,
-  }));
+  const byId = new Map(templates.map((row) => [row.id, row]));
+  return versions.map((version) => {
+    const template = version.template_id ? byId.get(version.template_id) : undefined;
+    return {
+      ...version,
+      touchpoint: template?.touchpoint ?? null,
+      channel: template?.channel ?? null,
+    };
+  });
 }
 
 function renderCaseOf(candidate: SchedulerCandidate): RenderCase {

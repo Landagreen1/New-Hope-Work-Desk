@@ -361,10 +361,18 @@ export interface CancellationImportRun {
   completed_at: string;
 }
 
-/** One `public.cancellation_templates` row. `touchpoint` is its unique lookup key (Req 12.1). */
+/**
+ * One `public.cancellation_templates` row.
+ *
+ * `(touchpoint, channel)` is its unique lookup key (Req 12.1, widened by v1.13.8). Before that
+ * migration `touchpoint` alone was unique; there are now two rows per touchpoint, because an SMS
+ * body has to fit the length the provider accepts for a Bilingual render and an email body does
+ * not. `channel` is optional on the type so a row read before v1.13.8 still satisfies it.
+ */
 export interface CancellationTemplate {
   id: string;
   touchpoint: Touchpoint;
+  channel?: 'email' | 'sms' | null;
   name: string;
   created_at: string;
 }
@@ -553,9 +561,18 @@ export const AUTHORIZATION_STATUSES = [
 // ---------------------------------------------------------------------------
 
 /**
- * The `cancellation_events.event_type` values this module writes. The column is free text, so
- * the vocabulary lives here rather than in a check constraint; the two opt-out types come from
- * `domain/suppression` so a plan and a direct write cannot disagree.
+ * The `cancellation_events.event_type` values this module writes. The two opt-out types come
+ * from `domain/suppression` so a plan and a direct write cannot disagree.
+ *
+ * **Adding a value here requires a migration in the same change.** `event_type` is guarded by
+ * `cancellation_events_event_type_check`, and a value this object carries that the constraint
+ * does not admit fails the audit insert at the database. Every write below appends its audit
+ * entry *after* its primary write, so the failure is worse than an error: the operation lands,
+ * the timeline entry does not, and the agent is shown a failure for work that was actually
+ * done. That is exactly what happened between v1.10.10 — which added the constraint without
+ * reconciling it against this object — and v1.13.7, which widened it to the union and is now
+ * the file to edit. `__tests__/event-type-vocabulary.test.ts` compares the two and fails when
+ * they drift.
  */
 export const CANCELLATION_EVENT_TYPES = {
   contactAdded: 'contact_added',
@@ -973,8 +990,9 @@ export async function listCancellationTemplates(): Promise<CancellationTemplateW
 
   const { data: templateData, error: templateError } = await supabase
     .from('cancellation_templates')
-    .select('id,touchpoint,name,created_at')
-    .order('touchpoint', { ascending: false });
+    .select('id,touchpoint,channel,name,created_at')
+    .order('touchpoint', { ascending: false })
+    .order('channel', { ascending: true });
   throwIfError(templateError, 'loading the message templates');
   const templates = (templateData as CancellationTemplate[]) ?? [];
   if (templates.length === 0) return [];
