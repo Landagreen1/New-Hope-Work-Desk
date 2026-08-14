@@ -197,6 +197,34 @@ export interface AssignmentAliasResult {
   rows_assigned: number;
 }
 
+/**
+ * What one `renewal_assign_bulk` call did, as the RPC reports it (v1.14.0).
+ *
+ * The four outcome counts are disjoint and sum to `requested`, which is the count of *distinct*
+ * ids the call resolved — a selection carrying the same renewal twice assigns it once. Reporting
+ * them separately rather than as one total is the point: "assigned 12" and "assigned 3, closed 9"
+ * are very different answers to the same click, and a manager who selected a filtered page needs
+ * to see which it was.
+ */
+export interface BulkAssignResult {
+  /** Distinct record ids the call resolved. */
+  requested: number;
+  /** Records whose owner changed. Each one wrote an audit event and notified the employee. */
+  assigned: number;
+  /**
+   * Records the employee already owned. The manager provenance stamp is applied so a later
+   * automatic ownership decision cannot move them, but the owner did not change, so nobody was
+   * notified and no assignment event was written.
+   */
+  confirmed: number;
+  /** Records left untouched because the renewal is renewed, lost, or cancelled. */
+  closed_skipped: number;
+  /** Ids that resolved to no readable row: already deleted, or outside this manager's read scope. */
+  not_found: number;
+  assigned_to: string;
+  assigned_name: string;
+}
+
 export interface RenewalImportRun {
   id: string;
   file_name: string;
@@ -275,7 +303,14 @@ export interface RenewalFilters {
   search?: string;
 }
 
-const OPEN_STATUSES: RenewalStatus[] = ['imported', 'assigned', 'in_progress', 'monitoring', 'requote_sent'];
+/**
+ * The five statuses that still describe work the agency owes the customer.
+ *
+ * Exported because assignment surfaces need it: `renewal_assign_bulk` refuses a renewed, lost, or
+ * cancelled renewal, so offering one for selection would invite a click that reports
+ * `closed_skipped` instead of doing anything.
+ */
+export const OPEN_STATUSES: RenewalStatus[] = ['imported', 'assigned', 'in_progress', 'monitoring', 'requote_sent'];
 const MAX_EVIDENCE_SIZE_BYTES = 100 * 1024 * 1024;
 
 function throwIfError(error: { message?: string } | null) {
@@ -583,6 +618,69 @@ export async function assignRenewal(recordId: string, profileId: string): Promis
   throwIfError(error);
 }
 
+/** At most this many renewals in one bulk assign, matching the bound `renewal_assign_bulk` enforces. */
+export const MAX_BULK_ASSIGN_RECORDS = 500;
+
+/**
+ * Assigns many renewals to one employee in a single transaction (v1.14.0).
+ *
+ * The consolidated collector export carries no agent column, so its rows arrive owned by whatever
+ * `policy_followup_resolve_owner` could resolve — and its last branch is manager review, which
+ * leaves a record visible and unowned on purpose. This is how a manager clears that bucket without
+ * opening every record.
+ *
+ * Every assignment is stamped `assignment_source = 'manager'`, which is what stops a later
+ * automatic ownership decision from moving it. Renewals only: the matching cancellation cases are
+ * not touched, matching the single-record Reassign action.
+ *
+ * The bound is enforced server-side too; it is repeated here so the surface can refuse before a
+ * round trip and say the same thing.
+ */
+export async function assignRenewalBulk(
+  recordIds: readonly string[],
+  profileId: string,
+): Promise<BulkAssignResult> {
+  const distinct = Array.from(new Set(recordIds.filter((id) => id.trim() !== '')));
+  if (distinct.length === 0) throw new Error('Choose at least one renewal to assign.');
+  if (distinct.length > MAX_BULK_ASSIGN_RECORDS) {
+    throw new Error(
+      `Assign at most ${MAX_BULK_ASSIGN_RECORDS} renewals in one action. `
+      + `${distinct.length} are selected — narrow the filter and assign in batches.`,
+    );
+  }
+
+  const { data, error } = await getSupabase().rpc('renewal_assign_bulk', {
+    p_record_ids: distinct,
+    p_agent_id: profileId,
+  });
+  throwIfError(error);
+  return data as BulkAssignResult;
+}
+
+/**
+ * The sentence a manager reads after a bulk assign.
+ *
+ * Built here rather than in the component so the wording is one thing and is testable without
+ * rendering. Only the outcomes that actually happened are mentioned, because "3 assigned, 0 already
+ * owned, 0 closed, 0 not found" reads like a failure report for a clean run.
+ */
+export function describeBulkAssign(result: BulkAssignResult): string {
+  const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+  const parts: string[] = [`${plural(result.assigned, 'renewal')} assigned to ${result.assigned_name}`];
+
+  if (result.confirmed > 0) {
+    parts.push(`${plural(result.confirmed, 'renewal')} already owned by them, now locked to your decision`);
+  }
+  if (result.closed_skipped > 0) {
+    parts.push(`${plural(result.closed_skipped, 'renewal')} left alone because the outcome is already recorded`);
+  }
+  if (result.not_found > 0) {
+    parts.push(`${plural(result.not_found, 'selection')} no longer available`);
+  }
+
+  return `${parts.join('. ')}.`;
+}
+
 export async function listRenewalAssignees(): Promise<RenewalAssignee[]> {
   const { data, error } = await getSupabase()
     .from('profiles')
@@ -799,16 +897,18 @@ export function guessMapping(headers: string[]): Record<string, string> {
     }
   }
 
-  // The consolidated Spanish export carries no assignment column at all — `Productor` is the
-  // only person on the row. `assigned_name` is required, so leaving it unmapped blocks the
-  // import on data the file does not have, and the producer is the same label the cancellation
-  // importer already resolves to an assignee. It is proposed last, after `producer_name` has
-  // taken the column, so both fields read it; the mapping selects show the proposal and a
-  // manager changes it or clears it like any other.
-  if (mapping.assigned_name === undefined && mapping.producer_name !== undefined) {
-    mapping.assigned_name = mapping.producer_name;
-  }
-
+  // No `Productor` fallback for `assigned_name`.
+  //
+  // An earlier revision proposed the producer as the assignment label, because the consolidated
+  // Spanish export carries no agent column and `assigned_name` is a required mapping. That was
+  // wrong in substance: `Productor` is the producer on the policy, not the Work Desk employee who
+  // owns the follow-up work, and inventing an assignment label from it wrote a person's name into
+  // `assigned_import_label` where it then drove the alias mechanism.
+  //
+  // It is unnecessary now as well. That file is a collector export, `RenewalManagerActions`
+  // recognizes its header and sends it to the Policy Follow-up importer, which needs no mapping and
+  // resolves ownership per row — leaving genuinely unplaceable rows unassigned, which is what
+  // `renewal_assign_bulk` exists to clear. So this wizard never has to map that file at all.
   return mapping;
 }
 

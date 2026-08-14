@@ -12,14 +12,18 @@
 // delete, and unmatched-label review. Every read and write goes through `api.ts` — zero direct
 // Supabase access, zero renewal database function calls (Req 7.2).
 
-import { AlertTriangle, CheckCircle2, ChevronDown, FileUp, Link2, ListChecks, Pencil, RefreshCw, ShieldCheck, Unlink, UploadCloud, UserCheck, UsersRound, X, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, FileUp, Info, Link2, ListChecks, Pencil, RefreshCw, ShieldCheck, Unlink, UploadCloud, UserCheck, UsersRound, X, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 
 import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 import { ui } from '../nhwd-shared/ui';
+// Pure header classifier, no client and no I/O, so Requirement 7.2 still holds for this file.
+import { classifyCollectorHeader } from '../policy-follow-up/collector';
 import {
-  assignRenewal, buildNormalizedRows, deleteRenewalAssignmentAlias, extractDistinctAssignmentLabels, guessMapping,
+  MAX_BULK_ASSIGN_RECORDS, OPEN_STATUSES,
+  assignRenewal, assignRenewalBulk, buildNormalizedRows, deleteRenewalAssignmentAlias, describeBulkAssign,
+  extractDistinctAssignmentLabels, guessMapping,
   importBatch, listRenewalAssignees, managerUpdateRecord, normalizeAssignmentLabel, normalizeDate, parseCsv,
   upsertRenewalAssignmentAlias, type ImportBatchResult, type NormalizedImportRow, type RenewalAssignee,
   type RenewalAssignmentAlias, type RenewalImportRun, type RenewalRecord,
@@ -240,6 +244,148 @@ function MappingSelects({ fields, headers, mapping, onChange }: {
   );
 }
 
+/**
+ * Multi-select renewal chooser for a bulk reassignment (v1.14.0).
+ *
+ * The consolidated collector export carries no agent column, so its rows arrive owned by whatever
+ * the ownership engine could resolve and its manager-review branch leaves the rest unowned on
+ * purpose. This is how that bucket gets cleared without opening one record at a time — the default
+ * filter is therefore "unassigned only", which is the case a manager actually comes here for.
+ *
+ * Only open renewals are offered. `renewal_assign_bulk` refuses a renewed, lost, or cancelled row,
+ * so listing one would invite a click that reports `closed_skipped` and changes nothing.
+ *
+ * Every row is a real `<input type="checkbox">` with its own label, so selection is reachable by
+ * keyboard and by a screen reader rather than being a click target on a div (Req 4.6). "Select all"
+ * acts on the filtered rows that are visible, never on the whole table, so what it does is what the
+ * manager can see.
+ */
+function BulkRecordPicker({
+  records, selected, onChange, unassignedOnly, onUnassignedOnly, assigneeName, limit,
+}: {
+  records: readonly RenewalRecord[];
+  selected: readonly string[];
+  onChange: (next: readonly string[]) => void;
+  unassignedOnly: boolean;
+  onUnassignedOnly: (next: boolean) => void;
+  /** Resolves an assigned employee id to a name, for the "currently owned by" column. */
+  assigneeName: (profileId: string | null) => string;
+  limit: number;
+}) {
+  const [query, setQuery] = useState('');
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const openRecords = useMemo(
+    () => records.filter((record) => OPEN_STATUSES.includes(record.status)),
+    [records],
+  );
+
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return openRecords
+      .filter((record) => (unassignedOnly ? record.assigned_to === null : true))
+      .filter((record) => !needle
+        || `${record.customer_name} ${record.policy_number} ${record.carrier ?? ''}`.toLowerCase().includes(needle))
+      .slice(0, limit);
+  }, [limit, openRecords, query, unassignedOnly]);
+
+  const visibleIds = useMemo(() => visible.map((record) => record.id), [visible]);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id));
+
+  function toggle(id: string) {
+    onChange(selectedSet.has(id) ? selected.filter((value) => value !== id) : [...selected, id]);
+  }
+
+  function toggleAllVisible() {
+    if (allVisibleSelected) {
+      onChange(selected.filter((id) => !visibleIds.includes(id)));
+      return;
+    }
+    onChange(Array.from(new Set([...selected, ...visibleIds])));
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label>
+          <span className={ui.label}>Filter renewals</span>
+          <input
+            className={ui.input}
+            value={query}
+            placeholder="Customer, policy number, or carrier"
+            onChange={(event: ChangeEvent<HTMLInputElement>) => setQuery(event.target.value)}
+          />
+        </label>
+        <label className="flex items-end gap-2 pb-1">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={unassignedOnly}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => onUnassignedOnly(event.target.checked)}
+          />
+          <span className="text-sm font-bold text-slate-700">Unassigned only</span>
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className={ui.btnGhost} disabled={visibleIds.length === 0} onClick={toggleAllVisible}>
+          <ListChecks className="h-4 w-4" aria-hidden="true" />
+          {allVisibleSelected ? `Clear these ${visibleIds.length}` : `Select these ${visibleIds.length}`}
+        </button>
+        {selected.length > 0 ? (
+          <button type="button" className={ui.btnGhost} onClick={() => onChange([])}>
+            <X className="h-4 w-4" aria-hidden="true" />Clear all {selected.length}
+          </button>
+        ) : null}
+        {/*
+          Not a live region. The action feedback above the panel already is one, and two competing
+          live regions make a screen reader announce the wrong one. The count is also carried by the
+          submit button's own label ("Assign 3 renewals"), which is the control that matters.
+        */}
+        <p className="text-sm font-black text-slate-900">{selected.length} selected</p>
+      </div>
+
+      {visible.length === 0 ? (
+        <p className={ui.empty}>
+          {openRecords.length === 0
+            ? 'No open renewals are in view. Import a renewal file first.'
+            : 'No open renewals match this filter.'}
+        </p>
+      ) : (
+        <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto rounded-2xl border border-slate-200">
+          {visible.map((record) => (
+            <label
+              key={record.id}
+              className="flex cursor-pointer items-start gap-3 bg-white px-3 py-2 hover:bg-[#f8faff]"
+            >
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 shrink-0"
+                checked={selectedSet.has(record.id)}
+                onChange={() => toggle(record.id)}
+              />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-black text-slate-900">
+                  {record.customer_name} · {record.policy_number}
+                </span>
+                <span className="mt-0.5 block text-xs font-semibold text-slate-500">
+                  {record.renewal_date} · {record.carrier || '—'} · {assigneeName(record.assigned_to)}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {openRecords.length > visible.length ? (
+        <p className="text-xs font-semibold text-slate-500">
+          Showing {visible.length} of {openRecords.length} open renewals. Narrow the filter to reach the rest.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** Renewal chooser shared by Reassign renewal and Correct imported data. */
 function RecordPicker({ label, records, value, onChange }: {
   label: string; records: readonly RenewalRecord[]; value: string; onChange: (recordId: string) => void;
@@ -298,6 +444,12 @@ export default function RenewalManagerActions({
   const [notice, setNotice] = useState<string | null>(null);
 
   const [fileName, setFileName] = useState('');
+  /**
+   * Set when the chosen file is a consolidated collector export. Non-null suppresses the mapping
+   * step entirely: that format has a fixed header, needs no mapping, and belongs to the Policy
+   * Follow-up importer.
+   */
+  const [collectorFileName, setCollectorFileName] = useState<string | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
@@ -310,6 +462,13 @@ export default function RenewalManagerActions({
   const [loadedAssignees, setLoadedAssignees] = useState<readonly RenewalAssignee[]>([]);
 
   const [assignTarget, setAssignTarget] = useState(''); const [assignTo, setAssignTo] = useState('');
+  /**
+   * One renewal or several. `one` is the default so the panel opens on the behaviour it has always
+   * had, and the bulk list is something a manager asks for rather than something they land in.
+   */
+  const [assignMode, setAssignMode] = useState<'one' | 'many'>('one');
+  const [bulkSelected, setBulkSelected] = useState<readonly string[]>([]);
+  const [bulkUnassignedOnly, setBulkUnassignedOnly] = useState(true);
   const [correctTarget, setCorrectTarget] = useState(''); const [draft, setDraft] = useState<CorrectionDraft>(() => correctionDraft());
 
   const assignees = assigneesProp ?? loadedAssignees;
@@ -401,10 +560,25 @@ export default function RenewalManagerActions({
 
   async function loadFile(file: File | null) {
     if (!file) return;
-    setError(null); setNotice(null);
+    setError(null); setNotice(null); setCollectorFileName(null);
     try {
       const parsed = parseCsv(await file.text());
       if (!parsed.headers.length) { setError('The CSV did not contain a header row.'); return; }
+
+      // A consolidated collector export is a fixed 26-column contract that needs no mapping at all,
+      // and it is imported by the Policy Follow-up surface, which also resolves ownership per row.
+      // Showing twenty-six dropdowns for it would be asking a manager to hand-map a header the
+      // product already knows by name. This path recognizes it and says where it goes, rather than
+      // reimplementing the collector import here — `PolicyFollowUpImports` owns that, and its own
+      // header records the separation: the legacy wizards stay put and the surfaces link to
+      // each other.
+      if (classifyCollectorHeader(parsed.headers) === 'renewal') {
+        setCollectorFileName(file.name);
+        setFileName(file.name);
+        setHeaders([]); setRawRows([]); setMapping({});
+        return;
+      }
+
       setFileName(file.name);
       setHeaders(parsed.headers);
       setRawRows(parsed.rows);
@@ -471,6 +645,23 @@ export default function RenewalManagerActions({
     const person = assignees.find((item) => item.id === assignTo);
     await runAction('reassign', () => assignRenewal(record.id, assignTo),
       `${record.policy_number} is assigned to ${person?.display_name || 'the selected employee'}.`, 'The renewal assignment could not be saved.');
+  }
+
+  /**
+   * The same decision over many records, in one transaction (v1.14.0).
+   *
+   * The reported notice comes from `describeBulkAssign` rather than being assembled here, because
+   * the counts are the interesting part: a click that reports "3 assigned, 9 left alone because the
+   * outcome is already recorded" has to say so rather than claim twelve.
+   */
+  async function submitBulkAssign() {
+    if (!assignTo) { setError('Choose the employee who will own the selected renewals.'); return; }
+    if (bulkSelected.length === 0) { setError('Select at least one renewal to assign.'); return; }
+    await runAction('bulk-assign', async () => {
+      const result = await assignRenewalBulk(bulkSelected, assignTo);
+      setBulkSelected([]);
+      return describeBulkAssign(result);
+    }, 'The selected renewals were assigned.', 'The renewals could not be assigned.');
   }
 
   async function submitCorrection() {
@@ -567,6 +758,26 @@ export default function RenewalManagerActions({
                 <input type="file" accept=".csv,text/csv" className="mt-3 block w-full text-sm font-semibold" onChange={(event: ChangeEvent<HTMLInputElement>) => void loadFile(event.target.files?.[0] || null)} />
               </label>
 
+              {collectorFileName ? (
+                <div role="status" className="rounded-2xl border border-[#b5c4df] bg-[#f8faff] p-4">
+                  <p className="flex items-center gap-2 text-sm font-black text-[#223f7a]">
+                    <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {collectorFileName} is a consolidated collector export. It needs no column mapping.
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-slate-700">
+                    This wizard is for the older Power BI and HawkSoft exports, which vary column by
+                    column. The collector export has a fixed header, so import it from{' '}
+                    <strong>Policy follow-up → Imports</strong>, which reads it by name, previews it,
+                    and resolves an owner for every row.
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-slate-700">
+                    That file carries no agent column, so rows it cannot place stay unassigned on
+                    purpose. Clear them with <strong>Manager actions → Reassign renewal → Several
+                    renewals</strong>.
+                  </p>
+                </div>
+              ) : null}
+
               {headers.length ? (
                 <>
                   <StatGrid className="grid grid-cols-2 gap-2 sm:grid-cols-5" items={[['File rows', rawRows.length], ['Valid policies', normalizedRows.length],
@@ -646,17 +857,75 @@ export default function RenewalManagerActions({
 
           {panel === 'reassign' ? (
             <>
-              <RecordPicker label="Renewal to reassign" records={records} value={assignTarget} onChange={(id) => {
-                setAssignTarget(id);
-                setAssignTo(records.find((record) => record.id === id)?.assigned_to ?? '');
-              }} />
+              {/*
+                One renewal or several. Radio inputs rather than a custom segmented control, so the
+                mutually exclusive choice is keyboard operable and announced without extra ARIA.
+              */}
+              <fieldset className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+                <legend className={ui.label}>How many renewals</legend>
+                <div className="flex flex-wrap gap-4">
+                  {([['one', 'One renewal'], ['many', 'Several renewals']] as const).map(([value, label]) => (
+                    <label key={value} className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="renewal-assign-mode"
+                        className="h-4 w-4"
+                        value={value}
+                        checked={assignMode === value}
+                        onChange={() => { setAssignMode(value); setError(null); setNotice(null); }}
+                      />
+                      <span className="text-sm font-bold text-slate-700">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              {assignMode === 'one' ? (
+                <RecordPicker label="Renewal to reassign" records={records} value={assignTarget} onChange={(id) => {
+                  setAssignTarget(id);
+                  setAssignTo(records.find((record) => record.id === id)?.assigned_to ?? '');
+                }} />
+              ) : (
+                <BulkRecordPicker
+                  records={records}
+                  selected={bulkSelected}
+                  onChange={setBulkSelected}
+                  unassignedOnly={bulkUnassignedOnly}
+                  onUnassignedOnly={setBulkUnassignedOnly}
+                  limit={MAX_BULK_ASSIGN_RECORDS}
+                  assigneeName={(profileId) => {
+                    if (!profileId) return 'Unassigned';
+                    const person = assignees.find((item) => item.id === profileId);
+                    return person ? `Owned by ${person.display_name}` : 'Owned by an inactive user';
+                  }}
+                />
+              )}
+
               <SelectField label="Assign to" value={assignTo} onChange={setAssignTo}>
                 <option value="">Choose an employee</option>
                 {employeeOptions}
               </SelectField>
-              <button type="button" className={ui.btnPrimary} disabled={!assignTarget || !assignTo || busy === 'reassign'} onClick={() => void submitReassign()}>
-                <UserCheck className="h-4 w-4" aria-hidden="true" />{busy === 'reassign' ? 'Saving…' : 'Save assignment'}
-              </button>
+
+              {assignMode === 'one' ? (
+                <button type="button" className={ui.btnPrimary} disabled={!assignTarget || !assignTo || busy === 'reassign'} onClick={() => void submitReassign()}>
+                  <UserCheck className="h-4 w-4" aria-hidden="true" />{busy === 'reassign' ? 'Saving…' : 'Save assignment'}
+                </button>
+              ) : (
+                <>
+                  <button type="button" className={ui.btnPrimary}
+                    disabled={bulkSelected.length === 0 || !assignTo || busy === 'bulk-assign'}
+                    onClick={() => void submitBulkAssign()}>
+                    <UserCheck className="h-4 w-4" aria-hidden="true" />
+                    {busy === 'bulk-assign'
+                      ? `Assigning ${bulkSelected.length}…`
+                      : `Assign ${bulkSelected.length} renewal${bulkSelected.length === 1 ? '' : 's'}`}
+                  </button>
+                  <p className="text-xs font-semibold text-slate-500">
+                    A renewal with a recorded outcome is left alone. Each assignment is stamped as your
+                    decision, so a later import cannot move it.
+                  </p>
+                </>
+              )}
             </>
           ) : null}
 
