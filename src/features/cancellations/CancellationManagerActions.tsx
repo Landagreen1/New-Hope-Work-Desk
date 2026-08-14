@@ -67,6 +67,7 @@ import {
   CheckCircle2,
   ChevronDown,
   FileUp,
+  Info,
   ListChecks,
   LoaderCircle,
   MailCheck,
@@ -106,6 +107,8 @@ import {
   type ImportFileRejection,
 } from './import/classify';
 import { parseCsv, type ParsedCsv } from './import/csv';
+// Pure header classifier: no client, no I/O.
+import { classifyCollectorHeader } from '../policy-follow-up/collector';
 import type { ProducerLabelEntry } from './import/fields';
 import {
   buildImportBatchPayload,
@@ -578,6 +581,13 @@ export default function CancellationManagerActions({
   const [parsed, setParsed] = useState<ParsedCsv | null>(null);
   const [classified, setClassified] = useState<ClassifiedImportFile | null>(null);
   const [fileRejection, setFileRejection] = useState<ImportFileRejection | null>(null);
+  /**
+   * Set when the chosen file is a consolidated collector export rather than an eficacia or avisos
+   * report. Non-null replaces the wizard with the one useful sentence: this file needs no mapping,
+   * and it is imported from Policy follow-up → Imports.
+   */
+  const [collectorFile, setCollectorFile] =
+    useState<{ name: string; domain: 'renewal' | 'cancellation' } | null>(null);
   const [draft, setDraft] = useState<MappingDraft | null>(null);
   const [blockReasons, setBlockReasons] = useState<readonly MappingBlockReason[]>([]);
   const [confirmed, setConfirmed] = useState<ConfirmedMapping | null>(null);
@@ -768,6 +778,7 @@ export default function CancellationManagerActions({
     setParsed(null);
     setClassified(null);
     setFileRejection(null);
+    setCollectorFile(null);
     setDraft(null);
     setBlockReasons([]);
     setConfirmed(null);
@@ -788,8 +799,28 @@ export default function CancellationManagerActions({
     setPending('file');
     try {
       const parsedFile = parseCsv(await file.text());
-      const result = classifyParsedFile(parsedFile, file.size);
       if (!mountedRef.current) return;
+
+      // A consolidated collector export has a fixed header and needs no mapping, and this wizard is
+      // for the legacy two-file eficacia/avisos pair. Left to `classifyParsedFile` it is refused with
+      // "the header row names neither cancellation report format" — true, and useless: the file is
+      // perfectly importable, one surface over. `eficacia` deliberately disallows `PolizaNormalizada`
+      // for exactly this reason (a collector file merged under eficacia field ownership would drop the
+      // fields only the collector carries), so recognizing it here completes that refusal with the
+      // answer instead of leaving a manager to guess. Both domains are named, because either file can
+      // be dropped in either wizard.
+      const collectorDomain = classifyCollectorHeader([...parsedFile.header]);
+      if (collectorDomain !== null) {
+        setFileName(file.name);
+        setCollectorFile({ name: file.name, domain: collectorDomain });
+        setParsed(null);
+        setClassified(null);
+        setStage('upload');
+        return;
+      }
+      setCollectorFile(null);
+
+      const result = classifyParsedFile(parsedFile, file.size);
       setFileName(file.name);
       if (!result.ok) {
         // Requirement 8.13: the whole file is refused, nothing is written, and the message names
@@ -1320,6 +1351,35 @@ export default function CancellationManagerActions({
                       </div>
                     ) : null}
                   </div>
+
+                  {/*
+                    A collector export, which this wizard does not import. Shown instead of the
+                    "names neither format" refusal, because the file is importable one surface over
+                    and the refusal alone left a manager to work that out.
+                  */}
+                  {collectorFile !== null ? (
+                    <div role="status" className="rounded-2xl border border-[#b5c4df] bg-[#f8faff] p-4">
+                      <p className="flex items-center gap-2 text-sm font-black text-[#223f7a]">
+                        <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        {collectorFile.name} is the consolidated{' '}
+                        {collectorFile.domain === 'renewal' ? 'renewals' : 'cancellations'} collector
+                        export. It needs no column mapping.
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-slate-700">
+                        This wizard imports the two-file eficacia and avisos reports, which need their
+                        columns confirmed. Import the collector export from{' '}
+                        <strong>Policy follow-up → Imports</strong>, which reads its fixed header by
+                        name, previews it, and carries every field it holds — including the contacts
+                        this wizard would have to be told about column by column.
+                      </p>
+                      {collectorFile.domain === 'renewal' ? (
+                        <p className="mt-2 text-sm font-semibold text-slate-700">
+                          This is the renewals file, not the cancellations one — the same Imports
+                          surface takes both, and it will read this one as renewals.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {/* Stage 2: classification result (Requirements 8.2, 8.3) */}
                   {stage !== 'upload' && classified !== null ? (
