@@ -448,7 +448,8 @@ const SUPPRESSION_COLUMNS = 'id,channel,normalized_value,cleared_at';
 const COMMUNICATION_COLUMNS =
   'id,case_id,contact_id,touchpoint,channel,template_version_id,rendered_subject,rendered_body,'
   + 'delivery_result,send_time,failure_reason,attempt_count,combined_group_id';
-const TEMPLATE_COLUMNS = 'id,touchpoint';
+/** `channel` since v1.13.8: the SMS wording and the email wording are separate template rows. */
+const TEMPLATE_COLUMNS = 'id,touchpoint,channel';
 const TEMPLATE_VERSION_COLUMNS =
   'id,template_id,version,language,subject,body,cancellation_statement,contact_request,fallback_text';
 const PHRASE_COLUMNS = 'id,phrase,language,claim_category,is_active';
@@ -1067,7 +1068,7 @@ async function readRenderInputs(
   caseRow: SchedulerCaseRow,
   summary: ManualSendSummary,
 ): Promise<RenderInputs> {
-  const templateRead = await readRows<{ id: string; touchpoint: Touchpoint }>(
+  const templateRead = await readRows<{ id: string; touchpoint: Touchpoint; channel: RenderChannel | null }>(
     () => client.from(TEMPLATES_TABLE).select(TEMPLATE_COLUMNS),
     'read_templates',
   );

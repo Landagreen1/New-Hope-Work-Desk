@@ -82,7 +82,14 @@ describe('Property 10 (PBT-10): Duplicate Flag Validation', () => {
       fc.property(
         uuidArb,
         uuidArb,
-        fc.string({ minLength: 501, maxLength: 600 }),
+        // `validateDuplicateFlag` measures `reason.trim()`, so length alone does not make a
+        // reason too long: a 501-character run of spaces trims to empty and is reported as
+        // "at least 10 characters" instead. Generating raw strings of length 501+ therefore
+        // failed this property whenever the random seed produced an all-whitespace value,
+        // which made the suite flaky rather than finding a real defect. Replacing whitespace
+        // keeps the generated length and guarantees the trimmed length exceeds 500, which is
+        // the condition the 500-character rule is actually about.
+        fc.string({ minLength: 501, maxLength: 600 }).map((value) => value.replace(/\s/g, 'x')),
         (quoteId, originalId, reason) => {
           fc.pre(quoteId !== originalId);
           const result = validateDuplicateFlag(quoteId, originalId, reason);
@@ -92,6 +99,19 @@ describe('Property 10 (PBT-10): Duplicate Flag Validation', () => {
       ),
       PBT_CONFIG
     );
+  });
+
+  it('reports a whitespace-only reason as too short, not too long', () => {
+    // The behavior the flaky generator was accidentally exercising, pinned deliberately so the
+    // trim-then-measure contract is covered rather than left to chance.
+    const result = validateDuplicateFlag(
+      '00000000-0000-1000-8000-000000000000',
+      '00000000-0000-1000-8000-000000000001',
+      ' '.repeat(600)
+    );
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('Reason must be at least 10 characters');
+    expect(result.errors).not.toContain('Reason must be at most 500 characters');
   });
 
   it('rejects empty quoteId', () => {

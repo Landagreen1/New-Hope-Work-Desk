@@ -348,6 +348,14 @@ export interface TemplateVersionRow {
   template_id?: string | null;
   version?: number | null;
   touchpoint?: Touchpoint | null;
+  /**
+   * Which channel the row is written for, joined through from `cancellation_templates.channel`
+   * exactly as `touchpoint` is (v1.13.8). Optional for the same reason: a caller handing over the
+   * rows of one template already knows the channel, and every fixture predating the column omits
+   * it. Where it is absent from every supplied row, selection ignores it and behaves as it did
+   * before the column existed.
+   */
+  channel?: RenderChannel | null;
   language: TemplateLanguage;
   subject: string;
   body: string;
@@ -671,19 +679,47 @@ export function resolveTouchpoint(
 
 /**
  * The template version row for one segment: the highest `version` among the rows of that language
- * whose `touchpoint` is the applied one or absent.
+ * whose `touchpoint` is the applied one or absent, and whose `channel` is the requested one.
  *
  * A missing row throws. `v1.10.9` seeds an English row and a Spanish row for each of the four
  * touchpoints, so a missing row means the caller selected the wrong template; rendering one segment
  * of a Bilingual message would violate Requirement 11.6.
+ *
+ * **Channel selection never falls back across channels (v1.13.8).** Where `channel` is given and
+ * any supplied row carries one, only rows of that channel are considered, and none matching throws.
+ * Falling back to the other channel is the specific thing that must not happen: the email bodies
+ * are ~400 characters per language, so serving them to an SMS send puts a Bilingual body at
+ * 1076-1157 characters and RingCentral rejects every one of them with "Parameter [text] value is
+ * invalid" — the defect v1.13.8 exists to fix. A loud failure naming the missing template is
+ * recoverable; silently sending an email body as a text is not.
+ *
+ * Where no supplied row carries a channel, selection ignores it entirely and behaves as it did
+ * before the column existed, which keeps every caller that hands over the rows of a single template
+ * working unchanged.
  */
 export function selectTemplateVersion(
   templateVersions: readonly TemplateVersionRow[],
   touchpoint: Touchpoint,
   language: TemplateLanguage,
+  channel?: RenderChannel,
 ): TemplateVersionRow {
+  const channelAware = templateVersions.some(
+    (row) => row.channel !== null && row.channel !== undefined,
+  );
+  let pool = templateVersions;
+  if (channel !== undefined && channelAware) {
+    pool = templateVersions.filter((row) => row.channel === channel);
+    if (pool.length === 0) {
+      throw new RenderInputError(
+        `no ${channel} template version row was supplied for the ${touchpoint}-day touchpoint; `
+        + 'the other channel\'s rows are not substituted, because an email body exceeds the SMS '
+        + 'length the provider accepts',
+      );
+    }
+  }
+
   let selected: TemplateVersionRow | null = null;
-  for (const row of templateVersions) {
+  for (const row of pool) {
     if (row.language !== language) continue;
     if (row.touchpoint !== null && row.touchpoint !== undefined && row.touchpoint !== touchpoint) continue;
     if (selected === null || (row.version ?? 0) > (selected.version ?? 0)) selected = row;
@@ -1098,7 +1134,7 @@ export function renderMessage(input: RenderMessageInput): RenderResult {
   const segments = languages.map((segmentLanguage) => buildSegment(
     context,
     segmentLanguage,
-    selectTemplateVersion(input.templateVersions, touchpoint, segmentLanguage),
+    selectTemplateVersion(input.templateVersions, touchpoint, segmentLanguage, input.channel),
   ));
 
   const subject = assembleSubject(segments, input.channel);
