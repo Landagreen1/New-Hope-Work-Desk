@@ -45,15 +45,28 @@ const MANAGER_ACTIONS: readonly { id: PanelId; label: string; hint: string; Icon
 
 export const MANAGER_ACTION_LABELS: readonly string[] = MANAGER_ACTIONS.map((action) => action.label);
 
-/** The six columns the import requires, keyed as `NormalizedImportRow` fields. */
+/**
+ * The columns the import cannot proceed without.
+ *
+ * `assigned_name` is deliberately **not** among them. It was, because every export used to carry an
+ * `Asignacion TXT` column naming the responsible employee. The carrier files the agency receives now
+ * carry no agent at all, so requiring it blocked an import on data the file does not have and cannot
+ * have. A file with no agent column imports every row unassigned, which is the correct state, and a
+ * manager owns them with Reassign renewal → Several renewals.
+ *
+ * These five are different: `renewal_import_batch` identifies a record by policy number and renewal
+ * date and skips any row missing either, and a renewal with no customer name, carrier, or line of
+ * business is not usable work.
+ */
 const REQUIRED_FIELDS: readonly ImportField[] = [
   { key: 'customer_name', label: 'Named Insured' }, { key: 'carrier', label: 'Company' },
   { key: 'line_of_business', label: 'LOB' }, { key: 'policy_number', label: 'Policy#' },
-  { key: 'renewal_date', label: 'Renewal Date' }, { key: 'assigned_name', label: 'Asignacion TXT' },
+  { key: 'renewal_date', label: 'Renewal Date' },
 ];
 
 /** Columns mapped only when a later export carries them. */
 const OPTIONAL_FIELDS: readonly ImportField[] = [
+  { key: 'assigned_name', label: 'Asignacion TXT' },
   { key: 'customer_phone', label: 'Phone' }, { key: 'customer_email', label: 'Email' },
   { key: 'hawksoft_client_id', label: 'HawkSoft Client ID' }, { key: 'notice_call_date', label: 'Aviso Call' },
   { key: 'notes', label: 'Notes' }, { key: 'eft', label: 'EFT' }, { key: 'requote', label: 'REQUOTE' },
@@ -517,9 +530,22 @@ export default function RenewalManagerActions({
   const missingRequired = REQUIRED_FIELDS.filter((field) => !mapping[field.key]).map((field) => field.label);
   const unlinkedLabels = fileLabels.filter((label) => !aliasByLabel.has(normalizeAssignmentLabel(label)));
 
+  /**
+   * A repeated Policy# + Renewal Date is reported, not refused.
+   *
+   * It used to block the import. It should not: `renewal_import_batch` resolves every row by
+   * `policy_number` and `renewal_date` and updates the row it finds rather than storing a second one,
+   * so a policy listed twice in one file is applied twice to the same record and the later row wins.
+   * Nothing is duplicated in the database. Carrier exports legitimately repeat a policy, and refusing
+   * the whole file for it meant a manager had to hand-edit a carrier document before importing it.
+   */
+  const duplicateNotice = duplicateKeys
+    ? `${duplicateKeys} Policy# + Renewal Date combination${duplicateKeys === 1 ? '' : 's'} appear`
+      + `${duplicateKeys === 1 ? 's' : ''} more than once. Each is one record; the last row for it wins.`
+    : null;
+
   const blockedReason = missingRequired.length ? `Map the required columns: ${missingRequired.join(', ')}.`
-    : !normalizedRows.length ? 'Choose a CSV containing valid renewal policies.'
-      : duplicateKeys ? 'Remove duplicate Policy# + Renewal Date combinations before importing.' : null;
+    : !normalizedRows.length ? 'Choose a CSV containing valid renewal policies.' : null;
 
   /** Labels of the most recent completed import: this session's, else the newest recorded run (Req 6.7). */
   const unmatchedLabels = useMemo(() => sessionUnmatched ?? distinctLabels(importRuns[0]?.unmatched_assignees), [importRuns, sessionUnmatched]);
@@ -795,6 +821,15 @@ export default function RenewalManagerActions({
                   <p className={`text-sm font-black ${blockedReason ? 'text-amber-800' : 'text-emerald-800'}`}>
                     {blockedReason ? `Import blocked: ${blockedReason}` : `${normalizedRows.length} valid policies are ready to synchronize.`}
                   </p>
+                  {duplicateNotice ? (
+                    <p className="text-xs font-bold text-slate-500">{duplicateNotice}</p>
+                  ) : null}
+                  {!mapping.assigned_name ? (
+                    <p className="text-xs font-bold text-slate-500">
+                      This file names no responsible employee, so every row imports unassigned. Own them
+                      with Manager actions → Reassign renewal → Several renewals.
+                    </p>
+                  ) : null}
                   <button type="button" className={ui.btnPrimary} disabled={Boolean(blockedReason) || busy === 'import'} onClick={() => void commitImport()}>
                     <UploadCloud className="h-4 w-4" aria-hidden="true" />
                     {busy === 'import' ? 'Importing and assigning…' : `Import and assign ${normalizedRows.length} renewal${normalizedRows.length === 1 ? '' : 's'}`}
