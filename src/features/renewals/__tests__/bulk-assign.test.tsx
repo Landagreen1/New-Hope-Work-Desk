@@ -325,6 +325,83 @@ describe('bulk assign panel', () => {
 // The import wizard and the collector export
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// A carrier file with no agent column, and repeated policies
+// ---------------------------------------------------------------------------
+
+/**
+ * A carrier export: the identifying columns, no agent, and the same policy listed twice. Both
+ * properties used to block the import outright.
+ */
+const CARRIER_CSV = [
+  'Compania,Poliza,Asegurado,LOB,FechaRenovacion',
+  'Progressive,POL-1,Ada Byron,Personal Auto,2026-08-16',
+  'Progressive,POL-2,Alan Turing,Personal Auto,2026-08-20',
+  'Progressive,POL-1,Ada Byron,Personal Auto,2026-08-16',
+].join('\n');
+
+describe('a carrier export with no agent column', () => {
+  it('is importable, because the agent column is no longer required', async () => {
+    render(<RenewalManagerActions role="manager" assignees={ASSIGNEES} />);
+    await uploadCsv(CARRIER_CSV, 'carrier-renewals.csv');
+
+    // The old behaviour blocked on "Map the required columns: Asignacion TXT".
+    expect(screen.queryByText(/Import blocked/)).toBeNull();
+    expect(screen.getByRole('button', { name: /Import and assign/ })).toBeTruthy();
+  });
+
+  it('does not refuse the file for a repeated Policy# and Renewal Date', async () => {
+    render(<RenewalManagerActions role="manager" assignees={ASSIGNEES} />);
+    await uploadCsv(CARRIER_CSV, 'carrier-renewals.csv');
+
+    // `renewal_import_batch` resolves each row by (policy number, renewal date) and updates the row
+    // it finds, so a repeat is one record, not two. Refusing the file was over-strict.
+    expect(screen.queryByText(/Remove duplicate/)).toBeNull();
+    expect(screen.getByText(/appears more than once/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: /Import and assign/ }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('says the rows will import unassigned and where to own them', async () => {
+    render(<RenewalManagerActions role="manager" assignees={ASSIGNEES} />);
+    await uploadCsv(CARRIER_CSV, 'carrier-renewals.csv');
+
+    expect(screen.getByText(/imports unassigned/)).toBeTruthy();
+    expect(screen.getByText(/Several renewals/)).toBeTruthy();
+  });
+
+  it('sends no assignment label to the importer when the file names none', async () => {
+    vi.mocked(api.importBatch).mockResolvedValue({
+      id: 'run-1', rows_total: 3, rows_inserted: 2, rows_updated: 1, rows_skipped: 0,
+      rows_assigned: 0, unmatched_assignees: [],
+    });
+    render(<RenewalManagerActions role="manager" assignees={ASSIGNEES} />);
+    await uploadCsv(CARRIER_CSV, 'carrier-renewals.csv');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Import and assign/ }));
+    });
+
+    const [, mapping, rows] = vi.mocked(api.importBatch).mock.calls[0];
+    expect(mapping.assigned_name).toBeUndefined();
+    for (const row of rows) expect(row.assigned_name).toBe('');
+  });
+
+  it('still requires the columns a record cannot exist without', async () => {
+    render(<RenewalManagerActions role="manager" assignees={ASSIGNEES} />);
+    // No policy number and no renewal date: the importer identifies a record by those two.
+    await uploadCsv('Compania,Asegurado,LOB\nProgressive,Ada Byron,Personal Auto', 'broken.csv');
+
+    expect(screen.getByText(/Import blocked/)).toBeTruthy();
+  });
+
+  it('still maps the agent column when a file does carry one', async () => {
+    render(<RenewalManagerActions role="manager" assignees={ASSIGNEES} />);
+    await uploadCsv(POWERBI_CSV, 'renewals.csv');
+
+    expect(screen.queryByText(/imports unassigned/)).toBeNull();
+  });
+});
+
 describe('import wizard collector recognition', () => {
   it('asks for no mapping when the file is a collector export', async () => {
     render(<RenewalManagerActions role="manager" assignees={ASSIGNEES} />);
