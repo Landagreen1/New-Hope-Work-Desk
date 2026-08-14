@@ -1365,9 +1365,12 @@ export default function CancellationManagerActions({
                     <div className="rounded-2xl border border-slate-200 bg-white p-4">
                       <h5 className="text-sm font-black text-slate-900">Column mapping</h5>
                       <p className="mt-1 text-sm font-semibold text-slate-600">
-                        Each file header is proposed against the column of the {draft.columnSet} set whose
-                        name matches it, ignoring case and surrounding spaces. Change any proposal below.
-                        A header left unmapped still reaches the database inside the stored raw row.
+                        Each file header is proposed against the column of the {draft.columnSet} set it
+                        names, ignoring case, accents, spacing and punctuation, so <em>Póliza</em>,{' '}
+                        <em>POLIZA</em> and <em>Fecha de Cancelación</em> all map themselves. A column no
+                        header names is then filled from the other names the reports have used for it.
+                        Change any proposal below. A header left unmapped still reaches the database
+                        inside the stored raw row.
                       </p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                         {draft.assignments.map((assignment) => {

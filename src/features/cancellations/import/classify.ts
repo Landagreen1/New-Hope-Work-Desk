@@ -11,6 +11,8 @@
 // Row-level validation (empty policy number, unparseable date, amount due) is not this
 // module's job; it belongs to `fields.ts` and `preview.ts`.
 
+import { headerMatchKey } from '../../nhwd-shared/header-matching';
+
 // ---------------------------------------------------------------------------
 // Column sets
 // ---------------------------------------------------------------------------
@@ -201,11 +203,26 @@ export type ClassifyImportFileResult = ClassifiedImportFile | ImportFileRejectio
 // ---------------------------------------------------------------------------
 
 /**
- * Header comparison key: leading and trailing whitespace removed, case folded. Every column
- * match in Requirements 8.2, 8.3, and 8.4 is defined this way.
+ * Header comparison key. Every column match in Requirements 8.2, 8.3, and 8.4 is defined this
+ * way, and `mapping.ts` uses the same key for its proposals.
+ *
+ * Delegates to `headerMatchKey`, which folds away a byte order mark, letter case, accents,
+ * punctuation, inner and outer whitespace, CamelCase versus spaced words, and the filler words
+ * `de`/`del`/`la`/`el`/`los`/`las`/`of`/`the`. That is what lets these Spanish reports classify
+ * without a manager renaming columns first: `Póliza`, `POLIZA`, and `Poliza` are one name, and
+ * so are `FechaCancelacion`, `Fecha Cancelación`, and `Fecha de Cancelacion`.
+ *
+ * **Classification reads names, never aliases.** `mapping.ts` additionally accepts a table of
+ * different words for the same column (`Aseguradora` for `Compania`, and each set's names in
+ * the other language), and that table is deliberately not consulted here. The two formats are
+ * told apart by `Poliza` versus `Policy number`; treating those as equivalent would classify an
+ * avisos file as eficacia, and the source-aware merge in `cancellation_import_batch` would then
+ * give avisos data eficacia field ownership and overwrite columns avisos never carried. A file
+ * whose identity columns are named something neither format uses is refused as unrecognized,
+ * which is recoverable, rather than merged under the wrong ownership, which is not.
  */
 export function normalizeHeaderName(value: string): string {
-  return value.trim().toLowerCase();
+  return headerMatchKey(value);
 }
 
 /** True when the header row carries a cell equal to `columnName` under `normalizeHeaderName`. */

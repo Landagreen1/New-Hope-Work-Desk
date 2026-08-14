@@ -17,6 +17,7 @@
 //
 // Pure module: no React, no Supabase, no network, no file system, no clock.
 
+import { headerMatchKey } from '../nhwd-shared/header-matching';
 import {
   foldSourceValue,
   normalizeCarrierKey,
@@ -148,9 +149,20 @@ export const COLLECTOR_REQUIREMENTS: readonly CollectorRequirement[] = [
   },
 ];
 
-/** Header comparison: leading and trailing whitespace removed, case folded, accents removed. */
+/**
+ * Header comparison key.
+ *
+ * `foldSourceValue` handled case, accents, and whitespace runs, which covers a collector run
+ * that drops an accent. It did not cover the differences a hand-edited or re-exported file
+ * introduces: `Fecha Renovacion` for `FechaRenovacion`, `FECHA_RENOVACION`, `Cliente ID` for
+ * `ClienteID`. Those arrive often enough that a manager was told the header named neither
+ * collector format when it plainly did, and the file could not be imported at all — this path
+ * has no mapping step to fall back on. `headerMatchKey` folds those too, and still keeps
+ * different words distinct, so `FechaCancelacion` and `FechaCancelacionEstimada`, and
+ * `Poliza` and `PolizaNormalizada`, remain separate columns.
+ */
 export function normalizeCollectorHeader(value: string): string {
-  return foldSourceValue(value);
+  return headerMatchKey(value);
 }
 
 /** The lowest header position equal to `column`, or `null`. A repeated header keeps its first. */
