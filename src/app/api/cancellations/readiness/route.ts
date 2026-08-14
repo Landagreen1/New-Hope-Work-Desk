@@ -3,6 +3,7 @@
 // Manager-only. Returns a structured report of environment configuration, template
 // readiness, scheduler history, and current sending state. Never returns credential values.
 
+import { providerReadiness } from '@/features/cancellations/scheduler/readiness';
 import { canManageRenewals } from '@/lib/permissions';
 
 export const runtime = 'nodejs';
@@ -17,20 +18,12 @@ interface ReadinessReport {
   sending: { enabled: boolean; failedCount: number; missingContactCount: number };
 }
 
-function checkSmsConfigured(): boolean {
-  // RingCentral requires JWT token or client credentials
-  return !!(
-    process.env.RINGCENTRAL_JWT_TOKEN ||
-    (process.env.RINGCENTRAL_CLIENT_ID && process.env.RINGCENTRAL_CLIENT_SECRET)
-  );
-}
-
-function checkEmailEnvVar(): string | undefined {
-  // Check the email provider API key without naming it as a string literal
-  const key = ['RESEND', 'API', 'KEY'].join('_');
-  const value = process.env[key];
-  return value && value.length > 0 ? value : undefined;
-}
+// Both channel checks used to be hand-written here, and both were wrong: the SMS one read
+// `RINGCENTRAL_*` names this product does not use, so it was permanently false and the
+// automatic-sending toggle could never be enabled; the email one checked the API key without the
+// from-address, so it could report ready while every send failed. `providerReadiness()` asks the
+// provider modules themselves, which is also what keeps the credential names out of this file
+// (Requirements 23.1, 23.5).
 
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -58,8 +51,7 @@ export async function POST(request: Request): Promise<Response> {
 
     // Check environment variables (presence only, never values)
     const cronSecretSet = !!(process.env.CRON_SECRET && process.env.CRON_SECRET.length > 0);
-    const smsConfigured = checkSmsConfigured();
-    const emailConfigured = !!checkEmailEnvVar();
+    const { sms: smsConfigured, email: emailConfigured } = providerReadiness();
 
     // Check database readiness
     const { data: settings } = await supabase
