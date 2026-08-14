@@ -463,6 +463,8 @@ export default function RenewalManagerActions({
    * Follow-up importer.
    */
   const [collectorFileName, setCollectorFileName] = useState<string | null>(null);
+  /** Which collector export it is, so the notice can name the mistake rather than just the format. */
+  const [collectorDomain, setCollectorDomain] = useState<'renewal' | 'cancellation'>('renewal');
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
@@ -591,15 +593,22 @@ export default function RenewalManagerActions({
       const parsed = parseCsv(await file.text());
       if (!parsed.headers.length) { setError('The CSV did not contain a header row.'); return; }
 
-      // A consolidated collector export is a fixed 26-column contract that needs no mapping at all,
-      // and it is imported by the Policy Follow-up surface, which also resolves ownership per row.
-      // Showing twenty-six dropdowns for it would be asking a manager to hand-map a header the
-      // product already knows by name. This path recognizes it and says where it goes, rather than
-      // reimplementing the collector import here — `PolicyFollowUpImports` owns that, and its own
-      // header records the separation: the legacy wizards stay put and the surfaces link to
-      // each other.
-      if (classifyCollectorHeader(parsed.headers) === 'renewal') {
+      // A consolidated collector export is a fixed-header contract that needs no mapping at all, and
+      // it is imported by the Policy Follow-up surface, which also resolves ownership per row.
+      // Showing dropdowns for it would be asking a manager to hand-map a header the product already
+      // knows by name. This path recognizes it and says where it goes, rather than reimplementing the
+      // collector import here — `PolicyFollowUpImports` owns that, and its own header records the
+      // separation: the legacy wizards stay put and the surfaces link to each other.
+      //
+      // Both domains are recognized, not just renewals. A manager who drops the cancellations export
+      // into the renewals wizard is one folder away from the right file, and the useful answer names
+      // the mistake. Left unrecognized it reached the mapping step, where `Poliza` matched and
+      // `FechaVencimientoPago` did not, and the manager was told to map a Renewal Date column the
+      // file does not contain.
+      const collectorDomain = classifyCollectorHeader(parsed.headers);
+      if (collectorDomain !== null) {
         setCollectorFileName(file.name);
+        setCollectorDomain(collectorDomain);
         setFileName(file.name);
         setHeaders([]); setRawRows([]); setMapping({});
         return;
@@ -788,7 +797,9 @@ export default function RenewalManagerActions({
                 <div role="status" className="rounded-2xl border border-[#b5c4df] bg-[#f8faff] p-4">
                   <p className="flex items-center gap-2 text-sm font-black text-[#223f7a]">
                     <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    {collectorFileName} is a consolidated collector export. It needs no column mapping.
+                    {collectorFileName} is the consolidated{' '}
+                    {collectorDomain === 'renewal' ? 'renewals' : 'cancellations'} collector export.
+                    It needs no column mapping.
                   </p>
                   <p className="mt-2 text-sm font-semibold text-slate-700">
                     This wizard is for the older Power BI and HawkSoft exports, which vary column by
@@ -796,11 +807,18 @@ export default function RenewalManagerActions({
                     <strong>Policy follow-up → Imports</strong>, which reads it by name, previews it,
                     and resolves an owner for every row.
                   </p>
-                  <p className="mt-2 text-sm font-semibold text-slate-700">
-                    That file carries no agent column, so rows it cannot place stay unassigned on
-                    purpose. Clear them with <strong>Manager actions → Reassign renewal → Several
-                    renewals</strong>.
-                  </p>
+                  {collectorDomain === 'renewal' ? (
+                    <p className="mt-2 text-sm font-semibold text-slate-700">
+                      That file carries no agent column, so rows it cannot place stay unassigned on
+                      purpose. Clear them with <strong>Manager actions → Reassign renewal → Several
+                      renewals</strong>.
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-sm font-semibold text-slate-700">
+                      This is the cancellations file, not the renewals one — the same Imports surface
+                      takes both, and it will read this one as cancellations.
+                    </p>
+                  )}
                 </div>
               ) : null}
 

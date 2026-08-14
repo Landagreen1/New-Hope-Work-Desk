@@ -54,6 +54,17 @@ const COLLECTOR_CSV = [
   + 'a@b.com,Active,Si,1200.00,ZZ TEST PRODUCER ONE,Exacto,ClienteID,zz.csv,2,note',
 ].join('\n');
 
+/** The 24-column consolidated cancellations collector export, header verbatim. */
+const CANCELLATION_COLLECTOR_CSV = [
+  'Compania,Poliza,PolizaNormalizada,Asegurado,LOB,FechaCancelacion,FechaCancelacionEstimada,'
+  + 'FechaVencimientoPago,MontoAdeudado,TipoTransaccion,EstadoCarrier,TipoRegistro,ClienteID,Titular,'
+  + 'Telefonos,Emails,EstadoHawkSoft,Productor,Idioma,Cruce,MetodoCruce,ArchivoOrigen,FilaOrigen,'
+  + 'AvisosImportacion',
+  'Progressive,ZZTEST-C-001,ZZTEST-C-001,ZZ TEST ALPHA,Personal Auto,2026-08-29,,2026-08-27,412.55,'
+  + 'Cancelacion por falta de pago,Pendiente,pending,ZZT001,ZZ TEST ALPHA,9158083304,a@b.com,Active,'
+  + 'ZZ TEST PRODUCER ONE,es,Exacto,ClienteID,zz.csv,2,note',
+].join('\n');
+
 /** The older Power BI shape, which does vary column by column and still needs the mapping step. */
 const POWERBI_CSV = [
   'Named Insured,Company,LOB,Policy#,Renewal Date,Asignacion TXT',
@@ -408,7 +419,7 @@ describe('import wizard collector recognition', () => {
     await uploadCsv(COLLECTOR_CSV, 'consolidado_renovaciones.csv');
 
     expect(screen.getByRole('status').textContent)
-      .toContain('consolidado_renovaciones.csv is a consolidated collector export');
+      .toContain('consolidado_renovaciones.csv is the consolidated renewals collector export');
     // Not one of the twenty-six dropdowns, and no import button for this file.
     expect(screen.queryByLabelText('Policy#')).toBeNull();
     expect(screen.queryByLabelText('Renewal Date')).toBeNull();
@@ -437,10 +448,23 @@ describe('import wizard collector recognition', () => {
   it('clears the collector notice when a mappable file is chosen next', async () => {
     render(<RenewalManagerActions role="manager" assignees={ASSIGNEES} />);
     await uploadCsv(COLLECTOR_CSV, 'consolidado_renovaciones.csv');
-    expect(screen.queryByText(/consolidated collector export/)).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('collector export');
 
     await chooseFile(POWERBI_CSV, 'renewals.csv');
-    expect(screen.queryByText(/consolidated collector export/)).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
     expect(screen.getByLabelText('Policy#')).toBeTruthy();
+  });
+
+  it('names the mistake when the cancellations collector file is dropped here', async () => {
+    // One folder away from the right file. Left unrecognized this reached the mapping step and asked
+    // for a Renewal Date column the cancellations export does not contain.
+    render(<RenewalManagerActions role="manager" assignees={ASSIGNEES} />);
+    await uploadCsv(CANCELLATION_COLLECTOR_CSV, 'consolidado_cancelaciones.csv');
+
+    const status = screen.getByRole('status').textContent ?? '';
+    expect(status).toContain('consolidated cancellations collector export');
+    expect(status).toContain('This is the cancellations file, not the renewals one');
+    expect(screen.queryByLabelText('Renewal Date')).toBeNull();
+    expect(api.importBatch).not.toHaveBeenCalled();
   });
 });
