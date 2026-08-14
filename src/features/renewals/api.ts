@@ -35,7 +35,23 @@ export interface RenewalRecord {
   requote_note: string | null;
   assigned_import_label: string | null;
   powerbi_raw: Record<string, string> | null;
-  assignment_source: 'powerbi' | 'manager' | 'manual' | null;
+  /**
+   * Where the current assignment came from.
+   *
+   * `powerbi`, `manager`, and `manual` are the pre-existing values. The four added by
+   * `v1.13.x` name the Policy Follow-up precedence steps of Requirement 3.3 so a manager can
+   * tell a collector-import assignment from a producer-mapped one from a balanced one; design
+   * 11.1 forbids labelling a collector row `powerbi`.
+   */
+  assignment_source:
+    | 'powerbi'
+    | 'manager'
+    | 'manual'
+    | 'collector'
+    | 'shared_owner'
+    | 'producer_mapping'
+    | 'weighted_auto'
+    | null;
   last_seen_import_run_id: string | null;
   last_seen_imported_at: string | null;
   source_sync_state: 'present' | 'missing_from_latest_file';
@@ -52,6 +68,42 @@ export interface RenewalRecord {
   closed_at: string | null;
   created_at: string;
   updated_at: string;
+
+  // ── Collector source lineage (Requirement 1.1), added by v1.13.1.
+  //
+  // Every one of these is nullable and absent on a record the legacy Power BI / HawkSoft import
+  // created, which is why the whole group is optional here: a record read before v1.13.1 was
+  // deployed simply does not carry them, and no derivation may assume it does.
+
+  /** Which importer wrote the record: `renewal_collector` for a consolidated collector file. */
+  source_system?: string | null;
+  /** `TipoRegistro` exactly as the collector wrote it. */
+  source_record_type?: string | null;
+  /** `EstadoEnReporte` exactly as the carrier report wrote it. */
+  source_status_raw?: string | null;
+  /** The interpretation of `source_record_type`, as `PolicySourceState`. */
+  source_state_normalized?: string | null;
+  /** `Cruce` interpreted: `exact`, `probable`, `no_match`, or `unknown`. */
+  source_match_status?: string | null;
+  /** `Cruce` exactly as written. */
+  source_match_status_raw?: string | null;
+  /** `MetodoCruce` exactly as written. */
+  source_match_method?: string | null;
+  /**
+   * `Productor` exactly as the collector wrote it, which the producer mapping of Requirement 3.3
+   * step 4 resolves. Distinct from `producer_name`, which the HawkSoft export writes.
+   */
+  producer_label?: string | null;
+  source_file_name?: string | null;
+  source_row_number?: number | null;
+  /** `AvisosImportacion`: the collector's own warning text for the row. */
+  source_warning?: string | null;
+  /** True where the row is held for manager review (Requirements 1.3, 1.4). */
+  source_review_required?: boolean | null;
+  /** True where automatic customer communication is withheld (Requirement 12.2). */
+  source_communication_blocked?: boolean | null;
+  /** The whole source row, keyed by header name, for the lineage disclosure of Req 11.3. */
+  source_payload?: Record<string, string> | null;
 }
 
 export interface RenewalContact {
@@ -81,6 +133,26 @@ export interface RenewalEvent {
   event_type: string;
   detail: Record<string, unknown> | null;
   created_at: string;
+}
+
+/**
+ * One row of `renewal_contact_summaries` (Requirements 5.4, 15.1).
+ *
+ * A record with no contacts is absent from the result rather than returned as a zero row, so the
+ * caller reads "no contact recorded" from the absence.
+ */
+export interface RenewalContactSummaryRow {
+  record_id: string;
+  contact_count: number;
+  last_contact_at: string | null;
+  last_outcome: string | null;
+}
+
+/** One row of `renewal_requote_summaries` (Requirements 5.2, 5.4). */
+export interface RenewalRequoteSummaryRow {
+  record_id: string;
+  requote_event_count: number;
+  last_requote_at: string | null;
 }
 
 export interface ImportBatchResult {
@@ -239,6 +311,44 @@ export async function listRenewals(filter: RenewalFilters = {}): Promise<Renewal
     rows = rows.filter((row) => [row.customer_name, row.policy_number, row.carrier, row.customer_phone, row.customer_email].some((value) => value?.toLowerCase().includes(needle)));
   }
   return rows;
+}
+
+/**
+ * Contact history for many records in one round trip (Requirements 5.4, 15.1).
+ *
+ * The list surface cannot use `listContacts`: that is one query per record, and Requirement 15.1
+ * forbids an N+1 read. Before this existed the list handed its derivations an *empty* contact
+ * index, so the No contact recorded count, every Last contact cell, and every recommended next
+ * action were computed as though nobody had ever been contacted. This is the read that fixes it.
+ *
+ * `recordIds` absent means every record the caller may read. The RPC is security invoker, so
+ * `renewal_contacts` row level security decides the scope exactly as it does for `listContacts`.
+ */
+export async function listRenewalContactSummaries(
+  recordIds?: readonly string[],
+): Promise<RenewalContactSummaryRow[]> {
+  const { data, error } = await getSupabase().rpc('renewal_contact_summaries', {
+    p_record_ids: recordIds && recordIds.length > 0 ? recordIds : null,
+  });
+  throwIfError(error);
+  return (data as RenewalContactSummaryRow[]) ?? [];
+}
+
+/**
+ * Requote activity for many records in one round trip (Requirements 5.2, 5.4).
+ *
+ * `recommendedNextAction` separates `Prepare requote` from `Review requote` by whether any contact
+ * followed the latest requote activity, so the list needs the latest requote time alongside the
+ * latest contact time. Same bulk shape, same reason.
+ */
+export async function listRenewalRequoteSummaries(
+  recordIds?: readonly string[],
+): Promise<RenewalRequoteSummaryRow[]> {
+  const { data, error } = await getSupabase().rpc('renewal_requote_summaries', {
+    p_record_ids: recordIds && recordIds.length > 0 ? recordIds : null,
+  });
+  throwIfError(error);
+  return (data as RenewalRequoteSummaryRow[]) ?? [];
 }
 
 export async function listContacts(recordId: string): Promise<RenewalContact[]> {

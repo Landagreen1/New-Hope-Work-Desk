@@ -80,7 +80,7 @@
 //     criterion and contradict Requirement 15.10's freshly imported case. At least one record is
 //     required, which is the only reading that leaves both clauses reachable.
 
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import type { ContactAuthorizationStatus, ContactValidationStatus } from '../import/contacts';
@@ -877,7 +877,7 @@ export function deriveNextRequiredAction(state: CaseCommunicationState): NextReq
   const caseRow = state.case;
   if (nextRequiredActionCleared(caseRow)) return null;
 
-  const manager = isBroadManagerRole(state.viewerRole ?? 'manager');
+  const manager = canManageRenewals(state.viewerRole ?? 'manager');
   const status = deriveCaseCommunicationStatus(state);
 
   // (a)

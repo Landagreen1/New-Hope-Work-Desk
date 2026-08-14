@@ -19,3 +19,11 @@ private/
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+
+# Payroll and attendance exports. These carry employee names, hourly rates, and
+# total pay, so they must never enter git history.
+payroll-*.csv
+*-payroll.csv
+
+# Throwaway SQL used for one-off schema checks
+.kiro/tmp-*.sql

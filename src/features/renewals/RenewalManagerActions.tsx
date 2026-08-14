@@ -15,7 +15,7 @@
 import { AlertTriangle, CheckCircle2, ChevronDown, FileUp, Link2, ListChecks, Pencil, RefreshCw, ShieldCheck, Unlink, UploadCloud, UserCheck, UsersRound, X, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 import { ui } from '../nhwd-shared/ui';
 import {
@@ -288,7 +288,7 @@ export interface RenewalManagerActionsProps {
 export default function RenewalManagerActions({
   role, records = [], aliases = [], assignees: assigneesProp, importRuns = [], selectedRecordId = null, onChanged,
 }: RenewalManagerActionsProps) {
-  const isManager = isBroadManagerRole(role);
+  const isManager = canManageRenewals(role);
   const menuId = useId();
 
   const [menuOpen, setMenuOpen] = useState(false);

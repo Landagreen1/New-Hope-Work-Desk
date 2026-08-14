@@ -59,7 +59,7 @@
 // `cancellation_contacts` returns it unchanged, including a phone value retained as an invalid
 // trimmed segment under Requirement 10.11.
 
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import type {
@@ -762,7 +762,7 @@ export function clearSuppression(
   reason: string | null | undefined,
   context: SuppressionContext,
 ): ClearSuppressionResult {
-  if (!isBroadManagerRole(actor.role)) {
+  if (!canManageRenewals(actor.role)) {
     return {
       ok: false,
       rejection: {

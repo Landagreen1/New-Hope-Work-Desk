@@ -44,7 +44,7 @@ export function canManageSales(role: AppRole): boolean {
 }
 
 export function canManageCustomerService(role: AppRole): boolean {
-  return isBroadManagerRole(role) || role === "customer_service_supervisor";
+  return isBroadManagerRole(role) || role === "customer_service_supervisor" || role === "sales_supervisor";
 }
 
 export function canManageCommercial(role: AppRole): boolean {
@@ -80,6 +80,20 @@ export function canAccessRenewals(role: AppRole): boolean {
     role === "sales_supervisor" ||
     isBroadManagerRole(role)
   );
+}
+
+/**
+ * Manager-level access within the Renewals / Policy Follow-up workspace.
+ * Controls import wizards, manager actions in cancellation drawers, verification
+ * panels, escalation fan-out, and the scheduler readiness endpoint.
+ *
+ * Manager_Role in this workspace is `manager` or `super_admin` only.
+ * `sales_supervisor` accesses the workspace (via `canAccessRenewals`) but holds
+ * Agent_Role privileges — they cannot import, verify payments, or configure
+ * templates.
+ */
+export function canManageRenewals(role: AppRole): boolean {
+  return isBroadManagerRole(role);
 }
 
 export function canAdministerUsers(role: AppRole): boolean {

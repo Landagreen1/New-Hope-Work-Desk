@@ -21,7 +21,7 @@
  * identifier cannot leave the key naming the old customer (Requirements 9.5, 9.9, 9.11).
  */
 
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import { getSupabase } from '../nhwd-shared/client';
@@ -83,7 +83,7 @@ async function requireManager(action: string): Promise<ManagerActor> {
   throwIfError(error, action);
   const actor = (data as ManagerActor | null) ?? null;
   if (actor === null) reject(`Your profile could not be read. Nothing was changed.`);
-  if (!isBroadManagerRole(actor.role)) {
+  if (!canManageRenewals(actor.role)) {
     reject(`${action} requires a manager or super admin. Nothing was changed.`);
   }
   return actor;

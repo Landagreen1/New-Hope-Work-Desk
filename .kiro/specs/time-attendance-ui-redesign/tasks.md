@@ -613,7 +613,7 @@ Migration stages map to tasks: stage 1 → task 2, stage 2 → task 6, stage 3 �
 - [x] 23. Checkpoint — full experience wired, nothing removed yet
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 24. Cleanup — remove the superseded components and routes
+- [x] 24. Cleanup — remove the superseded components and routes
   - Every sub-task in this task commits on its own and carries no behavioural change, per Requirement 23, criterion 7.
 
   - [x] 24.1 Add the reference-scan check
@@ -630,7 +630,7 @@ Migration stages map to tasks: stage 1 → task 2, stage 2 → task 6, stage 3 �
     - Deletion only, in its own commit
     - _Requirements: 23.6, 23.7_
 
-  - [-] 24.4 Remove the retired section mappings and vocabulary remnants
+  - [x] 24.4 Remove the retired section mappings and vocabulary remnants
     - Retired section strings in `role-workspace.tsx` and `TimeAttendanceWorkspace.tsx`, and any `birthday` label or mapping left after 11.4
     - _Requirements: 23.6, 23.7_
 
@@ -646,19 +646,19 @@ Migration stages map to tasks: stage 1 → task 2, stage 2 → task 6, stage 3 �
     - The nine preserved tables and the five new tables exist; the new indexes exist; no released migration file has changed
     - _Requirements: 2.7, 20.10, 20.11, 20.12, 23.1, 23.2_
 
-- [ ] 25. Migration stage 6 — staffing thresholds (deferred)
+- [x] 25. Migration stage 6 — staffing thresholds (deferred)
   - Blocked on Appendix B, Open Question 3. Do not start until the intended minimum and warning staffing per department, day of week, and time slot are supplied. Until then, unconfigured departments correctly report required as unconfigured with status Healthy, which 4.1 already handles.
 
-  - [~] 25.1 Write and apply the staffing-thresholds seed migration
+  - [x] 25.1 Write and apply the staffing-thresholds seed migration
     - `supabase/migrations/v1.9.5-staffing-thresholds-seed.sql` seeding `staffing_thresholds` for every department, day of week, and time slot from the supplied answers
     - Header comment records the rollback; run the retention script
     - _Requirements: 6.3, 23.1, 23.2, 23.3, 23.8_
 
-  - [~] 25.2 Add the threshold editor to WorkforceAdmin
+  - [x] 25.2 Add the threshold editor to WorkforceAdmin
     - Editor over `staffing_thresholds` for minimum staff and warning threshold per department, day of week, and time slot
     - _Requirements: 2.3, 2.5, 6.3_
 
-- [~] 26. Final checkpoint
+- [x] 26. Final checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

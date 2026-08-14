@@ -84,7 +84,7 @@
 import { AlertTriangle, ChevronLeft, ChevronRight, FileUp, Paperclip, RefreshCw, Save } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { canAccessRenewals, isBroadManagerRole } from '@/lib/permissions';
+import { canAccessRenewals, canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
@@ -414,7 +414,7 @@ export default function CancellationsPage({
   const load = useCallback(() => {
     // Requirement 22: a profile the workspace gate rejects reads zero cancellation rows.
     if (!allowed) return;
-    void withTimeout(fetchCancellations(isBroadManagerRole(profile.role))).then(
+    void withTimeout(fetchCancellations(canManageRenewals(profile.role))).then(
       (next) => {
         if (!mounted.current) return;
         setData(next);
@@ -464,7 +464,7 @@ export default function CancellationsPage({
    * The role the controls are drawn from: the profile `api.ts` will check when a write runs, which
    * is read per load so a role change takes effect without a reload, falling back to the profile the
    * route resolved. `super_admin` holds every `manager` permission, so the manager gate is
-   * `isBroadManagerRole` and never a bare `role === 'manager'`.
+   * `canManageRenewals` and never a bare `role === 'manager'`.
    */
   const viewerRole: AppRole = data.actor?.role ?? profile.role;
   const viewer = useMemo<CancellationViewer>(
@@ -611,7 +611,7 @@ export default function CancellationsPage({
         {/* Returns zero nodes outside Manager_Role, so no role check is needed here (Req 22.3). */}
         <div className="flex flex-wrap items-center justify-end gap-3">
           {/* REQ-4.3: Visible Import button for managers in the header area */}
-          {isBroadManagerRole(viewerRole) ? (
+          {canManageRenewals(viewerRole) ? (
             <button
               type="button"
               className={ui.btnPrimary}

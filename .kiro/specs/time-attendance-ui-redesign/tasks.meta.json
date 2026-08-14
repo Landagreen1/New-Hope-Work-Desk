@@ -1488,6 +1488,11 @@
         "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
         "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
         "timestamp": 1785558322386
+      },
+      {
+        "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
+        "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
+        "timestamp": 1785559792616
       }
     ],
     "25.1 Write and apply the staffing-thresholds seed migration": [
@@ -1500,6 +1505,16 @@
         "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
         "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
         "timestamp": 1785482096413
+      },
+      {
+        "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
+        "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
+        "timestamp": 1785560701704
+      },
+      {
+        "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
+        "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
+        "timestamp": 1785561287928
       }
     ],
     "25.2 Add the threshold editor to WorkforceAdmin": [
@@ -1512,6 +1527,16 @@
         "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
         "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
         "timestamp": 1785482096468
+      },
+      {
+        "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
+        "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
+        "timestamp": 1785561295290
+      },
+      {
+        "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
+        "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
+        "timestamp": 1785562393409
       }
     ],
     "26. Final checkpoint": [
@@ -1524,6 +1549,16 @@
         "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
         "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
         "timestamp": 1785482096512
+      },
+      {
+        "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
+        "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
+        "timestamp": 1785559798235
+      },
+      {
+        "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
+        "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
+        "timestamp": 1785560260119
       }
     ],
     "1. Test harness and domain foundations": [
@@ -1806,6 +1841,20 @@
         "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
         "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
         "timestamp": 1785556779374
+      }
+    ],
+    "24. Cleanup — remove the superseded components and routes": [
+      {
+        "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
+        "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
+        "timestamp": 1785559792680
+      }
+    ],
+    "25. Migration stage 6 — staffing thresholds (deferred)": [
+      {
+        "executionId": "4216ecad-c534-4d8b-9f36-c9a40066b32b",
+        "chatSessionId": "sess_ec4acce5-e7bb-42d1-893e-37876208031b",
+        "timestamp": 1785562393514
       }
     ]
   }

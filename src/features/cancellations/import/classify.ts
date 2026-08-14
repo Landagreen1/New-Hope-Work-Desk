@@ -73,7 +73,11 @@ export const COLUMN_SET_REQUIREMENTS: readonly ColumnSetRequirement[] = [
   {
     columnSet: 'eficacia',
     requiredColumns: ['Poliza', 'FechaCancelacion'],
-    disallowedColumns: [],
+    // `PolizaNormalizada` belongs to the consolidated PendingCancellation collector export, which
+    // also carries `Poliza` and `FechaCancelacion` and would otherwise classify here. A collector
+    // file merged under eficacia field ownership would silently drop the fields only the collector
+    // carries, so this path refuses it and the manager uses the collector upload instead.
+    disallowedColumns: ['PolizaNormalizada'],
     acceptedColumns: EFICACIA_COLUMNS,
   },
   {

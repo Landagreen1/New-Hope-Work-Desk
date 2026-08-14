@@ -1,0 +1,183 @@
+{
+  "pbtResults": {
+    "1. Write bug condition exploration test": {
+      "status": "passed",
+      "failingExample": "All 7 property tests FAILED as expected, confirming the bug exists:\n\n1. \"after RC claim, cs_intake_submissions.converted_at is NOT NULL\" — FAILED: converted_at remains NULL\n   Counterexample: RC submission with id=00000000-0000-1000-8000-000000000000, converted_at=null after claim\n\n2. \"after RC claim, cs_intake_submissions.status is 'converted'\" — FAILED: status='claimed' instead of 'converted'\n   Counterexample: expected 'converted', received 'claimed'\n\n3. \"after RC claim, cs_intake_submissions.work_item_id is set to new quote ID\" — FAILED: work_item_id=null\n   Counterexample: work_item_id remains null after RC claim\n\n4. \"cs_intake_convert after RC claim does NOT create a duplicate quote\" — FAILED: createdNewQuote=true\n   Counterexample: cs_intake_convert creates a new work_items record even when operational_quotes already exists\n\n5. \"after RC claim + cs_intake_convert attempt, only 1 quote exists for intake\" — FAILED: totalQuoteCount=2\n   Counterexample: expected 1 quote, got 2 (operational_quotes + work_items duplicate)\n\n6. \"isRingcentralSource returns true for RC-sourced intakes with work_item_id=NULL\" — FAILED: returns false\n   Counterexample: isRingcentralSource(row) returns false because Boolean(null) = false\n\n7. \"'Create Quote' button is hidden when converted_at is already set\" — FAILED: button shows as visible=true\n   Counterexample: currentButtonVisible=true because status='claimed' and no hasLinkedQuote guard",
+      "lastRunTimestamp": 1784499540135
+    },
+    "2. Write preservation property tests (BEFORE implementing fix)": {
+      "status": "passed",
+      "lastRunTimestamp": 1784499784115
+    },
+    "3.5 Verify bug condition exploration test now passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1784504273217
+    },
+    "3.6 Verify preservation tests still pass": {
+      "status": "passed",
+      "lastRunTimestamp": 1784504553820
+    }
+  },
+  "executionHistory": {
+    "1. Write bug condition exploration test": [
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499329644
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499336190
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499554725
+      }
+    ],
+    "2. Write preservation property tests (BEFORE implementing fix)": [
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499329691
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499560292
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499797302
+      }
+    ],
+    "3.1 Add `cs_intake_submissions` sync step to `_create_quote_from_intake`": [
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499329735
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499803181
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784500092402
+      }
+    ],
+    "3.2 Add idempotency guard to `cs_intake_convert`": [
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499329777
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784500098113
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784502374461
+      }
+    ],
+    "3.3 Fix `isRingcentralSource()` heuristic in IntakeQueue.tsx": [
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499329809
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784502379843
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784503802681
+      }
+    ],
+    "3.4 Gate \"Create Quote\" button on conversion state": [
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499329848
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784503805739
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784504133008
+      }
+    ],
+    "3.5 Verify bug condition exploration test now passes": [
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499329884
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784504135850
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784504285763
+      }
+    ],
+    "3.6 Verify preservation tests still pass": [
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499329918
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784504288517
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784504562208
+      }
+    ],
+    "4. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784499329948
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784504565853
+      },
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784504624511
+      }
+    ],
+    "3. Fix for RC Claim Duplicate Quote": [
+      {
+        "executionId": "fc02c2fa-a967-4e35-9d18-9aac2caff1e2",
+        "chatSessionId": "sess_d29ed95f-a7fa-45b5-a89f-2b889e8e0841",
+        "timestamp": 1784504562251
+      }
+    ]
+  }
+}

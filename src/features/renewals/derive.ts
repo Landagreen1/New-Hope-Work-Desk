@@ -7,6 +7,10 @@
 // at runtime.
 
 import type { RenewalContact, RenewalEvent, RenewalRecord } from './api';
+// `normalization.ts` is a pure leaf module with no imports of its own, so reaching for the shared
+// operational vocabulary here adds no runtime dependency and no layering inversion. It is the one
+// place the Spanish/carrier source values become operational terms (Requirement 1.2).
+import { POLICY_SOURCE_STATE_LABELS } from '../policy-follow-up/normalization';
 
 // ---------------------------------------------------------------------------
 // Constants and types
@@ -56,10 +60,22 @@ export const RENEWAL_SUMMARY_FILTERS: readonly { id: RenewalSummaryFilterId; lab
   { id: 'customer-decision-pending', label: 'Customer decision pending' },
 ];
 
-/** The six recommended next actions of Requirement 5.2, used as their own display values. */
+/**
+ * The recommended next actions, used as their own display values.
+ *
+ * Six of them are the original Requirement 5.2 set. `Review renewal` is the seventh, added for
+ * the Policy Follow-up assignment workflow: its Requirement 5.2 names a step between "the customer
+ * has been contacted" and "a decision is ready" — the renewal terms still have to be looked at —
+ * and there was no action naming it.
+ *
+ * `Review renewal` is reachable only for a record carrying a normalized collector source state
+ * (`source_state_normalized`), which is what keeps the ladder's behaviour identical for every
+ * record the legacy import created. See `NEXT_ACTION_RULES`.
+ */
 export type RenewalNextAction =
   | 'Make first contact'
   | 'Complete follow-up'
+  | 'Review renewal'
   | 'Prepare requote'
   | 'Review requote'
   | 'Record customer decision'
@@ -82,6 +98,7 @@ export type RenewalDeriveRecord =
     | 'requote_sent_at'
     | 'requote_intake_id'
     | 'requote_work_item_id'
+    | 'source_state_normalized'
   >>;
 
 /** The `renewal_contacts` field these helpers read. */
@@ -333,6 +350,52 @@ export function isOpenRenewal(record: Pick<RenewalDeriveRecord, 'status'>): bool
 }
 
 /**
+ * One record's contact history as the bulk summary read reports it (Requirements 5.4, 15.1).
+ *
+ * The list surface cannot afford one `renewal_contacts` query per row, and it does not need the
+ * rows: `renewal_contact_summaries` returns the count and the latest occurrence per record in one
+ * round trip.
+ */
+export interface RenewalContactSummary {
+  record_id: string;
+  contact_count: number;
+  last_contact_at: string | null;
+  last_outcome: string | null;
+}
+
+/**
+ * The contact entries a summary stands for, as the derivations here read them (Requirement 5.4).
+ *
+ * Every derivation in this module reads exactly two things from a contact list: whether it is
+ * empty (`no-contact-recorded`, `Make first contact`) and the latest `occurred_at` (`Review
+ * requote`, the Last contact cell). A one-element list carrying the latest occurrence is therefore
+ * *behaviourally identical* to the full history for all of them, which is what lets the list
+ * surface use the summary read instead of the empty placeholder it used to pass.
+ *
+ * The count is still carried in the summary and displayed; it is only the derivations that do not
+ * need it. A summary reporting contacts but no readable timestamp still yields a non-empty list, so
+ * `Make first contact` correctly stops firing — the absent timestamp is the unknown, not the
+ * contact.
+ */
+export function renewalContactsFromSummary(
+  summary: Pick<RenewalContactSummary, 'contact_count' | 'last_contact_at'> | null | undefined,
+): readonly RenewalDeriveContact[] {
+  if (!summary || summary.contact_count <= 0) return EMPTY_CONTACTS;
+  return [{ occurred_at: summary.last_contact_at ?? '' }];
+}
+
+/** A `RenewalContactIndex` built from the bulk summary read (Requirements 5.4, 15.1). */
+export function renewalContactIndexFromSummaries(
+  summaries: readonly RenewalContactSummary[],
+): RenewalContactIndex {
+  const index = new Map<string, readonly RenewalDeriveContact[]>();
+  for (const summary of summaries) {
+    index.set(summary.record_id, renewalContactsFromSummary(summary));
+  }
+  return index;
+}
+
+/**
  * Counting rule of one summary filter (Req 3.7 to 3.9). Records that are not open match no
  * filter (Req 3.5). A record with no next follow-up date falls out of both follow-up
  * filters and stays eligible for the rest; the four renewal-date windows are inclusive on
@@ -461,9 +524,83 @@ export function compareRenewalRows(
   return compareTextInsensitive(a.record.id ?? '', b.record.id ?? '');
 }
 
+/** Statuses at which the renewal terms have not yet been taken to the customer for review. */
+const PRE_REVIEW_STATUSES: ReadonlySet<string> = new Set(['imported', 'assigned', 'in_progress']);
+
 /**
- * The six rules of Requirement 5.2 as one ordered array of `{ action, when }` predicates.
- * The first rule whose condition holds supplies the recommended next action.
+ * The operational status of one renewal, in the language an agent reads (Requirements 1.2, 6.3).
+ *
+ * A Carrier Non-Renewal record reads `Carrier Non-Renewal / Requote Required` whatever its stored
+ * workflow status is, because that is the fact the agent has to act on and Requirement 7.2 requires
+ * it be prominent. Every other record reads a plain-English rendering of its workflow status.
+ * Neither is the raw stored enum and neither is Spanish.
+ *
+ * Lives here rather than in the shared projection so the Renewal drawer, the list, and the shared
+ * My Work view all read one definition without the drawer having to depend on the cancellations
+ * module.
+ */
+export function renewalNormalizedStatus(record: RenewalDeriveRecord): string {
+  if (isCarrierNonRenewalRecord(record)) return POLICY_SOURCE_STATE_LABELS.carrier_nonrenewal;
+  if (record.source_state_normalized === 'review_required') {
+    return POLICY_SOURCE_STATE_LABELS.review_required;
+  }
+
+  switch (record.status) {
+    case 'imported': return 'Imported — not yet assigned';
+    case 'assigned': return 'Assigned — contact required';
+    case 'in_progress': return 'Customer contacted';
+    case 'monitoring': return 'Waiting on customer';
+    case 'requote_sent': return 'Requote with customer';
+    case 'renewed': return 'Renewed';
+    case 'lost': return 'Lost';
+    case 'cancelled': return 'Cancelled';
+    default: return 'Open';
+  }
+}
+
+/**
+ * Why a renewal is waiting rather than owed an action, or `null` (Requirement 6.2).
+ *
+ * Only the two statuses that genuinely record a dependency qualify. `monitoring` means a follow-up
+ * is scheduled and the customer has not come back; `requote_sent` means the requote is with the
+ * customer. An `assigned` record with no contact is not waiting — it is work nobody has started.
+ */
+export function renewalWaitingReason(record: RenewalDeriveRecord): string | null {
+  if (record.status === 'requote_sent') return 'Requote is with the customer';
+  if (record.status === 'monitoring') return 'Waiting on the customer';
+  return null;
+}
+
+/**
+ * True where the record's normalized collector source state is Carrier Non-Renewal, which
+ * Requirement 7.2 requires force a requote ahead of every ordinary renewal action.
+ *
+ * Reads the stored normalized value rather than the raw Spanish `TipoRegistro`: the interpretation
+ * belongs to `policy-follow-up/normalization.ts`, and this module consumes its result.
+ */
+export function isCarrierNonRenewalRecord(record: RenewalDeriveRecord): boolean {
+  return record.source_state_normalized === 'carrier_nonrenewal';
+}
+
+/**
+ * The rules of Requirement 5.2 as one ordered array of `{ action, when }` predicates. The first
+ * rule whose condition holds supplies the recommended next action.
+ *
+ * Two rules changed for the Policy Follow-up assignment workflow, both additively:
+ *
+ *   * `Prepare requote` now also fires for a Carrier Non-Renewal record with no requote activity.
+ *     A carrier declining to renew is exactly the case Requirement 7.2 says must show
+ *     `Prepare Requote` ahead of ordinary renewal work, and the legacy `requote_requested` flag is
+ *     not set on a collector row. `Review requote` still outranks it, so a non-renewal whose
+ *     requote is already out reads `Review requote` — the requote has been prepared.
+ *
+ *   * `Review renewal` was inserted between `Make first contact` and `Complete follow-up`, gated on
+ *     the record carrying a normalized collector source state. A record with no source state — every
+ *     record the legacy Power BI / HawkSoft import created — cannot reach it, so the ladder is
+ *     unchanged for them and every pre-existing expectation of `Complete follow-up` still holds.
+ *     The gate is not a hedge: "the customer was contacted but the renewal terms have not been
+ *     reviewed" is only answerable for a record whose renewal premium and record type came from a
+ *     source that reports them.
  */
 const NEXT_ACTION_RULES: readonly { action: RenewalNextAction; when: (context: NextActionContext) => boolean }[] = [
   {
@@ -489,11 +626,19 @@ const NEXT_ACTION_RULES: readonly { action: RenewalNextAction; when: (context: N
   {
     action: 'Prepare requote',
     when: ({ record, requotes }) =>
-      statusFilterId(record) === 'requote-requested' && !hasRequoteActivity(record, requotes),
+      (statusFilterId(record) === 'requote-requested' || isCarrierNonRenewalRecord(record))
+      && !hasRequoteActivity(record, requotes),
   },
   {
     action: 'Make first contact',
     when: ({ contacts }) => contacts.length === 0,
+  },
+  {
+    action: 'Review renewal',
+    when: ({ record }) =>
+      record.source_state_normalized === 'renewal'
+      && PRE_REVIEW_STATUSES.has(record.status)
+      && !record.next_follow_up_at,
   },
   {
     action: 'Complete follow-up',

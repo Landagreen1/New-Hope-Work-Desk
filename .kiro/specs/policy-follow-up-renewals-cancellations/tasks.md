@@ -391,7 +391,7 @@ Repository facts used by every task: `npm test` is `vitest --run`; `npm run test
     - Zero eligible contacts on the target channel returns an error naming the requirement for valid authorized contact information with zero rows written and case status unchanged; both actions work while `automatic_sending_enabled` is false
     - _Requirements: 17.5, 17.6, 17.11, 17.12, 21.3, 21.4, 22.2, 22.6, 26.6_
 
-  - [~] 15.2 Write send route tests
+  - [ ] 15.2 Write send route tests
     - New file `src/features/cancellations/scheduler/__tests__/send-route.test.ts`
     - Cover: current touchpoint selection including the pre-15-day fallback; an existing non-failed row skipped with the already-sent indication; retry updating the existing row with a new send time, provider identifier, and result while subject and body stay byte-identical; zero eligible contacts returning the error with no rows written; both actions succeeding while the kill switch is off; a non-manager retry rejected with 403
     - _Requirements: 17.5, 17.6, 17.11, 17.12, 22.6, 26.6, 25.2_
@@ -420,13 +420,13 @@ Repository facts used by every task: `npm test` is `vitest --run`; `npm run test
     - Renders the thirteen cells per row in the Requirement 16.1 order from props, pages of at most 50 rows, a loading indicator for the first page, and row click opening the drawer for that case with at most one drawer displayed
     - _Requirements: 16.1, 16.5, 16.6, 16.9, 16.10, 1.5_
 
-  - [~] 16.6 Create `src/features/cancellations/CancellationDrawer.tsx`
+  - [ ] 16.6 Create `src/features/cancellations/CancellationDrawer.tsx`
     - Renders the customer and policy summary, carrier, effective date, reason, amount due, assigned employee, every contact row with channel, normalized value, validation status, both suppression states, authorization status and primary status, preferred language, the four-touchpoint schedule with per-channel send state, SMS and email delivery history most recent first, recorded customer responses, notes and evidence, next required action, case status, communication status, and the audit timeline ordered by event time then insertion order, most recent first
     - Hosts the nine controls as individually selectable actions with exactly one rendered prominent per `primaryAction`; hides Verify Payment, Confirm Reinstatement, Confirm Cancellation, and Retry Failed Communication from Agent_Role and shows all nine to `manager` and `super_admin`
     - Shows the combined-message coverage ("this notice covers N policies") from `cancellation_communication_cases` for every case in a group
     - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.7, 17.10, 17.12, 13.8_
 
-  - [~] 16.7 Write drawer role-visibility tests
+  - [ ] 16.7 Write drawer role-visibility tests
     - New file `src/features/cancellations/__tests__/drawer-controls.test.ts`
     - Cover: the four manager-only controls absent for `agent`, `customer_service`, `sales_supervisor` and present for `manager` and `super_admin`; exactly one prominent control rendered for each primary-action step; the timeline ordering on equal event times
     - _Requirements: 17.3, 17.4, 17.7, 17.10, 22.2, 22.3, 25.2_
@@ -436,52 +436,52 @@ Repository facts used by every task: `npm test` is `vitest --run`; `npm run test
     - Assistance requested and Callback requested set the case assistance flag and feed the Customer Assistance Requested escalation; every change writes the previous value, new value, profile, and time to `cancellation_events` and triggers the escalation re-evaluation; existing communications are never modified
     - _Requirements: 10.9, 11.1, 11.5, 20.4, 21.1, 21.2, 21.5, 21.6, 21.7, 22.2_
 
-  - [-] 16.9 Create `src/features/cancellations/CancellationPaymentReport.tsx`
+  - [ ] 16.9 Create `src/features/cancellations/CancellationPaymentReport.tsx`
     - Records a payment report with required note text of 1 to 2,000 trimmed characters, optional amount from 0.01 to 999,999,999.99, optional confirmation reference of at most 100 characters, and zero or more evidence files at 10 files and 100 MB each
     - On success sets case status Payment Reported, next required action Verify Payment, and the follow-up deadline to the end of the second business day excluding weekends and configured holidays, clamped to the effective date; adds one timeline entry and leaves every communication row unchanged
     - Rejects an empty note, an out-of-range amount, an over-length reference, an oversized or failed evidence upload, and a case already Reinstated, Cancelled, Resolved, Invalid, or Duplicate, in each case naming the rejected field or the closed-case reason, storing nothing and leaving case status and deadline unchanged
     - _Requirements: 18.1, 18.3, 18.4, 18.5, 18.6, 18.7, 18.8, 18.9, 18.10_
 
-  - [-] 16.10 Create `src/features/cancellations/CancellationVerificationPanel.tsx`
+  - [ ] 16.10 Create `src/features/cancellations/CancellationVerificationPanel.tsx`
     - Manager and `super_admin` only: records one of the seven verification outcomes with the recording profile, verification time, note, and evidence, and adds the outcome to the timeline
     - Policy reinstated sets Reinstated, Policy cancelled sets Cancelled, both cancelling every later touchpoint, clearing the next required action, and retaining every communication row; Payment verified — reinstatement pending sets Reinstatement Pending with next action Confirm Reinstatement and a deadline no later than three business days, sending stays suspended; Payment not found, Additional payment required, Policy still scheduled for cancellation, and Other each require note text plus a next case status from Open, Verification Pending, Cancelled plus a next required action, rejecting an incomplete submission with the entered values retained
     - Mark Resolved requires current status Reinstated or Cancelled plus note text, otherwise rejected with the reason; a case status override requires reason text of 1 to 1,000 characters stored with the profile, time, previous and new status as one timeline entry; a non-manager attempt is rejected with the role message and no change
     - _Requirements: 19.1, 19.2, 19.3, 19.4, 19.5, 19.7, 19.8, 19.9, 19.10, 19.11, 22.4, 22.10, 22.11_
 
-  - [-] 16.11 Create `src/features/cancellations/CancellationManagerActions.tsx`
+  - [ ] 16.11 Create `src/features/cancellations/CancellationManagerActions.tsx`
     - Manager and `super_admin` only, one collapsed control hosting the import wizard (upload, classification result, mapping overrides, the five preview counts with rejected, duplicate, and unmatched lists, confirmation calling the loader, and the completion summary), template editing that saves a new version rather than updating one, the automatic-sending kill switch with the profile and change time stored, unmatched producer and customer review, reassignment, and imported-data correction
     - Renders nothing at all for Agent_Role rather than a disabled control
     - _Requirements: 8.1, 8.4, 8.5, 14.17, 22.3, 26.4_
 
-  - [~] 16.12 Create `src/features/cancellations/CancellationsPage.tsx` and wire the tab
+  - [ ] 16.12 Create `src/features/cancellations/CancellationsPage.tsx` and wire the tab
     - Page container owning records, load, error, retry, search text, saved filter, sort order, selected case id, and the business date computed once per render pass; composes the summary bar, table, drawer, contact panel, payment report, verification panel, and manager actions; hosts the note composer requiring 1 to 4,000 trimmed characters with the 10-file and 100 MB evidence limits
     - Replaces the placeholder in `PolicyFollowUpPage.tsx` with this container, keeping the per-tab state retention, the drawer close on tab leave, and the failed-query retry behavior
     - _Requirements: 1.1, 1.3, 1.4, 1.5, 1.6, 1.7, 1.10, 17.1, 17.8, 17.9_
 
 - [ ] 17. Role enforcement and audit immutability tests
-  - [~] 17.1 Write RLS role-enforcement tests
+  - [ ] 17.1 Write RLS role-enforcement tests
     - New file `src/features/cancellations/__tests__/rls-role-enforcement.test.ts`
     - Cover per role (`agent`, `customer_service`, `sales_supervisor`, `manager`, `super_admin`): case read scope; write limited to rows assigned to self; the four case status values an Agent_Role profile may set and the rejection of every other value including any change on a closed case; verification outcome insert denied outside Manager_Role; import run read denied to `agent`; manager-only operations returning 403 and leaving data unchanged; `super_admin` matching `manager` on every check
     - _Requirements: 19.11, 22.1, 22.2, 22.3, 22.6, 22.9, 22.10, 22.12, 25.2_
 
-  - [~] 17.2 Write the audit immutability integration test
+  - [ ] 17.2 Write the audit immutability integration test
     - New file `src/features/cancellations/__tests__/audit-immutability.integration.test.ts`, run by `npm run test:integration`
     - Attempt update and delete on `cancellation_communications` and `cancellation_events` as `agent`, as `manager`, and through a service-role client; assert every attempt fails with the immutability error and the row is byte-identical afterwards; assert `cancellation_retry_communication` updates only the five permitted columns and rejects a subject or body change
     - _Requirements: 14.16, 17.7, 22.8, 25.2_
 
 - [ ] 18. Scheduler authorization tests
-  - [~] 18.1 Write scheduler auth tests
+  - [ ] 18.1 Write scheduler auth tests
     - New file `src/features/cancellations/__tests__/scheduler-auth.test.ts`
     - Cover: no `Authorization` header, a wrong bearer token, a token that is a prefix or suffix of the configured secret, and a session whose role is not `manager` or `super_admin` all returning HTTP 403 with zero communication rows created and zero provider calls; the exact bearer token and a `manager` session and a `super_admin` session each authorized
     - _Requirements: 12.9, 12.10, 22.6, 25.7_
 
-- [ ] 19. Phase 2 verification gate and commit
-  - [~] 19.1 Phase 2 verification gate — one run, four results
+- [x] 19. Phase 2 verification gate and commit
+  - [x] 19.1 Phase 2 verification gate — one run, four results
     - In a single verification run execute, in order, `npx tsc --noEmit`, then `npm test`, then `npm run test:integration`, then `npm run build`
     - Record all four outcomes plus the run identifier in the Verification Record section, and confirm the run contains a passing case for every item named in Requirement 25 criteria 2 through 7; any non-zero error count or failing test voids the record and the whole sequence is re-run after the fix
     - _Requirements: 25.2, 25.3, 25.4, 25.5, 25.6, 25.7, 25.9_
 
-  - [~] 19.2 Commit Phase 2
+  - [x] 19.2 Commit Phase 2
     - Stage only the Phase 2 paths (`supabase/migrations/v1.10.*`, `src/features/cancellations/**`, `src/lib/email.ts`, `src/lib/__tests__/email.test.ts`, `src/app/api/cancellations/**`, `src/features/renewals/PolicyFollowUpPage.tsx`, `.env.example`, this tasks file) by name, leaving the unrelated changes from 0.1 unstaged
     - Commit with the title `feat(cancellations): add reminder and tracking workflow`, producing exactly two commits on `feature/renewals-cancellations`
     - _Requirements: 26.7_

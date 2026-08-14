@@ -43,6 +43,7 @@ import {
   CANCELLATION_SAVED_FILTERS,
   DEFAULT_CANCELLATION_FILTER,
   MAX_SEARCH_LENGTH,
+  STANDARD_CANCELLATION_SAVED_FILTERS,
   effectiveSearchText,
 } from './derive';
 import type { CancellationFilterCounts, CancellationSavedFilterId } from './derive';
@@ -157,7 +158,7 @@ export default function CancellationsSummaryBar({
             active, so the selected state and its exclusivity reach assistive tech natively, and
             arrow-key movement between the fourteen filters comes for free. */}
         <div role="radiogroup" aria-labelledby={headingId} aria-busy={loading} className="flex flex-wrap gap-2">
-          {CANCELLATION_SAVED_FILTERS.map((filter) => {
+          {STANDARD_CANCELLATION_SAVED_FILTERS.map((filter) => {
             const active = selectedFilter === filter.id;
             const count = displayCount(counts[filter.id]);
             return (

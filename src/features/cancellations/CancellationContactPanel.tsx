@@ -67,7 +67,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import { ui } from '../nhwd-shared/ui';
@@ -316,7 +316,7 @@ export default function CancellationContactPanel({
     };
   }, []);
 
-  const manager = isBroadManagerRole(role ?? 'manager');
+  const manager = canManageRenewals(role ?? 'manager');
   // Requirement 17.10 by way of `derive.ts`: Record Customer Response is shown to every role, and
   // the gate is read from the one function that decides control visibility rather than restated.
   const responseVisible = isActionVisibleToRole('Record Customer Response', role);

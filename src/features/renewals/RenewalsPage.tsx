@@ -19,16 +19,18 @@
 import { AlertTriangle, RefreshCw, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { canAccessRenewals, isBroadManagerRole } from '@/lib/permissions';
+import { canAccessRenewals, canManageRenewals } from '@/lib/permissions';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 import {
-  generateDueNotifications, listRenewalAssignees, listRenewalAssignmentAliases, listRenewalImportRuns,
+  generateDueNotifications, listRenewalAssignees, listRenewalAssignmentAliases,
+  listRenewalContactSummaries, listRenewalImportRuns, listRenewalRequoteSummaries,
   listRenewalSyncExceptions, listRenewals,
 } from './api';
 import type {
-  RenewalAssignee, RenewalAssignmentAlias, RenewalImportRun, RenewalRecord, RenewalSyncException,
+  RenewalAssignee, RenewalAssignmentAlias, RenewalContactSummaryRow, RenewalImportRun,
+  RenewalRecord, RenewalRequoteSummaryRow, RenewalSyncException,
 } from './api';
 import RenewalDrawer from './RenewalDrawer';
 import RenewalManagerActions from './RenewalManagerActions';
@@ -37,10 +39,12 @@ import RenewalsTable from './RenewalsTable';
 import type { RenewalTableRow } from './RenewalsTable';
 import {
   MAX_SEARCH_LENGTH, RENEWAL_SUMMARY_FILTERS, compareRenewalRows, currentBusinessDate, daysRemaining,
-  matchesSearch, matchesSummaryFilter, premiumChange, recommendedNextAction, summaryCounts,
+  matchesSearch, matchesSummaryFilter, premiumChange, recommendedNextAction,
+  renewalContactIndexFromSummaries, renewalContactsFromSummary, summaryCounts,
 } from './derive';
 import type {
-  RenewalContactIndex, RenewalRow, RenewalSortOrder, RenewalSummaryFilterId, RenewalsUiState,
+  RenewalContactIndex, RenewalRequoteActivity, RenewalRow, RenewalSortOrder, RenewalSummaryFilterId,
+  RenewalsUiState,
 } from './derive';
 import { failureText } from './format';
 
@@ -52,24 +56,36 @@ const REFRESH_INTERVAL_MS = 60_000;
 const PAGE_SIZE = 50;
 const LOAD_FAILURE = 'The renewal record query failed.';
 
-/** The five container reads as one snapshot, replaced only by a query that returned (Req 1.7). */
+/** The container reads as one snapshot, replaced only by a query that returned (Req 1.7). */
 interface RenewalsData {
   records: readonly RenewalRecord[];
+  /**
+   * Contact history per record, from the bulk read (Requirements 5.4, 15.1).
+   *
+   * This page used to hand the derived helpers an *empty* contact index, because `api.ts` could
+   * only read contacts one record at a time and an N+1 query per row was not acceptable. The
+   * consequence was that the No contact recorded count, every Last contact cell, and every
+   * recommended next action were computed as though nobody had ever been contacted — the defect
+   * Requirement 5.4 exists to fix. `renewal_contact_summaries` answers for the whole page in one
+   * round trip, so the real history is now available here.
+   */
+  contactSummaries: readonly RenewalContactSummaryRow[];
+  /** Requote activity per record, from the bulk read (Requirements 5.2, 5.4). */
+  requoteSummaries: readonly RenewalRequoteSummaryRow[];
   assignees: readonly RenewalAssignee[];
   aliases: readonly RenewalAssignmentAlias[];
   importRuns: readonly RenewalImportRun[];
   syncExceptions: readonly RenewalSyncException[];
 }
 
-const EMPTY_DATA: RenewalsData = { records: [], assignees: [], aliases: [], importRuns: [], syncExceptions: [] };
+const EMPTY_DATA: RenewalsData = {
+  records: [], contactSummaries: [], requoteSummaries: [],
+  assignees: [], aliases: [], importRuns: [], syncExceptions: [],
+};
 
-/**
- * `api.ts` reads contacts one record at a time (`listContacts`), which the drawer owns, so the list
- * surface hands the derived helpers an empty index: the No contact recorded count, Last contact, and
- * Next required action all read as no contact. Defect-logged, not worked around (Req 2.6, 3.9, 4.1).
- */
-const NO_CONTACTS: RenewalContactIndex = new Map();
+/** What a record with no contacts and no requote activity carries. */
 const NO_ROW_CONTACTS: RenewalRow['contacts'] = [];
+const NO_REQUOTES: readonly RenewalRequoteActivity[] = [];
 
 /** A `RenewalRow` carrying the whole record, which the list cells need and `derive.ts` accepts. */
 type OrderedRenewal = { record: RenewalRecord; contacts: RenewalRow['contacts'] };
@@ -106,7 +122,7 @@ export interface RenewalsPageProps {
 export default function RenewalsPage({
   initialProfile: profile, embedded = false, initialUiState, onUiStateChange,
 }: RenewalsPageProps) {
-  const manage = isBroadManagerRole(profile.role);
+  const manage = canManageRenewals(profile.role);
   const allowed = canAccessRenewals(profile.role);
 
   const [data, setData] = useState<RenewalsData>(EMPTY_DATA);
@@ -127,14 +143,23 @@ export default function RenewalsPage({
   const load = useCallback(() => {
     // Requirement 2.9: a profile `canAccessRenewals` rejects reads zero renewal rows.
     if (!allowed) return;
+    // The two summary reads degrade to zero rows like every other supporting read: a list that
+    // reads `no contact recorded` because the summary query failed is the pre-existing behaviour,
+    // and it is still better than refusing to show the records (Req 1.7).
     void withTimeout(Promise.all([
       listRenewals(),
+      optional(listRenewalContactSummaries()),
+      optional(listRenewalRequoteSummaries()),
       optional(listRenewalAssignees()),
       manage ? optional(listRenewalAssignmentAliases()) : [],
       manage ? optional(listRenewalImportRuns()) : [],
       manage ? optional(listRenewalSyncExceptions()) : [],
-    ])).then(([records, assignees, aliases, importRuns, syncExceptions]) => {
-      setData({ records, assignees, aliases, importRuns, syncExceptions });
+    ])).then(([
+      records, contactSummaries, requoteSummaries, assignees, aliases, importRuns, syncExceptions,
+    ]) => {
+      setData({
+        records, contactSummaries, requoteSummaries, assignees, aliases, importRuns, syncExceptions,
+      });
       setError(null);
       setLastUpdated(new Date());
       setLoading(false);
@@ -174,10 +199,32 @@ export default function RenewalsPage({
   /** Computed once per render pass and handed to every child that compares dates (Req 3.6). */
   const businessDate = currentBusinessDate();
 
+  /**
+   * Contact history keyed by record id, from the bulk read (Requirement 5.4).
+   *
+   * `renewalContactsFromSummary` turns each summary into the one-element contact list the
+   * derivations read: every one of them looks only at whether the list is empty and at the latest
+   * occurrence, so a summary is behaviourally identical to the full history for all of them.
+   */
+  const contactIndex = useMemo<RenewalContactIndex>(
+    () => renewalContactIndexFromSummaries(data.contactSummaries),
+    [data.contactSummaries],
+  );
+
+  /** Requote activity keyed by record id, same shape and same reasoning (Requirement 5.2). */
+  const requoteIndex = useMemo(() => {
+    const index = new Map<string, readonly RenewalRequoteActivity[]>();
+    for (const summary of data.requoteSummaries) {
+      if (summary.requote_event_count <= 0) continue;
+      index.set(summary.record_id, [{ created_at: summary.last_requote_at ?? '' }]);
+    }
+    return index;
+  }, [data.requoteSummaries]);
+
   /** All ten counts, each computed independently of the active filter (Req 3.3). */
   const counts = useMemo(
-    () => summaryCounts(data.records, NO_CONTACTS, searchText, businessDate),
-    [businessDate, data.records, searchText],
+    () => summaryCounts(data.records, contactIndex, searchText, businessDate),
+    [businessDate, contactIndex, data.records, searchText],
   );
 
   const nameById = useMemo(
@@ -194,31 +241,37 @@ export default function RenewalsPage({
   // Search text first, then the single active summary filter, then the five Requirement 4.2 sort
   // keys over the complete filtered set before any paging (Req 3.2, 4.5).
   const ordered = useMemo<OrderedRenewal[]>(() => data.records
-    .filter((record) => matchesSearch(record, searchText)
-      && (activeFilter === null || matchesSummaryFilter(record, NO_ROW_CONTACTS, activeFilter, businessDate)))
-    .map((record) => ({ record, contacts: NO_ROW_CONTACTS }))
+    .map((record) => ({ record, contacts: contactIndex.get(record.id) ?? NO_ROW_CONTACTS }))
+    .filter(({ record, contacts }) => matchesSearch(record, searchText)
+      && (activeFilter === null || matchesSummaryFilter(record, contacts, activeFilter, businessDate)))
     .sort((left, right) => compareRenewalRows(left, right, businessDate)),
-  [activeFilter, businessDate, data.records, searchText]);
+  [activeFilter, businessDate, contactIndex, data.records, searchText]);
 
   /** One page of already-derived cells; the table formats them and computes nothing (Req 4.1). */
-  const rows = useMemo<RenewalTableRow[]>(() => ordered.slice(0, visibleCount).map(({ record }) => ({
-    id: record.id,
-    customerName: record.customer_name,
-    policyNumber: record.policy_number,
-    carrier: record.carrier,
-    lineOfBusiness: record.line_of_business,
-    renewalDate: record.renewal_date,
-    daysRemaining: daysRemaining(record.renewal_date, businessDate),
-    assignedEmployee: assignedName(record.assigned_to),
-    currentPremium: record.premium_current,
-    renewalPremium: record.premium_renewal,
-    premiumChange: premiumChange(record.premium_current, record.premium_renewal),
-    // No bulk contact source at list level; see `NO_CONTACTS`.
-    lastContact: null,
-    nextFollowUp: record.next_follow_up_at,
-    status: record.status,
-    nextRequiredAction: recommendedNextAction(record),
-  })), [assignedName, businessDate, ordered, visibleCount]);
+  const rows = useMemo<RenewalTableRow[]>(() => ordered.slice(0, visibleCount).map(({ record }) => {
+    const summary = data.contactSummaries.find((entry) => entry.record_id === record.id) ?? null;
+    const contacts = renewalContactsFromSummary(summary);
+    const requotes = requoteIndex.get(record.id) ?? NO_REQUOTES;
+
+    return {
+      id: record.id,
+      customerName: record.customer_name,
+      policyNumber: record.policy_number,
+      carrier: record.carrier,
+      lineOfBusiness: record.line_of_business,
+      renewalDate: record.renewal_date,
+      daysRemaining: daysRemaining(record.renewal_date, businessDate),
+      assignedEmployee: assignedName(record.assigned_to),
+      currentPremium: record.premium_current,
+      renewalPremium: record.premium_renewal,
+      premiumChange: premiumChange(record.premium_current, record.premium_renewal),
+      // Requirement 5.4: the real latest contact, from the bulk read.
+      lastContact: summary?.last_contact_at ?? null,
+      nextFollowUp: record.next_follow_up_at,
+      status: record.status,
+      nextRequiredAction: recommendedNextAction(record, contacts, requotes),
+    };
+  }), [assignedName, businessDate, data.contactSummaries, ordered, requoteIndex, visibleCount]);
 
   const selected = data.records.find((record) => record.id === selectedId) ?? null;
   const filterLabel = RENEWAL_SUMMARY_FILTERS.find((filter) => filter.id === activeFilter)?.label ?? '';

@@ -132,7 +132,7 @@
 //     assignment, which is Requirements 20.8 and 20.9 in the type system rather than in a
 //     comment.
 
-import { canAccessRenewals, isBroadManagerRole } from '@/lib/permissions';
+import { canAccessRenewals, canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import type { ContactAuthorizationStatus } from '../import/contacts';
@@ -838,7 +838,7 @@ export function followUpRecipients(
   for (const profile of managerProfiles) {
     const id = trimToNull(profile.id);
     if (id === null || seen.has(id)) continue;
-    if (!isBroadManagerRole(profile.role)) continue;
+    if (!canManageRenewals(profile.role)) continue;
     seen.add(id);
     profileIds.push(id);
   }

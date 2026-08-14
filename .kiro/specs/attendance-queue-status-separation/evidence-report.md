@@ -642,6 +642,35 @@ the working tree by other work). Nothing in this pass imports any of them. The t
 as known-failing — `cancellations/__tests__/audit-immutability.integration.test.ts` and
 `cancellations/__tests__/cancellations-summary-bar.test.tsx` — are among them.
 
+#### Re-run 2026-08-13
+
+```
+npx tsc --noEmit
+  clean, exit 0
+
+npm run build (Next.js 16.2.10 Turbopack)
+  ✓ Compiled successfully in 5.2s
+  ✓ TypeScript in 12.8s
+  ✓ Generating static pages (47/47) in 517ms
+  exit 0
+
+npx vitest --run queue-status.test attendance-rpc.test SalesQueueStatus
+  Test Files 3 passed (3)   Tests 48 passed (48)
+
+npm test (full suite)
+  Test Files 12 failed | 96 passed | 3 skipped (111)
+  Tests 27 failed | 2558 passed | 61 skipped (2646)
+  All 27 failures are pre-existing and unrelated: cancellations (sales_supervisor manager parity),
+  renewals (same), and one duplicate-validation test in quotes. None in time-attendance.
+
+npm run test:integration -- queue-status-bug-condition
+  queue-status-bug-condition.integration.test.ts: 4 failed | 19 passed (23)
+  Four expected failures (deferred tasks): attributes break start, attributes break end,
+  attributes daily reset, attributes user deletion.
+  audit-immutability.integration.test.ts: 13 passed
+  cancellations audit-immutability: skipped (pre-existing check-constraint issue)
+```
+
 ### One behavior narrowing worth Byron's eye
 
 `apply_queue_status` returns early when the profile already holds the target status, which is what makes a

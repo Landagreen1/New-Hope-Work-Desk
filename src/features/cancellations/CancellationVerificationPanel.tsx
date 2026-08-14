@@ -80,7 +80,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
-import { isBroadManagerRole } from '@/lib/permissions';
+import { canManageRenewals } from '@/lib/permissions';
 import type { AppRole } from '@/lib/types';
 
 import { ui } from '../nhwd-shared/ui';
@@ -496,7 +496,7 @@ export default function CancellationVerificationPanel({
     };
   }, []);
 
-  const manager = isBroadManagerRole(role ?? 'manager');
+  const manager = canManageRenewals(role ?? 'manager');
   const busy = disabled || pending !== null;
   const plan = outcome === '' ? null : verificationOutcomePlan(outcome);
   const conditional = plan?.requiresNextDecision ?? false;
