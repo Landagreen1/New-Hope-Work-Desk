@@ -897,6 +897,11 @@ describe('the email provider is confined to src/lib/email.ts', () => {
   const ALLOWED = new Set([
     'src/lib/email.ts',
     'src/lib/__tests__/email.test.ts',
+    // The readiness regression suite, for the same reason `email.test.ts` is allowed: the defect it
+    // pins was the readiness route reading the *wrong* variable names, so a test that proves the
+    // right ones are read has to name them. Mocking the provider module instead would assert only
+    // that the mock was called and would have passed against the bug.
+    'src/features/cancellations/__tests__/email-readiness.test.ts',
     THIS_FILE,
   ]);
 
@@ -930,6 +935,10 @@ describe('the SMS provider is confined to src/lib/ringcentral-sms.ts', () => {
   const ALLOWED = new Set([
     'src/lib/ringcentral-sms.ts',
     'src/lib/__tests__/ringcentral-sms.test.ts',
+    // Same reason as the email allowlist above. The readiness route read `RINGCENTRAL_*` instead of
+    // `RC_*`, so its SMS check was false on every deployment that has ever existed; the regression
+    // test has to name both spellings to prove which one is honoured.
+    'src/features/cancellations/__tests__/email-readiness.test.ts',
     THIS_FILE,
   ]);
 
