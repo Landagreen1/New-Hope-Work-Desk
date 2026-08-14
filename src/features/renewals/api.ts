@@ -1,6 +1,8 @@
 'use client';
 
 import { getSupabase } from '../nhwd-shared/client';
+import { matchHeaderAliases } from '../nhwd-shared/header-matching';
+import { RENEWAL_IMPORT_ALIASES } from './import-aliases';
 
 export type RenewalStatus =
   | 'imported'
@@ -717,6 +719,14 @@ export function normalizeDate(value: string): string | null {
   return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 }
 
+/**
+ * The English-only fallback proposals, kept after the alias table took over the primary work.
+ *
+ * These are patterns rather than names — `current.*prem`, `business name.*insured.*names?` —
+ * so they still catch the loose English column titles older Power BI exports carried and that
+ * an exact name list cannot express. They run only for a field `RENEWAL_IMPORT_ALIASES` left
+ * unmapped, and only against source columns the alias pass did not claim.
+ */
 const GUESSES: Record<string, RegExp> = {
   policy_number: /^(policy#?|policy\s*(number|no\.?|#))$/i,
   renewal_date: /^(renewal\s*date|renewal|expiration\s*date|exp\.?\s*date)$/i,
@@ -751,12 +761,54 @@ const GUESSES: Record<string, RegExp> = {
   policy_office: /^policy\s*office$/i,
 };
 
+/**
+ * Proposes a source column for every target field of a renewal import.
+ *
+ * Two passes, in this order:
+ *
+ *  1. **Name aliases** (`RENEWAL_IMPORT_ALIASES`, matched through `headerMatchKey`). This is
+ *     what makes a Spanish export map itself: `Compania`, `Poliza`, `Asegurado`,
+ *     `FechaRenovacion`, `Telefonos`, and `Productor` are recognized as their target fields
+ *     regardless of accents, case, punctuation, CamelCase, or a `de` between words.
+ *  2. **The legacy English patterns** (`GUESSES`), for any field the first pass left unmapped.
+ *  3. **The producer, as the assignment label of last resort**, for a file that names no
+ *     assignment column — see the comment at the end of the function.
+ *
+ * In the first two passes a source column is proposed to at most one field, and a repeated
+ * header name is claimed as a whole, because `buildNormalizedRows` resolves a mapping by header
+ * text.
+ *
+ * Every proposal remains overridable in the mapping selects: this function decides where the
+ * manager starts, never what the import loads.
+ */
 export function guessMapping(headers: string[]): Record<string, string> {
   const mapping: Record<string, string> = {};
-  for (const [field, expression] of Object.entries(GUESSES)) {
-    const match = headers.find((header) => expression.test(header) && !Object.values(mapping).includes(header));
-    if (match) mapping[field] = match;
+  const claimed = new Set<string>();
+
+  for (const [field, headerIndex] of matchHeaderAliases(headers, RENEWAL_IMPORT_ALIASES)) {
+    mapping[field] = headers[headerIndex];
+    claimed.add(headers[headerIndex]);
   }
+
+  for (const [field, expression] of Object.entries(GUESSES)) {
+    if (mapping[field] !== undefined) continue;
+    const match = headers.find((header) => expression.test(header) && !claimed.has(header));
+    if (match) {
+      mapping[field] = match;
+      claimed.add(match);
+    }
+  }
+
+  // The consolidated Spanish export carries no assignment column at all — `Productor` is the
+  // only person on the row. `assigned_name` is required, so leaving it unmapped blocks the
+  // import on data the file does not have, and the producer is the same label the cancellation
+  // importer already resolves to an assignee. It is proposed last, after `producer_name` has
+  // taken the column, so both fields read it; the mapping selects show the proposal and a
+  // manager changes it or clears it like any other.
+  if (mapping.assigned_name === undefined && mapping.producer_name !== undefined) {
+    mapping.assigned_name = mapping.producer_name;
+  }
+
   return mapping;
 }
 

@@ -17,6 +17,9 @@
 // members as `classify.ts`'s `CancellationColumnSetId`, `EFICACIA_COLUMNS`, and
 // `AVISOS_COLUMNS`, so values cross between the two modules without conversion.
 
+import { headerMatchKey, matchHeaderAliases } from '../../nhwd-shared/header-matching';
+import { ALIASES_BY_SET } from './aliases';
+
 // ---------------------------------------------------------------------------
 // Column sets
 // ---------------------------------------------------------------------------
@@ -153,12 +156,21 @@ export type ConfirmMappingResult =
 // ---------------------------------------------------------------------------
 
 /**
- * Header and column names are compared after removing leading and trailing whitespace and
- * without case sensitivity (Req 8.4). `toLowerCase` rather than `toLocaleLowerCase` keeps
- * the comparison locale-invariant, and `trim` also removes a stray BOM.
+ * Header and column names are compared under `headerMatchKey` (Req 8.4).
+ *
+ * Requirement 8.4's "ignoring case and surrounding whitespace" was originally implemented as
+ * `trim().toLowerCase()`, which is the narrowest reading of it and the reason these files
+ * needed manual mapping: the reports are Spanish, so the same column arrives as `Poliza`,
+ * `Póliza`, `POLIZA`, and `Fecha de Cancelación` against a canonical `FechaCancelacion`, and
+ * only the first of those compared equal. `headerMatchKey` widens the comparison to every
+ * difference that cannot change which column is meant — a byte order mark, letter case,
+ * accents, punctuation, inner and outer whitespace, CamelCase versus spaced words, and the
+ * filler words `de`/`del`/`la`/`el`/`los`/`las`/`of`/`the` — and no further. A difference in
+ * the actual words or their order still means a different column, so `FechaCancelacion` and
+ * `FechaCancelacionEstimada` stay distinct, and so do `Poliza` and `PolizaNormalizada`.
  */
 function canonicalName(value: string): string {
-  return value.trim().toLowerCase();
+  return headerMatchKey(value);
 }
 
 function buildCanonicalLookup(columns: readonly CancellationColumn[]): ReadonlyMap<string, CancellationColumn> {
@@ -208,18 +220,41 @@ function buildColumnIndex(
 // ---------------------------------------------------------------------------
 
 /**
- * Proposes a target column for every source column of the header row: the column of
- * `columnSet` whose name equals the header after trimming and case folding, and `null` for
- * a header with no equal column name (Req 8.4). Column names absent from the header row
- * simply never appear in the proposal, which is how Requirements 8.2 and 8.3 turn them
- * into an absent value for every row.
+ * Proposes a target column for every source column of the header row (Req 8.4), in two passes.
+ *
+ * **Pass one, by name.** Each header takes the column of `columnSet` whose name it matches
+ * under `canonicalName`. This is the original rule, widened only in what counts as the same
+ * name, so a header that mapped before still maps to the same column.
+ *
+ * **Pass two, by alias.** For each column no header claimed by name, `ALIASES_BY_SET` supplies
+ * the other names the reports have used for it — `Aseguradora` for `Compania`, `MontoAdeudado`
+ * for `MontoDebido`, `DiasRestantes` for `Days remaining` — and the first one present in the
+ * header row takes the column. Pass one is never overridden, one source column is proposed to
+ * at most one column, and the aliases are scoped to the classified set, so an eficacia name can
+ * never resolve against an avisos column or the reverse.
+ *
+ * A header no pass reaches stays `null` and is therefore an absent value for every row, which
+ * is how Requirements 8.2 and 8.3 treat a column the file does not carry. Every proposal from
+ * either pass is still overridable, and `proposedColumn` records what was proposed so the
+ * wizard can show a manager which columns it decided for them.
  */
 export function proposeMapping(columnSet: CancellationColumnSet, header: readonly string[]): MappingDraft {
   const lookup = COLUMN_BY_CANONICAL_NAME[columnSet];
-  const assignments = header.map((value, headerIndex) => {
+  const assignments: MappingAssignment[] = header.map((value, headerIndex) => {
     const proposedColumn = lookup.get(canonicalName(value)) ?? null;
     return { headerIndex, header: value, column: proposedColumn, proposedColumn };
   });
+
+  const claimedByName = new Set(
+    assignments.map((assignment) => assignment.column).filter((column): column is CancellationColumn => column !== null),
+  );
+  const openTargets = ALIASES_BY_SET[columnSet].filter((entry) => !claimedByName.has(entry.target));
+  const byAlias = matchHeaderAliases(header, openTargets, (headerIndex) => assignments[headerIndex].column === null);
+
+  for (const [column, headerIndex] of byAlias) {
+    assignments[headerIndex] = { ...assignments[headerIndex], column, proposedColumn: column };
+  }
+
   return { columnSet, header: [...header], assignments };
 }
 
