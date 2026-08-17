@@ -57,21 +57,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 });
   }
 
-  // 2. Load the opportunity and linked intake
+  // 2. Load the opportunity (RLS enforces team access)
   const { data: opportunity, error: oppError } = await supabase
-    .rpc('specialty_get_opportunity', { p_opportunity_id: opportunity_id });
+    .from('specialty_opportunities')
+    .select('id, line_of_business, source_intake_id, display_name')
+    .eq('id', opportunity_id)
+    .single();
 
   if (oppError || !opportunity) {
     return NextResponse.json({ error: 'Opportunity not found or access denied' }, { status: 404 });
   }
 
   // 3. Load the linked intake data
+  if (!opportunity.source_intake_id) {
+    return NextResponse.json(
+      { error: 'No linked intake found for this opportunity' },
+      { status: 400 },
+    );
+  }
+
   const { data: intake, error: intakeError } = await supabase
-    .rpc('specialty_get_linked_intake', { p_opportunity_id: opportunity_id });
+    .from('cs_intake_submissions')
+    .select('*, cs_intake_drivers(*), cs_intake_vehicles(*), cs_intake_owners(*)')
+    .eq('id', opportunity.source_intake_id)
+    .single();
 
   if (intakeError || !intake) {
     return NextResponse.json(
-      { error: 'No linked intake found for this opportunity' },
+      { error: 'Linked intake not found' },
       { status: 400 },
     );
   }
@@ -82,8 +95,15 @@ export async function POST(request: Request) {
     .select('*, market_questions(question_text, auto_fill_source)')
     .eq('carrier_market_id', carrier_market_id);
 
-  // 5. Build the trucking data packet
-  const dataPacket = buildTruckingDataPacket(intake as unknown as LinkedIntake);
+  // 5. Build the trucking data packet from the intake
+  // Map the raw query result to the LinkedIntake shape the adapter expects
+  const intakeForAdapter = {
+    ...intake,
+    drivers: (intake.cs_intake_drivers ?? []).sort((a: { position: number }, b: { position: number }) => a.position - b.position),
+    vehicles: (intake.cs_intake_vehicles ?? []).sort((a: { position: number }, b: { position: number }) => a.position - b.position),
+    owners: intake.cs_intake_owners ?? [],
+  };
+  const dataPacket = buildTruckingDataPacket(intakeForAdapter as unknown as LinkedIntake);
   const sourceHash = computeDataHash(dataPacket);
 
   // 6. Build the supplemental answers map
