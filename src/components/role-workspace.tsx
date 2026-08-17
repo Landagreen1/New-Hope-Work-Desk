@@ -35,6 +35,7 @@ import PolicyFollowUpPage from "@/features/renewals/PolicyFollowUpPage";
 import SalesReportingCenter from "@/features/reporting/SalesReportingCenter";
 import { canAccessSpecialtyModule } from "@/features/specialty/api";
 import QuotingTeamsAdmin from "@/features/specialty/QuotingTeamsAdmin";
+import MarketDirectoryAdmin from "@/features/specialty/market-directory/MarketDirectoryAdmin";
 import SpecialtyWorkspace, {
   type SpecialtySection,
 } from "@/features/specialty/SpecialtyWorkspace";
@@ -431,6 +432,14 @@ export function RoleWorkspace({
         return (
           <Suspense fallback={<LoadingWorkspace label="Quoting Teams" />}>
             <QuotingTeamsAdmin initialProfile={profile} embedded />
+          </Suspense>
+        );
+      }
+      // Market Directory is a settings screen for managing submission markets.
+      if (subNav === "ua_market_directory") {
+        return (
+          <Suspense fallback={<LoadingWorkspace label="Market Directory" />}>
+            <MarketDirectoryAdmin initialProfile={profile} embedded />
           </Suspense>
         );
       }

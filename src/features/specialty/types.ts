@@ -61,7 +61,8 @@ export type DocumentCategory =
   | 'quote_pdf'
   | 'photos'
   | 'underwriting'
-  | 'other';
+  | 'other'
+  | 'generated_application';
 
 export type PriceMethod = 'phone' | 'whatsapp' | 'sms' | 'email' | 'in_person' | 'other';
 

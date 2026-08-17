@@ -326,6 +326,7 @@ export const DOCUMENT_CATEGORIES: readonly DocumentCategory[] = [
   'photos',
   'underwriting',
   'other',
+  'generated_application',
 ] as const;
 
 const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
@@ -338,6 +339,7 @@ const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
   photos: 'Photos',
   underwriting: 'Underwriting',
   other: 'Other',
+  generated_application: 'Generated Application',
 };
 
 export function documentCategoryLabel(category: DocumentCategory | string): string {

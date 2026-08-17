@@ -136,7 +136,8 @@ export type SubNavId =
    * insurance is a settings act, and putting it inside Specialty Quotes would make a
    * fourth quoting destination out of a screen most people never open.
    */
-  | "ua_quoting_teams";
+  | "ua_quoting_teams"
+  | "ua_market_directory";
 
 /**
  * What a {@link NavigationTarget}'s `recordId` names.
@@ -392,6 +393,7 @@ function getModulesForRole(
       subItems: [
         { id: "ua_users", label: "Users & Sources", icon: UserCog },
         { id: "ua_quoting_teams", label: "Quoting Teams", icon: Users },
+        { id: "ua_market_directory", label: "Market Directory", icon: Building2 },
       ],
     });
   }
