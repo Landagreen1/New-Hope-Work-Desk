@@ -14,8 +14,7 @@
  * v1.17.0
  */
 
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
 import { buildTruckingDataPacket, computeDataHash } from '@/features/specialty/market-directory/trucking-data-adapter';
@@ -23,24 +22,18 @@ import type { LinkedIntake } from '@/features/specialty/types';
 
 import { generatePdfFromTemplate } from './pdf-engine';
 
-export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+export const runtime = 'nodejs';
 
-  // Build authenticated client from the session cookie
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        cookie: cookieStore.toString(),
-      },
-    },
-  });
+export async function POST(request: Request) {
+  const supabase = await createClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Supabase is not configured.' }, { status: 503 });
+  }
 
   // Verify the user is authenticated
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
   }
 
   const body = await request.json();
