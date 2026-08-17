@@ -34,11 +34,21 @@ import type { WorkspaceContext } from './types';
 
 export type SpecialtySection = 'work' | 'quotes' | 'reports';
 
-const SECTIONS: { id: SpecialtySection; label: string; hint: string }[] = [
-  { id: 'work', label: 'Work', hint: 'What the team is working, and what needs attention.' },
-  { id: 'quotes', label: 'Quotes', hint: 'Search every specialty quote, open or closed.' },
-  { id: 'reports', label: 'Reports', hint: 'Pipeline, workload, carriers and outcomes.' },
-];
+/**
+ * What each destination is for. Used for the subtitle, not for a tab bar.
+ *
+ * The module deliberately renders no Work / Quotes / Reports switcher of its own: the
+ * sidebar already offers those three as sub-navigation items, and having both meant the
+ * same three words appeared twice on screen with two different active states to keep in
+ * step. The sidebar is the app's navigation convention — Commercial and Time & Attendance
+ * both work this way — so the sidebar wins and `activeSection` is the single source of
+ * truth for which destination is showing.
+ */
+const SECTION_SUBTITLES: Record<SpecialtySection, string> = {
+  work: 'What the team is working, and what needs attention. A quote you are not assigned is still yours to help with.',
+  quotes: 'Search every specialty quote, open or closed.',
+  reports: 'Pipeline, workload, contribution, timing, carriers and outcomes.',
+};
 
 export interface SpecialtyWorkspaceProps {
   initialProfile: ProfileLite;
@@ -90,19 +100,18 @@ export default function SpecialtyWorkspace({
 
   const permissions = useMemo(() => getSpecialtyPermissions(role, context), [context, role]);
 
-  const sections = useMemo(
-    () => SECTIONS.filter((entry) => entry.id !== 'reports' || permissions.canViewReports),
-    [permissions.canViewReports],
-  );
-
+  /**
+   * The subtitle carries what the removed tab bar used to: which destination this is,
+   * and which lines the reader actually works.
+   */
   const subtitle = useMemo(() => {
     if (!context) return 'Trucking and Homeowners quoting, worked as a team.';
     const lines = Array.from(new Set(context.lines_of_business.map((route) => route.line_of_business)));
     if (lines.length === 0) {
       return 'You have specialty access but no line of business is routed to your team yet.';
     }
-    return `${lines.map(lineLabel).join(' and ')} quoting, worked as a team. A quote you are not assigned is still yours to help with.`;
-  }, [context]);
+    return `${lines.map(lineLabel).join(' and ')} · ${SECTION_SUBTITLES[section]}`;
+  }, [context, section]);
 
   if (loading && !context) {
     return (
@@ -149,26 +158,6 @@ export default function SpecialtyWorkspace({
       }}
       embedded={embedded}
     >
-      <nav
-        aria-label="Specialty Quotes sections"
-        className="mb-5 flex flex-wrap gap-1 rounded-2xl bg-slate-100 p-1.5"
-      >
-        {sections.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            title={entry.hint}
-            onClick={() => setSection(entry.id)}
-            aria-current={section === entry.id ? 'page' : undefined}
-            className={`rounded-xl px-4 py-2.5 text-sm font-black transition ${
-              section === entry.id ? 'bg-[#223f7a] text-white shadow-sm' : 'text-slate-600 hover:bg-white'
-            }`}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </nav>
-
       {context.lines_of_business.length === 0 ? (
         <div className={`${ui.info} mb-5`}>
           You are a member of a quoting team, but no line of business is routed to it yet. A manager
@@ -176,9 +165,21 @@ export default function SpecialtyWorkspace({
         </div>
       ) : null}
 
-      {section === 'reports' ? (
+      {/* Reports is offered in the sidebar to everyone in the module, because the sidebar
+          cannot know a member's reporting capability. Saying so plainly here is better
+          than a screen of refused requests. */}
+      {section === 'reports' && !permissions.canViewReports ? (
+        <div className={ui.info}>
+          Reporting is not enabled for your team membership. A manager can turn it on under
+          User Administration → Quoting Teams.
+        </div>
+      ) : null}
+
+      {section === 'reports' && permissions.canViewReports ? (
         <SpecialtyReports context={context} onOpen={setOpenId} />
-      ) : (
+      ) : null}
+
+      {section !== 'reports' ? (
         <SpecialtyList
           key={section}
           profileId={initialProfile.id}
@@ -187,7 +188,7 @@ export default function SpecialtyWorkspace({
           onOpen={setOpenId}
           refreshToken={refreshToken}
         />
-      )}
+      ) : null}
 
       {openId ? (
         <OpportunityDrawer

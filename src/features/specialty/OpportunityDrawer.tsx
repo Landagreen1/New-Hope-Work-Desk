@@ -657,8 +657,9 @@ function NextActionControl({
         >
           <input className={ui.input} value={action} onChange={(event) => setAction(event.target.value)} />
         </Field>
+        {/* mt-2 because DateTimePicker, unlike ui.input, carries no top margin. */}
         <Field label="Due">
-          <DateTimePicker value={due} onChange={setDue} />
+          <DateTimePicker value={due} onChange={setDue} className="mt-2" />
         </Field>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -1727,7 +1728,7 @@ function CarrierMarketRow({
                   />
                 </Field>
                 <Field label="Carrier follow-up date">
-                  <DatePicker value={followUp} onChange={setFollowUp} />
+                  <DatePicker value={followUp} onChange={setFollowUp} className="mt-2" />
                 </Field>
               </div>
 

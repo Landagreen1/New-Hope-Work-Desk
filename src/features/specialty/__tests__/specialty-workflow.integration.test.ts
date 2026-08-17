@@ -1497,3 +1497,94 @@ describeAgainstProject('a new team works without a code change', () => {
     expect(restored.cleared).toBe(true);
   }, 180_000);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Every read surface actually returns rows
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * The regression guard for the bug that reached production.
+ *
+ * `specialty_search_opportunities` was catalogued correctly, was `security definer`,
+ * had the right signature, and raised 42804 — "structure of query does not match
+ * function result type" — on every single call, because the view exposed `mc_number`
+ * as `varchar(20)` while the function declared `text`. The Work screen showed nothing
+ * but an error.
+ *
+ * v1.16.3's post-conditions only checked that these functions existed. A function
+ * whose body has never run can be perfectly catalogued and still be incapable of
+ * returning a row, so existence is not a useful assertion. Executing each one is.
+ *
+ * Two other classes of failure are caught here for free, both of which also happened:
+ * PL/pgSQL variable/column ambiguity (42702) and Postgres's 100-argument call limit
+ * (54023). All three are properties of the database rather than of the SQL text, so no
+ * unit test can reach them.
+ */
+describeAgainstProject('every read and report function executes', () => {
+  const READS = [
+    'select count(*) as n from public.specialty_search_opportunities()',
+    'select count(*) as n from public.specialty_stage_counts()',
+    'select public.specialty_workspace_context() is not null as n',
+    'select count(*) as n from public.specialty_report_pipeline()',
+    'select count(*) as n from public.specialty_report_workload()',
+    'select count(*) as n from public.specialty_report_contributions()',
+    'select count(*) as n from public.specialty_report_timing()',
+    'select count(*) as n from public.specialty_report_carrier_performance()',
+    'select count(*) as n from public.specialty_report_lost_business()',
+    'select count(*) as n from public.specialty_report_attention()',
+  ];
+
+  it.each(READS)('runs: %s', async (statement) => {
+    // As a team member, so the access gate passes and the body is reached.
+    const [row] = await readAsUser(people.jason, `${statement};`);
+    expect(row).toBeDefined();
+  }, 60_000);
+
+  it('returns the full row shape from the search, including mc_number', async () => {
+    const rows = await readAsUser(
+      people.jason,
+      `select id::text, reference, mc_number, dot_number, sold_premium, best_premium,
+              markets_total, open_information_count, is_overdue, version, total_count
+       from public.specialty_search_opportunities(null, 'all', 'all', null, 'team', null, 'all', 100, 0);`,
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    // The column that broke it. Present, and typed as text over the wire.
+    expect(rows[0]).toHaveProperty('mc_number');
+    expect(rows[0]).toHaveProperty('total_count');
+  }, 60_000);
+
+  it('opens the detail payload for every opportunity a member can see', async () => {
+    const rows = await readAsUser(
+      people.jason,
+      `select id::text from public.specialty_search_opportunities(null, 'all', 'all', null, 'team', null, 'all', 100, 0);`,
+    );
+    expect(rows.length).toBeGreaterThan(0);
+
+    for (const row of rows) {
+      const [detail] = await readAsUser(
+        people.jason,
+        `select public.specialty_opportunity_detail(${quote(String(row.id))}) as payload;`,
+      );
+      const payload = detail.payload as Record<string, unknown>;
+      expect(payload.opportunity, String(row.id)).toBeDefined();
+      expect(Array.isArray(payload.carrier_markets), String(row.id)).toBe(true);
+      expect(Array.isArray(payload.contributors), String(row.id)).toBe(true);
+    }
+  }, 120_000);
+
+  it('exposes no varchar column on the row view, because every reader declares text', async () => {
+    // The root cause, asserted directly: a varchar on the view is a 42804 waiting for
+    // whichever function names that column next.
+    const rows = await runSql(`
+      select a.attname
+      from pg_attribute a
+      join pg_class c on c.oid = a.attrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and c.relname = 'specialty_opportunity_rows'
+        and a.attnum > 0 and not a.attisdropped
+        and format_type(a.atttypid, a.atttypmod) like 'character varying%';
+    `);
+    expect(rows.map((row) => row.attname)).toEqual([]);
+  }, 60_000);
+});

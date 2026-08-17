@@ -181,10 +181,17 @@ export default function SpecialtyReports({ context, onOpen }: SpecialtyReportsPr
           ))}
         </nav>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-[200px_180px_180px_auto]">
-          <label className="block">
-            <span className={ui.label}>Line of business</span>
+        {/* The pickers get an explicit mt-2 because, unlike `ui.select` and `ui.input`,
+            DatePicker carries no top margin of its own — so without it the date fields
+            sit higher than the select beside them. Same convention as PayrollProcessor
+            and WorkforceAdmin. */}
+        <div className="mt-4 grid items-end gap-3 sm:grid-cols-2 md:grid-cols-[minmax(160px,200px)_minmax(150px,180px)_minmax(150px,180px)_auto]">
+          <div>
+            <label className={ui.label} htmlFor="specialty-report-line">
+              Line of business
+            </label>
             <select
+              id="specialty-report-line"
               className={ui.select}
               value={line}
               onChange={(event) => setLine(event.target.value as SpecialtyLine | 'all')}
@@ -196,22 +203,28 @@ export default function SpecialtyReports({ context, onOpen }: SpecialtyReportsPr
                 </option>
               ))}
             </select>
-          </label>
+          </div>
+
           {view !== 'workload' && view !== 'attention' ? (
             <>
-              <label className="block">
+              <div>
                 <span className={ui.label}>From</span>
-                <DatePicker value={from} onChange={setFrom} />
-              </label>
-              <label className="block">
+                <DatePicker value={from} onChange={setFrom} max={to || undefined} className="mt-2" />
+              </div>
+              <div>
                 <span className={ui.label}>To</span>
-                <DatePicker value={to} onChange={setTo} />
-              </label>
+                <DatePicker value={to} onChange={setTo} min={from || undefined} className="mt-2" />
+              </div>
             </>
           ) : null}
-          <div className="flex items-end">
-            <button type="button" className={ui.btnSecondary} onClick={() => void load()}>
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+
+          <div>
+            <button
+              type="button"
+              className={`${ui.btnSecondary} mt-2 w-full whitespace-nowrap sm:w-auto`}
+              onClick={() => void load()}
+            >
+              <RefreshCw className={`h-4 w-4 shrink-0 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
           </div>

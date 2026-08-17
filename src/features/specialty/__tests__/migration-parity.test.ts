@@ -31,8 +31,16 @@ import type { SpecialtyStage } from '../types';
 
 const MIGRATIONS = path.join(process.cwd(), 'supabase', 'migrations');
 
+/**
+ * Reads a migration with line endings normalised.
+ *
+ * Git rewrites these files to CRLF on checkout on Windows, which silently breaks any
+ * assertion whose pattern spans a line break — `;\n` does not match `;\r\n`. Normalising
+ * once here means every assertion below can be written against LF and stay true whatever
+ * the working copy looks like.
+ */
 function sql(file: string): string {
-  return readFileSync(path.join(MIGRATIONS, file), 'utf8');
+  return readFileSync(path.join(MIGRATIONS, file), 'utf8').replace(/\r\n/g, '\n');
 }
 
 const TEAMS = sql('v1.16.0-specialty-quoting-teams.sql');
@@ -440,6 +448,51 @@ describe('reads and reports are gated', () => {
     expect(READS).toContain('from public.specialty_activity a');
     expect(READS).toContain("'is_primary_assignee', a.actor_profile_id = v_row.primary_assignee_id");
     expect(REPORTS).toContain('Counted from public.specialty_activity');
+  });
+});
+
+describe('read functions are proven by execution, not by existence', () => {
+  const ROW_FIX = sql('v1.16.8-specialty-row-type-fix.sql');
+
+  /**
+   * The lesson from the bug that reached production: v1.16.3 created
+   * `specialty_search_opportunities` and checked only that it existed. It raised 42804
+   * on every call because the view exposed `mc_number` as varchar while the function
+   * declared text, and the Work screen showed an error instead of a list.
+   */
+  it('casts the one varchar column the view inherited from the intake', () => {
+    expect(ROW_FIX).toContain('s.mc_number::text');
+  });
+
+  it('refuses to leave any varchar on the row view', () => {
+    expect(ROW_FIX).toContain("like 'character varying%'");
+    expect(ROW_FIX).toContain('left a varchar column on specialty_opportunity_rows');
+  });
+
+  it('executes every read and report function in its post-condition', () => {
+    for (const fn of [
+      'specialty_search_opportunities',
+      'specialty_stage_counts',
+      'specialty_workspace_context',
+      'specialty_opportunity_detail',
+      'specialty_activity_timeline',
+      'specialty_report_pipeline',
+      'specialty_report_workload',
+      'specialty_report_contributions',
+      'specialty_report_timing',
+      'specialty_report_carrier_performance',
+      'specialty_report_lost_business',
+      'specialty_report_attention',
+      'quote_center_search',
+    ]) {
+      expect(ROW_FIX, `${fn} must be executed, not merely catalogued`).toContain(
+        `public.${fn}(`,
+      );
+    }
+  });
+
+  it('impersonates a real member so the probes get past the access gate', () => {
+    expect(ROW_FIX).toContain("set_config('request.jwt.claims'");
   });
 });
 
