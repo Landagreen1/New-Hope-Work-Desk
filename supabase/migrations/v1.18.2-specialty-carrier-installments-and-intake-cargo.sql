@@ -65,6 +65,7 @@ begin
         'coverage_notes', m.coverage_notes,
         'installment_count', m.installment_count,
         'installment_amount', m.installment_amount,
+        'quote_number', m.quote_number,
         'quote_received_at', m.quote_received_at,
         'quote_received_by_name', receiver.display_name,
         'decline_reason', m.decline_reason, 'info_requested', m.info_requested,

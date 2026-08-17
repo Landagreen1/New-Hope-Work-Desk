@@ -406,6 +406,7 @@ export interface CarrierMarketPatch {
   notes?: string | null;
   installment_count?: number | null;
   installment_amount?: number | null;
+  quote_number?: string | null;
 }
 
 export async function updateCarrierMarket(

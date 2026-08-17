@@ -1713,6 +1713,7 @@ function CarrierMarketRow({
   const [followUp, setFollowUp] = useState(market.follow_up_date ?? '');
   const [installmentCount, setInstallmentCount] = useState<number | null>(market.installment_count ?? null);
   const [installmentAmount, setInstallmentAmount] = useState<number | null>(market.installment_amount ?? null);
+  const [quoteNumber, setQuoteNumber] = useState(market.quote_number ?? '');
   const [newNote, setNewNote] = useState('');
 
   // Per-carrier notes from the opportunity's notes array
@@ -1831,6 +1832,14 @@ function CarrierMarketRow({
                 <Field label="Installment Amount">
                   <DollarInput value={installmentAmount} onChange={setInstallmentAmount} />
                 </Field>
+                <Field label="Quote Number" hint="Carrier's reference number">
+                  <input
+                    className={ui.input}
+                    value={quoteNumber}
+                    onChange={(event) => setQuoteNumber(event.target.value)}
+                    placeholder="e.g. QN-123456"
+                  />
+                </Field>
               </div>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1897,6 +1906,7 @@ function CarrierMarketRow({
                           follow_up_date: followUp || null,
                           installment_count: installmentCount,
                           installment_amount: installmentAmount,
+                          quote_number: quoteNumber.trim() || null,
                         },
                         market.version,
                       );

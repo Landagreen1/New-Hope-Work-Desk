@@ -165,6 +165,7 @@ export interface CarrierMarket {
   coverage_notes: string | null;
   installment_count: number | null;
   installment_amount: number | null;
+  quote_number: string | null;
   quote_received_at: string | null;
   quote_received_by_name: string | null;
   decline_reason: string | null;
