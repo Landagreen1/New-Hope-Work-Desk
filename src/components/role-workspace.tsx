@@ -9,10 +9,12 @@ import { useRouter } from "next/navigation";
 import {
   getDefaultNavigation,
   resolveNavigationForRole,
+  type DeskSection,
   type NavigationTarget,
 } from "@/components/app-sidebar";
 import { SidebarLayout, type NavigationState, type SubNavId } from "@/components/sidebar-layout";
 import { WorkDeskApp } from "@/components/work-desk-app";
+import QuoteCenter from "@/features/quote-center/QuoteCenter";
 import CommercialBoard from "@/features/commercial/CommercialBoard";
 import CommercialCommissionReport from "@/features/commercial/CommercialCommissionReport";
 import CommercialCommissionReview from "@/features/commercial/CommercialCommissionReview";
@@ -22,13 +24,12 @@ import CommercialTimingReport from "@/features/commercial/CommercialTimingReport
 import { attendanceSectionForSubNav } from "@/features/time-attendance/shared/navigation-target";
 import TimeAttendanceWorkspace from "@/features/time-attendance/TimeAttendanceWorkspace";
 import CsIntakeLanding from "@/features/cs-intake/CsIntakeLanding";
-import IntakeQueue from "@/features/cs-intake/IntakeQueue";
 import type { ProfileLite } from "@/features/nhwd-shared/types";
 import { NotificationPanel } from "@/features/notifications/NotificationPanel";
 import PolicyFollowUpPage from "@/features/renewals/PolicyFollowUpPage";
 import SalesReportingCenter from "@/features/reporting/SalesReportingCenter";
 import WorkloadLog from "@/features/workload/WorkloadLog";
-import { getRolePermissions, isBroadManagerRole } from "@/lib/permissions";
+import { getRolePermissions } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import type { DashboardData, SessionProfile } from "@/lib/types";
 
@@ -43,24 +44,27 @@ function LoadingWorkspace({ label }: { label: string }) {
   );
 }
 
+/**
+ * The Customer Service module, now a single screen.
+ *
+ * Its second screen was the shared CS-to-Sales queue, which rendered the very same
+ * `IntakeQueue` component as the Sales module's Intake Queue — two sidebar entries
+ * for one screen. That queue is work, so it now lives as a section of My Desk, and
+ * this module is reached only by roles that have no Sales access at all.
+ */
 function ManagerCustomerServiceWorkspace({
   profile,
   initialSubNav,
 }: {
   profile: ProfileLite;
-  initialSubNav?: "intakes" | "queue";
+  initialSubNav?: "intakes";
 }) {
-  const tab = initialSubNav ?? "intakes";
-
+  void initialSubNav;
   return (
     <div className="space-y-5">
-      {tab === "intakes" ? (
-        <Suspense fallback={<LoadingWorkspace label="Quote Intake" />}>
-          <CsIntakeLanding initialProfile={profile} embedded />
-        </Suspense>
-      ) : (
-        <IntakeQueue initialProfile={profile} embedded />
-      )}
+      <Suspense fallback={<LoadingWorkspace label="Quote Intake" />}>
+        <CsIntakeLanding initialProfile={profile} embedded />
+      </Suspense>
     </div>
   );
 }
@@ -77,12 +81,12 @@ function subNavToManagerTab(
       return "overview";
     case "sales_work":
       return "work";
-    case "sales_databases":
-      return "quotes"; // WorkDeskApp uses "quotes" for the databases tab
     case "sales_reports":
       return "reports";
     case "ua_users":
       return "administration";
+    // sales_databases is gone: the manager Quotes Database it opened is superseded
+    // by Quote Center, which is rendered directly rather than as a WorkDeskApp tab.
     default:
       return undefined;
   }
@@ -90,21 +94,15 @@ function subNavToManagerTab(
 
 /**
  * Maps sidebar SubNavId to WorkDeskApp's agent tab.
+ *
+ * Down to two entries. Pending Pricing, the Intake Queue and the Workload Log are
+ * now sections of My Desk rather than tabs of their own, and the Quotes Database
+ * and My Team have moved to Quote Center and Performance.
  */
-function subNavToAgentTab(
-  subNav: SubNavId,
-): "desk" | "pricing" | "intake_queue" | "quotes" | "team" | "performance" | undefined {
+function subNavToAgentTab(subNav: SubNavId): "desk" | "performance" | undefined {
   switch (subNav) {
     case "sales_desk":
       return "desk";
-    case "sales_pricing":
-      return "pricing";
-    case "sales_intake_queue":
-      return "intake_queue";
-    case "sales_team":
-      return "team";
-    case "sales_databases":
-      return "quotes";
     case "sales_performance":
       return "performance";
     default:
@@ -115,13 +113,27 @@ function subNavToAgentTab(
 export function RoleWorkspace({
   sessionProfile,
   initialData,
+  initialDeskSection,
 }: {
   sessionProfile: SessionProfile;
   initialData: DashboardData;
+  /**
+   * Opens My Desk on a named section on first render, from `?desk=<section>`.
+   *
+   * Set by the retired `/tools/cs-intake/queue` route so an old bookmark for the
+   * standalone Sales Intake Queue lands on the queue rather than on a 404 or on
+   * whichever screen happens to be the role default.
+   */
+  initialDeskSection?: DeskSection;
 }) {
   const router = useRouter();
-  const [navigation, setNavigation] = useState<NavigationState>(
-    () => getDefaultNavigation(sessionProfile.role),
+  const [navigation, setNavigation] = useState<NavigationState>(() =>
+    resolveNavigationForRole(
+      sessionProfile.role,
+      initialDeskSection
+        ? { module: "sales", subNav: "sales_desk", deskSection: initialDeskSection }
+        : getDefaultNavigation(sessionProfile.role),
+    ),
   );
 
   const handleSignOut = useCallback(async () => {
@@ -144,7 +156,6 @@ export function RoleWorkspace({
 
   const permissions = getRolePermissions(sessionProfile.role);
   const activeNavigation = resolveNavigationForRole(sessionProfile.role, navigation);
-  const isBroadManager = isBroadManagerRole(sessionProfile.role);
 
   const handleNavigate = useCallback((nav: NavigationState) => {
     setNavigation(resolveNavigationForRole(sessionProfile.role, nav));
@@ -192,9 +203,58 @@ export function RoleWorkspace({
     [sessionProfile.role],
   );
 
+  /** Moves to My Desk, optionally landing on a specific section. */
+  const goToMyDesk = useCallback(
+    (section?: DeskSection) => {
+      setNavigation(
+        resolveNavigationForRole(sessionProfile.role, {
+          module: "sales",
+          subNav: "sales_desk",
+          ...(section ? { deskSection: section } : {}),
+        }),
+      );
+    },
+    [sessionProfile.role],
+  );
+
+  /**
+   * Opens an intake in the Customer Service intake screen.
+   *
+   * Quote Center deliberately does not host the intake form itself: the form is a
+   * large, validated component with its own draft, conflict and submission
+   * handling, and duplicating it would be exactly the kind of parallel
+   * implementation this consolidation is removing. `?edit=<id>` is the route
+   * CsIntakeLanding already supports for opening one record.
+   */
+  const openIntake = useCallback(
+    (intakeId?: string) => {
+      router.push(intakeId ? `/tools/cs-intake?edit=${intakeId}` : '/tools/cs-intake');
+    },
+    [router],
+  );
+
   // Determine what content to render based on sidebar navigation state
   const renderContent = () => {
     const { module, subNav } = activeNavigation;
+
+    // --- Quote Center ---
+    // One lookup destination shared by Customer Service, Sales, supervisors and
+    // managers. Its own screen rather than a WorkDeskApp tab, because WorkDeskApp is
+    // where work lives and mixing the two back together is what created the
+    // guess-which-database problem in the first place.
+    if (module === "sales" && subNav === "quote_center" && permissions.sales) {
+      return (
+        <Suspense fallback={<LoadingWorkspace label="Quote Center" />}>
+          <QuoteCenter
+            initialProfile={profile}
+            embedded
+            onNewIntake={() => openIntake()}
+            onContinueIntake={(intakeId) => openIntake(intakeId)}
+            onGoToMyDesk={() => goToMyDesk()}
+          />
+        </Suspense>
+      );
+    }
 
     // --- Sales Reporting Center ---
     // Its own screen rather than another tab inside WorkDeskApp: that component is
@@ -220,6 +280,7 @@ export function RoleWorkspace({
           initialData={initialData}
           forceManagerTab={forceManagerTab}
           forceAgentTab={forceAgentTab}
+          forceDeskSection={activeNavigation.deskSection}
           workloadDatabaseContent={
             <WorkloadLog initialProfile={profile} embedded />
           }
@@ -229,14 +290,10 @@ export function RoleWorkspace({
     }
 
     // --- Customer Service ---
+    // Reached only by roles without Sales access: commercial and
+    // commercial_supervisor, whose intake routing is unchanged.
     if (module === "customer_service" && permissions.customerService) {
-      const csSubTab = subNav === "cs_queue" ? "queue" : "intakes";
-      return (
-        <ManagerCustomerServiceWorkspace
-          profile={profile}
-          initialSubNav={csSubTab}
-        />
-      );
+      return <ManagerCustomerServiceWorkspace profile={profile} initialSubNav="intakes" />;
     }
 
     // --- Commercial ---

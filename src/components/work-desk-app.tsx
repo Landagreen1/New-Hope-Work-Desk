@@ -274,7 +274,26 @@ type ModalType =
   | "customer_service_pass"
   | "change_outcome"
   | null;
-type AgentTab = "desk" | "pricing" | "intake_queue" | "quotes" | "team" | "performance";
+/**
+ * The agent's top-level screens.
+ *
+ * Reduced from six to two. Pending Pricing, the Intake Queue and the Workload
+ * Database were separate destinations that all answered "what do I need to do?",
+ * so they are now sections of My Desk (see {@link MyDeskSection}). The Quotes
+ * Database and My Team answered "where is this customer?" and "how is the team
+ * doing?", so they moved to Quote Center and Performance respectively.
+ */
+type AgentTab = "desk" | "performance";
+
+/**
+ * The sections of My Desk.
+ *
+ * All four are work an agent has to act on, which is the whole test for belonging
+ * here: `work` is what is assigned right now, `intake` is what is available to
+ * take, `pricing` is what is awaiting a decision, and `workload` is the
+ * non-quote work log. Lookup and history live in Quote Center instead.
+ */
+type MyDeskSection = "work" | "intake" | "pricing" | "workload";
 type ManagerTab =
   | "overview"
   | "work"
@@ -2884,6 +2903,7 @@ export function WorkDeskApp({
   workloadDatabaseContent,
   forceManagerTab,
   forceAgentTab,
+  forceDeskSection,
   embedded = false,
 }: {
   sessionProfile: SessionProfile;
@@ -2892,7 +2912,9 @@ export function WorkDeskApp({
   externalWorkspaceContent?: React.ReactNode;
   workloadDatabaseContent?: React.ReactNode;
   forceManagerTab?: "overview" | "work" | "quotes" | "reports" | "team" | "administration";
-  forceAgentTab?: "desk" | "pricing" | "intake_queue" | "quotes" | "team" | "performance";
+  forceAgentTab?: AgentTab;
+  /** Opens My Desk on a specific section. Set by the sidebar. */
+  forceDeskSection?: MyDeskSection;
   /** When true, the component skips rendering its own header/chrome and renders content only */
   embedded?: boolean;
 }) {
@@ -2941,6 +2963,14 @@ export function WorkDeskApp({
   );
   const [agentTab, setAgentTab] = useState<AgentTab>(forceAgentTab ?? "desk");
   const [managerTab, setManagerTab] = useState<ManagerTab>(forceManagerTab ?? "overview");
+  /**
+   * Which part of My Desk is showing.
+   *
+   * Driven by the sidebar through {@link forceDeskSection} so a stale navigation
+   * state that named the retired Pending Pricing or Intake Queue screen lands on
+   * the corresponding section rather than on an unrelated page.
+   */
+  const [deskSection, setDeskSection] = useState<MyDeskSection>(forceDeskSection ?? "work");
 
   // Sync forceManagerTab from parent (top-level tab navigation)
   useEffect(() => {
@@ -2951,6 +2981,10 @@ export function WorkDeskApp({
   useEffect(() => {
     if (forceAgentTab) setAgentTab(forceAgentTab);
   }, [forceAgentTab]);
+
+  useEffect(() => {
+    if (forceDeskSection) setDeskSection(forceDeskSection);
+  }, [forceDeskSection]);
 
   const [whatsappCurrentId, setWhatsappCurrentId] = useState(
     initialData.rotations.whatsapp,
@@ -2988,7 +3022,6 @@ export function WorkDeskApp({
   );
   const [quoteStatusFilter, setQuoteStatusFilter] = useState("all");
   const [quoteUpdateFilter, setQuoteUpdateFilter] = useState("all");
-  const [agentDatabaseView, setAgentDatabaseView] = useState<"quotes" | "workloads">("quotes");
   const todayForPerformance = dateInputValue(new Date());
   const [agentPerformanceStart, setAgentPerformanceStart] = useState(todayForPerformance);
   const [agentPerformanceEnd, setAgentPerformanceEnd] = useState(todayForPerformance);
@@ -3082,54 +3115,9 @@ export function WorkDeskApp({
       ),
     [allQuoteRecords],
   );
-  const visibleAgentQuotes = useMemo(() => {
-    const needle = quoteSearch.trim().toLowerCase();
-    return allQuoteRecords.filter((quote) => {
-      const activities = quoteActivities.filter(
-        (activity) => activity.sourceWorkItemId === quote.sourceWorkItemId,
-      );
-      const latestStamp = activities.reduce(
-        (latest, activity) =>
-          new Date(activity.createdAt).getTime() > new Date(latest).getTime()
-            ? activity.createdAt
-            : latest,
-        quote.statusDate,
-      );
-      const matchesSearch =
-        !needle ||
-        [
-          quote.customer,
-          quote.source,
-          quote.salesperson,
-          quote.agent,
-          quote.status,
-          quote.receivedThrough,
-          workTypeLabels[quote.workType],
-        ].some((value) => value.toLowerCase().includes(needle));
-      const matchesStatus =
-        quoteStatusFilter === "all" || quote.status === quoteStatusFilter;
-      const matchesUpdate =
-        quoteUpdateFilter === "all" ||
-        (quoteUpdateFilter === "created"
-          ? true
-          : activities.some(
-              (activity) => activity.eventType === quoteUpdateFilter,
-            ));
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesUpdate &&
-        matchesCalendarDay(latestStamp, quoteDayFilter)
-      );
-    });
-  }, [
-    allQuoteRecords,
-    quoteActivities,
-    quoteDayFilter,
-    quoteSearch,
-    quoteStatusFilter,
-    quoteUpdateFilter,
-  ]);
+  // The agent-side Quotes Database that filtered this list in the browser is gone:
+  // Quote Center searches every lifecycle stage server-side instead, so there is
+  // no longer a screen that needs the whole quote history loaded and filtered here.
   const quoteNotesBySource = useMemo(() => {
     const rows = new Map<string, QuoteNote[]>();
     for (const note of quoteNotes)
@@ -4246,30 +4234,55 @@ export function WorkDeskApp({
       id: "desk",
       label: "My Desk",
       icon: <Gauge className="h-4 w-4" />,
-      badge: myActiveWork.length,
-    },
-    {
-      id: "pricing",
-      label: "Pending Pricing",
-      icon: <Clock3 className="h-4 w-4" />,
-      badge: myPendingPricing.length,
-    },
-    {
-      id: "intake_queue",
-      label: "Intake Queue",
-      icon: <ClipboardList className="h-4 w-4" />,
-      badge: unclaimedIntakeCount || undefined,
-    },
-    { id: "team", label: "My Team", icon: <UsersRound className="h-4 w-4" /> },
-    {
-      id: "quotes",
-      label: "Databases",
-      icon: <Table2 className="h-4 w-4" />,
+      badge: myActiveWork.length + myPendingPricing.length,
     },
     {
       id: "performance",
       label: "Performance",
       icon: <TrendingUp className="h-4 w-4" />,
+    },
+  ];
+
+  /**
+   * The sections of My Desk, each badged with the work waiting in it.
+   *
+   * The badges are the reason these are sections rather than a dropdown: an agent
+   * needs to see that three intakes are available and two quotes are awaiting a
+   * decision without opening anything.
+   */
+  const deskSections: Array<{
+    id: MyDeskSection;
+    label: string;
+    icon: React.ReactNode;
+    badge?: number;
+    available: boolean;
+  }> = [
+    {
+      id: "work",
+      label: "My Work",
+      icon: <Gauge className="h-4 w-4" />,
+      badge: myActiveWork.length || undefined,
+      available: true,
+    },
+    {
+      id: "intake",
+      label: "Intake Queue",
+      icon: <ClipboardList className="h-4 w-4" />,
+      badge: unclaimedIntakeCount || undefined,
+      available: true,
+    },
+    {
+      id: "pricing",
+      label: "Pending Pricing",
+      icon: <Clock3 className="h-4 w-4" />,
+      badge: myPendingPricing.length || undefined,
+      available: true,
+    },
+    {
+      id: "workload",
+      label: "Workload Log",
+      icon: <Table2 className="h-4 w-4" />,
+      available: Boolean(workloadDatabaseContent),
     },
   ];
 
@@ -4507,7 +4520,58 @@ export function WorkDeskApp({
 
             {!embedded && <TabBar tabs={agentTabs} value={agentTab} onChange={setAgentTab} />}
 
+            {/*
+              My Desk sections. What used to be three sidebar destinations is one
+              screen, because all three answer the same question: what do I need to
+              work on?
+            */}
             {agentTab === "desk" ? (
+              <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                    My Desk
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Everything waiting on you. Looking something up instead? Use Quote
+                    Center.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1 rounded-2xl bg-slate-100 p-1.5">
+                  {deskSections
+                    .filter((section) => section.available)
+                    .map((section) => (
+                      <button
+                        key={section.id}
+                        type="button"
+                        onClick={() => setDeskSection(section.id)}
+                        className={cn(
+                          "inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition",
+                          deskSection === section.id
+                            ? "bg-[#223f7a] text-white shadow-sm"
+                            : "text-slate-500 hover:bg-white",
+                        )}
+                      >
+                        {section.icon}
+                        {section.label}
+                        {section.badge ? (
+                          <span
+                            className={cn(
+                              "grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px]",
+                              deskSection === section.id
+                                ? "bg-white/20 text-white"
+                                : "bg-slate-200 text-slate-600",
+                            )}
+                          >
+                            {section.badge}
+                          </span>
+                        ) : null}
+                      </button>
+                    ))}
+                </div>
+              </section>
+            ) : null}
+
+            {agentTab === "desk" && deskSection === "work" ? (
               <div className="space-y-6">
                 <section className="grid gap-5 xl:grid-cols-3">
                   <RotationCard
@@ -4668,7 +4732,7 @@ export function WorkDeskApp({
                     <div className="mt-5">
                       <button
                         type="button"
-                        onClick={() => setAgentTab("intake_queue")}
+                        onClick={() => setDeskSection("intake")}
                         className="w-full rounded-xl bg-[#223f7a] px-4 py-3 text-xs font-black text-white hover:bg-[#17305f]"
                       >
                         Open Intake Queue
@@ -4899,7 +4963,7 @@ export function WorkDeskApp({
                         </div>
                       </div>
                       <button
-                        onClick={() => setAgentTab("pricing")}
+                        onClick={() => setDeskSection("pricing")}
                         className="mt-4 w-full rounded-xl bg-white px-3 py-2.5 text-xs font-black text-[#223f7a]"
                       >
                         Open Pending Pricing
@@ -4956,7 +5020,7 @@ export function WorkDeskApp({
               </div>
             ) : null}
 
-            {agentTab === "pricing" ? (
+            {agentTab === "desk" && deskSection === "pricing" ? (
               <section className="rounded-[28px] border border-blue-200 bg-white shadow-sm">
                 <div className="flex flex-col gap-3 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -5059,241 +5123,21 @@ export function WorkDeskApp({
               </section>
             ) : null}
 
-            {agentTab === "intake_queue" ? (
+            {/*
+              The shared CS-to-Sales queue. Unchanged component and unchanged claim
+              rules — the RingCentral turn and walk-in authorisation still decide who
+              may take what. Only its location changed.
+            */}
+            {agentTab === "desk" && deskSection === "intake" ? (
               <IntakeQueue initialProfile={{ id: sessionProfile.id, display_name: sessionProfile.displayName, initials: sessionProfile.initials, role: sessionProfile.role as "agent" | "customer_service" | "manager" | "commercial" | "super_admin", is_active: true }} embedded />
             ) : null}
 
-            {agentTab === "quotes" ? (
-              <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Team Databases</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">Review the quotes and workload handled by every team member.</p>
-                </div>
-                <div className="flex gap-1 rounded-2xl bg-slate-100 p-1.5">
-                  <button type="button" onClick={() => setAgentDatabaseView("quotes")} className={cn("rounded-xl px-4 py-2.5 text-xs font-black", agentDatabaseView === "quotes" ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-white")}>Quotes</button>
-                  <button type="button" onClick={() => setAgentDatabaseView("workloads")} className={cn("rounded-xl px-4 py-2.5 text-xs font-black", agentDatabaseView === "workloads" ? "bg-[#223f7a] text-white" : "text-slate-500 hover:bg-white")}>Workloads</button>
-                </div>
-              </section>
-            ) : null}
-
-            {agentTab === "quotes" && agentDatabaseView === "quotes" ? (
-              <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-100 p-6">
-                  <div>
-                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]">
-                      <Table2 className="h-4 w-4" /> Quotes Database
-                    </div>
-                    <h3 className="mt-1 text-xl font-black">
-                      All quotes from every agent
-                    </h3>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Search and filter existing quotes before working an
-                      activation or change. This prevents duplicate records.
-                    </p>
-                  </div>
-                  <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <Field label="Day">
-                      <DatePicker
-                        value={quoteDayFilter}
-                        onChange={(value) => setQuoteDayFilter(value)}
-                        placeholder="Filter by day"
-                      />
-                    </Field>
-                    <Field label="Status">
-                      <select
-                        value={quoteStatusFilter}
-                        onChange={(event) =>
-                          setQuoteStatusFilter(event.target.value)
-                        }
-                        className="field"
-                      >
-                        <option value="all">All statuses</option>
-                        <option>Active</option>
-                        <option>Price Sent</option>
-                        <option>Sold</option>
-                        <option>Not Sold</option>
-                      </select>
-                    </Field>
-                    <Field label="Update">
-                      <select
-                        value={quoteUpdateFilter}
-                        onChange={(event) =>
-                          setQuoteUpdateFilter(event.target.value)
-                        }
-                        className="field"
-                      >
-                        {quoteUpdateFilterOptions.map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Search">
-                      <div className="relative">
-                        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                        <input
-                          value={quoteSearch}
-                          onChange={(event) =>
-                            setQuoteSearch(event.target.value)
-                          }
-                          placeholder="Customer, source, salesperson, agent"
-                          className="field"
-                          style={{ paddingLeft: "3rem" }}
-                        />
-                      </div>
-                    </Field>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setQuoteDayFilter("");
-                      setQuoteStatusFilter("all");
-                      setQuoteUpdateFilter("all");
-                      setQuoteSearch("");
-                    }}
-                    className="mt-3 text-xs font-black text-[#223f7a]"
-                  >
-                    Show all records
-                  </button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
-                      <tr>
-                        <th className="px-5 py-3">Customer</th>
-                        <th className="px-5 py-3">Status</th>
-                        <th className="px-5 py-3">Type</th>
-                        <th className="px-5 py-3">Agent</th>
-                        <th className="px-5 py-3">Source / Salesperson</th>
-                        <th className="px-5 py-3">Input</th>
-                        <th className="px-5 py-3">Updated</th>
-                        <th className="px-5 py-3">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {visibleAgentQuotes.map((quote) => {
-                        const statusClass =
-                          quote.status === "Sold"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : quote.status === "Not Sold"
-                              ? "bg-rose-50 text-rose-700"
-                              : quote.status === "Price Sent"
-                                ? "bg-blue-50 text-blue-700"
-                                : "bg-amber-50 text-amber-700";
-                        const latestNote = (quoteNotesBySource.get(
-                          quote.sourceWorkItemId,
-                        ) || [])[0];
-                        return (
-                          <tr
-                            key={`${quote.stage}-${quote.id}`}
-                            className="hover:bg-slate-50"
-                          >
-                            <td className="px-5 py-4">
-                              <p className="font-black text-slate-900">
-                                {quote.customer}
-                              </p>
-                              <p className="mt-1 text-xs text-slate-400">
-                                {quote.source}
-                              </p>
-                              {quote.takeEvent ? (
-                                <p className="mt-2 text-[11px] font-black text-amber-700">
-                                  Taken by @{quote.takeEvent.takerUsername}{" "}
-                                  after{" "}
-                                  {formatElapsedSeconds(
-                                    quote.takeEvent.elapsedSeconds,
-                                  )}
-                                </p>
-                              ) : null}
-                              {latestNote ? (
-                                <p className="mt-2 max-w-md truncate text-xs font-semibold text-slate-500">
-                                  Latest note: {latestNote.note}
-                                </p>
-                              ) : null}
-                            </td>
-                            <td className="px-5 py-4">
-                              <span
-                                className={cn(
-                                  "rounded-full px-2.5 py-1 text-xs font-black",
-                                  statusClass,
-                                )}
-                              >
-                                {quote.status}
-                              </span>
-                            </td>
-                            <td className="px-5 py-4 font-bold text-slate-600">
-                              {workTypeLabels[quote.workType]}
-                            </td>
-                            <td className="px-5 py-4 font-bold text-slate-700">
-                              {quote.agent}
-                            </td>
-                            <td className="px-5 py-4">
-                              <p className="font-semibold text-slate-600">
-                                {quote.source}
-                              </p>
-                              <p className="mt-1 text-xs text-slate-400">
-                                {quote.salesperson}
-                              </p>
-                            </td>
-                            <td className="px-5 py-4 text-xs font-semibold text-slate-500">
-                              {quote.receivedThrough}
-                            </td>
-                            <td className="px-5 py-4 text-xs font-semibold text-slate-500">
-                              {formatDateTime(quote.statusDate)}
-                            </td>
-                            <td className="px-5 py-4">
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  onClick={() =>
-                                    openQuoteLog(quote.sourceWorkItemId)
-                                  }
-                                  className="rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-3 py-2 text-xs font-black text-[#223f7a]"
-                                >
-                                  Log
-                                </button>
-                                {(quote.status === "Sold" ||
-                                  quote.status === "Not Sold") &&
-                                quote.assignedProfileId === currentUserId ? (
-                                  <button
-                                    onClick={() =>
-                                      requestChangeOutcome(quote)
-                                    }
-                                    className="rounded-xl border border-[#c9d5e9] bg-[#f3f6fb] px-3 py-2 text-xs font-black text-[#223f7a]"
-                                  >
-                                    Change Outcome
-                                  </button>
-                                ) : null}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  {!visibleAgentQuotes.length ? (
-                    <div className="p-5">
-                      <EmptyState
-                        title="No matching quotes"
-                        note="Try a different customer, source, agent, or status."
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </section>
-            ) : null}
-
-            {agentTab === "quotes" && agentDatabaseView === "workloads" ? (
+            {agentTab === "desk" && deskSection === "workload" ? (
               workloadDatabaseContent ?? (
-                <EmptyState title="Workload database unavailable" note="Refresh the page or contact Management." />
+                <EmptyState title="Workload log unavailable" note="Refresh the page or contact Management." />
               )
             ) : null}
 
-            {agentTab === "team" ? (
-              <MyTeamPanel
-                quotes={allQuoteRecords}
-                activities={quoteActivities}
-                onOpenLog={openQuoteLog}
-              />
-            ) : null}
 
             {agentTab === "performance" ? (
               <section className="space-y-5">
@@ -5427,6 +5271,16 @@ export function WorkDeskApp({
                   performance={performance}
                   currentUserId={currentUserId}
                   efficiencyByAgent={dailyEfficiencyByAgent}
+                />
+                {/*
+                  My Team was its own destination, but it answers "how is the team
+                  doing?" rather than "what do I need to do?" or "where is this
+                  customer?", so it belongs with the rest of the performance data.
+                */}
+                <MyTeamPanel
+                  quotes={allQuoteRecords}
+                  activities={quoteActivities}
+                  onOpenLog={openQuoteLog}
                 />
               </section>
             ) : null}

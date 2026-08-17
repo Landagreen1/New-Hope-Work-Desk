@@ -69,6 +69,24 @@ export interface CsIntakeSubmission {
   return_reason: string | null;
   reject_reason: string | null;
   csr_notes: string | null;
+  // ── Shared-draft attribution and concurrency (v1.15.0) ────────────────────
+  /** The employee who STARTED the draft. See also created_by, which is the same fact. */
+  last_edited_by: string | null;
+  last_edited_at: string | null;
+  /** The employee who performed the successful final submission. */
+  completed_by: string | null;
+  /** Optimistic-concurrency counter. Must be echoed back when saving. */
+  version: number;
+  /** The durable quote link. work_item_id is nulled by its own FK once a quote advances. */
+  source_work_item_id: string | null;
+  // ── Address verification (v1.15.0) ────────────────────────────────────────
+  addr_verified: boolean;
+  addr_place_id: string | null;
+  addr_formatted: string | null;
+  renters_addr_verified: boolean;
+  renters_place_id: string | null;
+  renters_formatted: string | null;
+  renters_same_as_customer: boolean;
   // Trucking fields
   mc_number: string | null;
   mcs150_date: string | null;
@@ -196,15 +214,75 @@ export async function listSalespeople(dealerId: string): Promise<DealerSalespers
   return (data as DealerSalesperson[]) ?? [];
 }
 
-export async function listMyIntakes(profileId: string): Promise<CsIntakeSubmission[]> {
-  const { data, error } = await getSupabase()
+/** How an employee was involved in an intake. */
+export type IntakeInvolvement = 'started' | 'completed' | 'edited';
+
+/**
+ * The intakes this employee has a hand in.
+ *
+ * Previously a plain `created_by = profileId` filter, which stopped being the whole
+ * truth once drafts became shared: an intake that Maria finished for Vivian would
+ * not appear for Maria at all, even though she is the one who completed it. The RPC
+ * returns anything the employee started, last edited, or completed, and tags which.
+ */
+export async function listMyIntakes(
+  profileId: string,
+): Promise<(CsIntakeSubmission & { _involvement: IntakeInvolvement[] })[]> {
+  const supabase = getSupabase();
+
+  const { data: involvement, error: involvementError } = await supabase.rpc('cs_intake_my_work', {
+    p_limit: 300,
+  });
+  throwIfError(involvementError);
+
+  const rows = (involvement as { submission_id: string; involvement: IntakeInvolvement[] }[]) ?? [];
+  if (rows.length === 0) return [];
+
+  const byId = new Map(rows.map((row) => [row.submission_id, row.involvement]));
+  const { data, error } = await supabase
     .from('cs_intake_submissions')
     .select(SUBMISSION_COLS)
-    .eq('created_by', profileId)
-    .order('updated_at', { ascending: false })
-    .limit(300);
+    .in('id', Array.from(byId.keys()))
+    .order('updated_at', { ascending: false });
   throwIfError(error);
-  return (data as CsIntakeSubmission[]) ?? [];
+
+  void profileId;
+  return ((data as CsIntakeSubmission[]) ?? []).map((row) => ({
+    ...row,
+    _involvement: byId.get(row.id) ?? [],
+  }));
+}
+
+export interface IntakeProductionRow {
+  profile_id: string;
+  display_name: string;
+  drafts_started: number;
+  intakes_completed: number;
+  completed_for_others: number;
+  started_completed_by_others: number;
+  drafts_open: number;
+}
+
+/**
+ * Intake production for a date range.
+ *
+ * Two separate numbers on purpose. Drafts Started counts who opened the record;
+ * Intakes Completed counts who finished and submitted it, falling back to the
+ * starter for rows submitted before completion was tracked. An unfinished draft is
+ * never counted as a completed intake.
+ */
+export async function getIntakeProduction(
+  from: string,
+  to: string,
+  profileId?: string | null,
+): Promise<IntakeProductionRow[]> {
+  const { data, error } = await getSupabase().rpc('cs_intake_production', {
+    p_from: from,
+    p_to: to,
+    p_profile_id: profileId ?? null,
+  });
+  throwIfError(error);
+  return (data as IntakeProductionRow[]) ?? [];
 }
 
 export async function listQueue(): Promise<CsIntakeSubmission[]> {
@@ -266,92 +344,149 @@ export async function getIntake(id: string): Promise<{
   };
 }
 
+/** Columns the database owns. Sending them would be ignored at best and wrong at worst. */
+const SERVER_OWNED_COLUMNS = [
+  'id',
+  'created_at',
+  'updated_at',
+  'submitted_at',
+  'claimed_at',
+  'converted_at',
+  'work_item_id',
+  'source_work_item_id',
+  'source_commercial_quote_id',
+  'version',
+  'completed_by',
+  'last_edited_by',
+  'last_edited_at',
+] as const;
+
+/** Raised when another employee saved the same draft first. */
+export class DraftConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DraftConflictError';
+  }
+}
+
+export interface SaveDraftResult {
+  id: string;
+  /** The stored version after this save. Pass it to the next save. */
+  version: number;
+  changedFields: { field: string; old_value: string | null; new_value: string | null }[];
+}
+
+function stripServerOwned(submission: Partial<CsIntakeSubmission>): Record<string, unknown> {
+  const row = { ...submission } as Record<string, unknown>;
+  if (row.line_of_business === 'personal_auto') row.line_of_business = 'auto';
+  for (const key of SERVER_OWNED_COLUMNS) delete row[key];
+  // Strip internal-only keys that don't exist as DB columns
+  for (const key of Object.keys(row)) {
+    if (key.startsWith('_')) delete row[key];
+  }
+  return row;
+}
+
+function stripChildIds<T extends { id?: string; submission_id?: string }>(rows: T[]) {
+  return rows.map(({ id: _id, submission_id: _sid, ...rest }) => rest);
+}
+
+/**
+ * Saves an intake draft.
+ *
+ * A brand-new intake is inserted directly, because RLS requires
+ * `created_by = auth.uid()` on insert and that is exactly the guarantee wanted:
+ * the starter is recorded as the row is born.
+ *
+ * An existing intake goes through `cs_intake_save_draft`, which does the whole
+ * save — parent row, drivers, vehicles, owners, the version bump and the audit
+ * event — in one transaction. The old client-side version issued six separate
+ * statements, so a failure halfway through left a draft with new parent data and
+ * old vehicles, and two employees editing at once silently overwrote each other.
+ *
+ * @param expectedVersion the version the editor loaded. Omit only for a first
+ *   save. When it no longer matches, a {@link DraftConflictError} is raised
+ *   instead of overwriting the other employee's work.
+ */
 export async function saveDraft(
   profileId: string,
   submission: Partial<CsIntakeSubmission> & { id?: string },
   drivers: CsIntakeDriver[],
   vehicles: CsIntakeVehicle[],
   owners: CsIntakeOwner[] = [],
-): Promise<string> {
+  expectedVersion?: number | null,
+): Promise<SaveDraftResult> {
   const supabase = getSupabase();
-  let id = submission.id;
-  const row = { ...submission } as Record<string, unknown>;
-  if (row.line_of_business === 'personal_auto') row.line_of_business = 'auto';
-  for (const key of ['id', 'created_at', 'updated_at', 'submitted_at', 'claimed_at', 'converted_at', 'work_item_id', 'source_commercial_quote_id']) {
-    delete row[key];
-  }
-  // Strip internal-only keys that don't exist as DB columns
-  for (const key of Object.keys(row)) {
-    if (key.startsWith('_')) delete row[key];
-  }
+  const row = stripServerOwned(submission);
 
-  if (id) {
-    const { error } = await supabase.from('cs_intake_submissions').update(row).eq('id', id);
-    throwIfError(error);
-  } else {
+  if (!submission.id) {
     const { data, error } = await supabase
       .from('cs_intake_submissions')
-      .insert({ ...row, created_by: profileId })
-      .select('id')
+      .insert({ ...row, created_by: profileId, last_edited_by: profileId, last_edited_at: new Date().toISOString() })
+      .select('id,version')
       .single();
     throwIfError(error);
-    id = (data as { id: string }).id;
+    const created = data as { id: string; version: number };
+
     const { error: eventError } = await supabase.from('cs_intake_events').insert({
-      submission_id: id,
+      submission_id: created.id,
       actor_id: profileId,
       event_type: 'created',
       detail: { line_of_business: row.line_of_business },
     });
     throwIfError(eventError);
+
+    // Children are attached through the same atomic path the next save uses, so
+    // there is only one code path that writes them.
+    return saveDraft(profileId, { ...submission, id: created.id }, drivers, vehicles, owners, created.version);
   }
 
-  const { error: driverDeleteError } = await supabase.from('cs_intake_drivers').delete().eq('submission_id', id);
-  throwIfError(driverDeleteError);
-  const { error: vehicleDeleteError } = await supabase.from('cs_intake_vehicles').delete().eq('submission_id', id);
-  throwIfError(vehicleDeleteError);
+  const { data, error } = await supabase.rpc('cs_intake_save_draft', {
+    p_submission_id: submission.id,
+    p_payload: row,
+    p_drivers: stripChildIds(drivers),
+    p_vehicles: stripChildIds(vehicles),
+    p_owners: stripChildIds(owners),
+    p_expected_version: expectedVersion ?? null,
+  });
 
-  if (drivers.length) {
-    const { error } = await supabase.from('cs_intake_drivers').insert(
-      drivers.map(({ id: _id, submission_id: _sid, ...rest }, index) => ({
-        ...rest,
-        submission_id: id,
-        position: index + 1,
-      })),
-    );
+  if (error) {
+    // 40001 is the serialization-failure class the RPC raises for a stale save.
+    if (error.code === '40001' || /updated by another employee/i.test(error.message ?? '')) {
+      throw new DraftConflictError(
+        error.message ||
+          'This intake was updated by another employee while you were working on it. Review the latest information before saving.',
+      );
+    }
     throwIfError(error);
   }
 
-  if (vehicles.length) {
-    const { error } = await supabase.from('cs_intake_vehicles').insert(
-      vehicles.map(({ id: _id, submission_id: _sid, ...rest }, index) => ({
-        ...rest,
-        submission_id: id,
-        position: index + 1,
-      })),
-    );
-    throwIfError(error);
-  }
-
-  // Owners (commercial intakes)
-  const { error: ownerDeleteError } = await supabase.from('cs_intake_owners').delete().eq('submission_id', id);
-  throwIfError(ownerDeleteError);
-
-  if (owners.length) {
-    const { error } = await supabase.from('cs_intake_owners').insert(
-      owners.map(({ id: _id, submission_id: _sid, ...rest }, index) => ({
-        ...rest,
-        submission_id: id,
-        position: index + 1,
-      })),
-    );
-    throwIfError(error);
-  }
-
-  return id!;
+  const result = data as {
+    id: string;
+    version: number;
+    changed_fields: { field: string; old_value: string | null; new_value: string | null }[];
+  };
+  return { id: result.id, version: result.version, changedFields: result.changed_fields ?? [] };
 }
 
 export async function submitIntake(id: string): Promise<void> {
   const { error } = await getSupabase().rpc('cs_intake_submit', { p_submission_id: id });
+  throwIfError(error);
+}
+
+/**
+ * Appends a note to an intake that has not become a quote yet.
+ *
+ * Requires read access, not ownership: Customer Service and Sales both have to be
+ * able to document a call about work someone else started. Writes to
+ * cs_intake_events, which has no UPDATE or DELETE policy, so the note cannot be
+ * rewritten afterwards.
+ */
+export async function addIntakeNote(submissionId: string, note: string): Promise<void> {
+  const { error } = await getSupabase().rpc('cs_intake_add_note', {
+    p_submission_id: submissionId,
+    p_note: note,
+  });
   throwIfError(error);
 }
 
