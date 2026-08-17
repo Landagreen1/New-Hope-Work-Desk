@@ -110,6 +110,7 @@ export interface CsIntakeSubmission {
   auto_hauling_max_value: number | null;
   machinery_max_value: number | null;
   excluded_cargo: Record<string, string> | null;
+  cargo_coverage_desired: boolean | null;
   // Commercial GL fields
   ein: string | null;
   states_of_operation: string | null;
@@ -153,6 +154,8 @@ export interface CsIntakeDriver {
   license_status: string | null;
   years_licensed: number | null;
   sr22_required: boolean;
+  cdl: boolean;
+  cdl_date: string | null;
 }
 
 export interface CsIntakeVehicle {
@@ -169,6 +172,9 @@ export interface CsIntakeVehicle {
   usage: string | null;
   annual_mileage: number | null;
   garaging_zip: string | null;
+  truck_type: string | null;
+  physical_damage_value: number | null;
+  physical_damage_deductible: number | null;
 }
 
 export interface CsIntakeOwner {

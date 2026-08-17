@@ -73,6 +73,8 @@ const emptyDriver = (position = 1): CsIntakeDriver => ({
   license_status: 'valid',
   years_licensed: null,
   sr22_required: false,
+  cdl: false,
+  cdl_date: null,
 });
 
 const emptyVehicle = (position = 1): CsIntakeVehicle => ({
@@ -87,6 +89,9 @@ const emptyVehicle = (position = 1): CsIntakeVehicle => ({
   usage: 'commute',
   annual_mileage: null,
   garaging_zip: null,
+  truck_type: null,
+  physical_damage_value: null,
+  physical_damage_deductible: null,
 });
 
 type DraftSubmission = Partial<CsIntakeSubmission> & {
@@ -299,7 +304,7 @@ export default function IntakeForm({
     if (currentLob === 'non_owners') {
       required.push(submission.sr22_filing_state);
     } else if (currentLob === 'trucking') {
-      required.push(submission.business_name, submission.dot_number);
+      required.push(submission.business_name, submission.dot_number, submission.insured_email, submission.operating_radius_miles as unknown as string);
     } else if (currentLob === 'commercial_gl') {
       required.push(submission.business_name, submission.insured_phone_primary);
     } else if (currentLob === 'homeowners') {
@@ -357,6 +362,9 @@ export default function IntakeForm({
     if (currentLob === 'trucking') {
       if (!submission.business_name?.trim()) return 'Business name is required for Trucking.';
       if (!submission.dot_number?.trim()) return 'DOT number is required for Trucking.';
+      if (!submission.insured_email?.trim()) return 'Email is required for Trucking intakes.';
+      if (!submission.operating_radius_miles) return 'Operating radius (miles) is required for Trucking.';
+      if ((submission as Record<string, unknown>).cargo_coverage_desired === null || (submission as Record<string, unknown>).cargo_coverage_desired === undefined) return 'Cargo coverage desired (yes/no) is required for Trucking.';
     }
 
     // Commercial GL validation
@@ -615,6 +623,7 @@ export default function IntakeForm({
     commodities,
     primary_commodity: (sub.primary_commodity as string) || '',
     cargo_description: (sub.cargo_description as string) || '',
+    cargo_coverage_desired: sub.cargo_coverage_desired as boolean | null ?? null,
     broker_load_board: sub.broker_load_board as boolean | null ?? null,
     commodity_mix_known: sub.commodity_mix_known as boolean | null ?? null,
     typical_load_value: sub.typical_load_value as number | null ?? null,
@@ -1000,6 +1009,7 @@ export default function IntakeForm({
             }
             if ('primary_commodity' in cargoPatch) mapped.primary_commodity = cargoPatch.primary_commodity || null;
             if ('cargo_description' in cargoPatch) mapped.cargo_description = cargoPatch.cargo_description || null;
+            if ('cargo_coverage_desired' in cargoPatch) mapped.cargo_coverage_desired = cargoPatch.cargo_coverage_desired;
             if ('broker_load_board' in cargoPatch) mapped.broker_load_board = cargoPatch.broker_load_board;
             if ('commodity_mix_known' in cargoPatch) mapped.commodity_mix_known = cargoPatch.commodity_mix_known;
             if ('typical_load_value' in cargoPatch) mapped.typical_load_value = cargoPatch.typical_load_value;
@@ -1019,7 +1029,7 @@ export default function IntakeForm({
               patch(mapped as Partial<DraftSubmission>);
             }
           }}
-          cargoRequested={true}
+          cargoRequested={false}
           disabled={disabled}
         />
       )}
@@ -1131,7 +1141,7 @@ export default function IntakeForm({
           <Field label="Date of birth" required><DatePicker value={submission.insured_dob || ''} onChange={(value) => patch({ insured_dob: value || null })} disabled={disabled} placeholder="Date of birth" /></Field>
           <Field label="Primary phone" required><input type="tel" className={ui.input} disabled={disabled} value={submission.insured_phone_primary || ''} onChange={(event) => patch({ insured_phone_primary: event.target.value || null })} /></Field>
           <Field label="Alternate phone"><input type="tel" className={ui.input} disabled={disabled} value={submission.insured_phone_alt || ''} onChange={(event) => patch({ insured_phone_alt: event.target.value || null })} /></Field>
-          <Field label="Email"><input type="email" className={ui.input} disabled={disabled} value={submission.insured_email || ''} onChange={(event) => patch({ insured_email: event.target.value || null })} /></Field>
+          <Field label="Email" required={currentLob === 'trucking'}><input type="email" className={ui.input} disabled={disabled} value={submission.insured_email || ''} onChange={(event) => patch({ insured_email: event.target.value || null })} /></Field>
           <Field label="Preferred language"><select className={ui.select} disabled={disabled} value={submission.preferred_language || ''} onChange={(event) => patch({ preferred_language: event.target.value || null })}><option value="">Not specified</option><option value="English">English</option><option value="Spanish">Spanish</option><option value="Other">Other</option></select></Field>
           <Field label="Preferred contact"><select className={ui.select} disabled={disabled} value={submission.preferred_contact || ''} onChange={(event) => patch({ preferred_contact: event.target.value || null })}><option value="">Not specified</option><option value="Call">Call</option><option value="SMS">SMS</option><option value="WhatsApp">WhatsApp</option><option value="Email">Email</option></select></Field>
         </div>
@@ -1184,6 +1194,14 @@ export default function IntakeForm({
                 <Field label="Issuing state" required><select className={ui.select} disabled={disabled || driver.document_type === 'passport'} value={driver.license_state || ''} onChange={(event) => patchDriver(index, { license_state: event.target.value || null })}><option value="">Select</option>{US_STATES.map((state) => <option key={state}>{state}</option>)}<option value="Foreign">Foreign</option></select></Field>
                 <Field label="License status"><select className={ui.select} disabled={disabled} value={driver.license_status || 'valid'} onChange={(event) => patchDriver(index, { license_status: event.target.value })}><option value="valid">Valid</option><option value="permit">Permit</option><option value="foreign">Foreign</option><option value="suspended">Suspended</option><option value="not_licensed">Not licensed / ID only</option></select></Field>
                 <Field label="Years licensed"><input type="number" min="0" className={ui.input} disabled={disabled} value={driver.years_licensed ?? ''} onChange={(event) => patchDriver(index, { years_licensed: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
+                {currentLob === 'trucking' && (
+                  <>
+                    <Field label="CDL"><select className={ui.select} disabled={disabled} value={driver.cdl ? 'yes' : 'no'} onChange={(event) => patchDriver(index, { cdl: event.target.value === 'yes', cdl_date: event.target.value === 'no' ? null : driver.cdl_date })}><option value="no">No</option><option value="yes">Yes</option></select></Field>
+                    {driver.cdl && (
+                      <Field label="CDL Date"><DatePicker value={driver.cdl_date || ''} onChange={(value) => patchDriver(index, { cdl_date: value || null })} disabled={disabled} placeholder="CDL issue date" /></Field>
+                    )}
+                  </>
+                )}
               </div>
               <label className={`${ui.checkboxRow} mt-4`}><input type="checkbox" disabled={disabled} checked={driver.sr22_required} onChange={(event) => patchDriver(index, { sr22_required: event.target.checked })} /> SR-22 required</label>
             </div>
@@ -1222,6 +1240,13 @@ export default function IntakeForm({
                 <Field label="Use"><select className={ui.select} disabled={disabled} value={vehicle.usage || 'commute'} onChange={(event) => patchVehicle(index, { usage: event.target.value })}><option value="commute">Commute</option><option value="pleasure">Pleasure</option><option value="business">Business</option><option value="delivery">Delivery</option><option value="rideshare">Rideshare</option></select></Field>
                 <Field label="Annual mileage"><input type="number" min="0" className={ui.input} disabled={disabled} value={vehicle.annual_mileage ?? ''} onChange={(event) => patchVehicle(index, { annual_mileage: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
                 <Field label="Garaging ZIP"><input className={ui.input} disabled={disabled} value={vehicle.garaging_zip || submission.addr_zip || ''} onChange={(event) => patchVehicle(index, { garaging_zip: event.target.value || null })} /></Field>
+                {currentLob === 'trucking' && (
+                  <>
+                    <Field label="Truck Type"><select className={ui.select} disabled={disabled} value={vehicle.truck_type || ''} onChange={(event) => patchVehicle(index, { truck_type: event.target.value || null })}><option value="">Select</option><option value="box_truck">Box Truck</option><option value="truck_tractor">Truck Tractor</option><option value="sprinter_van">Sprinter Van</option><option value="flatbed">Flatbed</option><option value="reefer">Reefer</option><option value="tanker">Tanker</option><option value="dump_truck">Dump Truck</option><option value="car_hauler">Car Hauler</option><option value="step_van">Step Van</option><option value="other">Other</option></select></Field>
+                    <Field label="Physical Damage Value" hint="Desired coverage amount for this truck"><input type="number" min="0" className={ui.input} disabled={disabled} value={vehicle.physical_damage_value ?? ''} onChange={(event) => patchVehicle(index, { physical_damage_value: event.target.value === '' ? null : Number(event.target.value) })} placeholder="e.g. 75000" /></Field>
+                    <Field label="Physical Damage Deductible"><input type="number" min="0" className={ui.input} disabled={disabled} value={vehicle.physical_damage_deductible ?? ''} onChange={(event) => patchVehicle(index, { physical_damage_deductible: event.target.value === '' ? null : Number(event.target.value) })} placeholder="e.g. 2500" /></Field>
+                  </>
+                )}
               </div>
             </div>
           ))}

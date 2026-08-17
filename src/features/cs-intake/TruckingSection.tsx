@@ -136,7 +136,7 @@ export default function TruckingSection({ data, onChange, disabled }: TruckingSe
               />
             </Field>
 
-            <Field label="Operating Radius (miles)">
+            <Field label="Operating Radius (miles)" required>
               <input
                 type="number"
                 className={ui.input}

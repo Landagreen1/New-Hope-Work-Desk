@@ -215,6 +215,7 @@ const LOB_SECTIONS: Record<string, { title: string; fields: LobField[] }> = {
       ['mc_number', 'MC number'],
       ['mcs150_date', 'MCS-150 date', 'date'],
       ['cargo_type', 'Cargo type (legacy)'],
+      ['cargo_coverage_desired', 'Cargo coverage desired', 'bool'],
       ['primary_commodity', 'Primary commodity'],
       ['cargo_description', 'Cargo description'],
       ['broker_load_board', 'Broker / Load board', 'bool'],

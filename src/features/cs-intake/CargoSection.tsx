@@ -20,6 +20,9 @@ export interface CargoData {
   primary_commodity: string;
   cargo_description: string;
 
+  // Cargo coverage desired (mandatory for trucking)
+  cargo_coverage_desired: boolean | null;
+
   // Broker / load board
   broker_load_board: boolean | null;
   commodity_mix_known: boolean | null;
@@ -67,6 +70,7 @@ interface CargoSectionProps {
 export const COMMODITY_CATEGORIES = [
   { key: 'general_consumer_goods', label: 'General Consumer Goods', examples: 'packaged household products, retail merchandise, clothing, paper products' },
   { key: 'furniture_household', label: 'Furniture / Household Goods', examples: 'furniture, mattresses, appliances, home furnishings, moving goods' },
+  { key: 'appliances', label: 'Appliances', examples: 'washers, dryers, refrigerators, stoves, dishwashers, HVAC units' },
   { key: 'building_construction', label: 'Building / Construction Materials', examples: 'lumber, roofing, drywall, flooring, plumbing, construction supplies' },
   { key: 'machinery_equipment', label: 'Machinery / Equipment', examples: 'construction equipment, industrial machinery, generators, tools' },
   { key: 'automotive', label: 'Automotive', examples: 'auto parts, tires, engines, vehicle components' },
@@ -614,8 +618,27 @@ export default function CargoSection({ data, onChange, cargoRequested = false, d
             </div>
           </div>
 
-          {/* ─── Cargo Value (conditional on cargoRequested) ────────────────── */}
-          {cargoRequested && (
+          {/* ─── Cargo Coverage Desired (mandatory) ──────────────────────── */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Motor Truck Cargo Coverage Desired?" required>
+              <select
+                className={ui.select}
+                value={data.cargo_coverage_desired === null ? '' : data.cargo_coverage_desired ? 'yes' : 'no'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onChange({ cargo_coverage_desired: val === '' ? null : val === 'yes' });
+                }}
+                disabled={disabled}
+              >
+                <option value="">-- Select --</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </Field>
+          </div>
+
+          {/* ─── Cargo Value (conditional on cargo coverage desired) ──────── */}
+          {(cargoRequested || data.cargo_coverage_desired === true) && (
             <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
               <span className={`${ui.label} mb-3 block`}>Cargo Coverage Values</span>
 
