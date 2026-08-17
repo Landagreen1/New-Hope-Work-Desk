@@ -45,6 +45,8 @@ import {
   saveDraft,
   submitIntake,
   submitCommercialIntake,
+  submitSpecialtyIntake,
+  isSpecialtyLob,
 } from './api';
 import DatePicker from '../nhwd-shared/DatePicker';
 import LobPicker, { type ExtendedLob, isCommercialRoute } from './LobPicker';
@@ -197,6 +199,13 @@ export default function IntakeForm({
   const showDrivers = LOBS_WITH_DRIVERS.includes(currentLob);
   const showVehicles = LOBS_WITH_VEHICLES.includes(currentLob);
   const isCommercialRouted = isCommercialRoute(currentLob);
+  /**
+   * Trucking and Homeowners are still "commercial-routed" in the sense that they leave
+   * the personal sales queue, but their destination is now Specialty Quotes rather than
+   * the Commercial Board. Kept as a separate predicate so the copy, the assignee
+   * requirement and the submit call each stay honest about where the intake is going.
+   */
+  const isSpecialtyRouted = isSpecialtyLob(currentLob);
   const isFromRenewal = Boolean(submission.source_renewal_id);
   const disabled = readOnly || busy;
 
@@ -225,10 +234,12 @@ export default function IntakeForm({
   }, []);
 
   useEffect(() => {
-    if (isCommercialRouted) {
+    // Only Commercial GL needs an assignee list. A specialty intake is claimed by the
+    // team, so there is nobody for Customer Service to choose.
+    if (isCommercialRouted && !isSpecialtyRouted) {
       listCommercialAssignees().then(setCommercialAssignees).catch(() => {});
     }
-  }, [isCommercialRouted]);
+  }, [isCommercialRouted, isSpecialtyRouted]);
 
   useEffect(() => {
     let active = true;
@@ -349,8 +360,11 @@ export default function IntakeForm({
       if (!submission.insured_phone_primary?.trim()) return 'Owner phone is required for Commercial GL.';
     }
 
-    // Commercial-routed LOBs require an assignee
-    if (isCommercialRouted && !selectedAssignee) {
+    // Commercial GL still needs an assignee, because a commercial card is created for
+    // one person. Trucking and Homeowners deliberately do not: they route to a quoting
+    // team and stay unclaimed until an eligible member takes them, so Customer Service
+    // is never asked to pick between Oscar, Jason and Brenda.
+    if (isCommercialRouted && !isSpecialtyRouted && !selectedAssignee) {
       return 'Select a commercial team member to assign this quote to.';
     }
 
@@ -473,7 +487,14 @@ export default function IntakeForm({
       // next save from this editor would look stale to the concurrency check.
       patch({ id, version: saved.version } as Partial<DraftSubmission>);
       if (alsoSubmit) {
-        if (isCommercialRouted) {
+        if (isSpecialtyRouted) {
+          // Trucking and Homeowners go to the specialty team that owns the line, not to
+          // the Commercial Board and not to a named person.
+          await submitSpecialtyIntake(id);
+          setNotice(
+            'Intake submitted to the specialty quoting team. Every eligible member was notified and one of them will claim it.',
+          );
+        } else if (isCommercialRouted) {
           const cardId = await submitCommercialIntake(id, selectedAssignee || undefined);
           setNotice(`Intake submitted to the Commercial Board. Card created (${cardId.slice(0, 8)}…).`);
         } else {
@@ -770,9 +791,11 @@ export default function IntakeForm({
               {currentLob === 'renters' && 'Renters Insurance'}
             </h2>
             <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-              {isCommercialRouted
-                ? 'This intake will create a card on the Commercial Board.'
-                : 'This intake will be sent to the Personal Sales Queue.'}
+              {isSpecialtyRouted
+                ? 'This intake goes to the specialty quoting team for this line. You do not choose who works it — every eligible member is notified and one of them claims it.'
+                : isCommercialRouted
+                  ? 'This intake will create a card on the Commercial Board.'
+                  : 'This intake will be sent to the Personal Sales Queue.'}
             </p>
             {!readOnly && !initial && !isFromRenewal && (
               <button
@@ -877,14 +900,26 @@ export default function IntakeForm({
               {dealers.map((dealer) => <option key={dealer.id} value={dealer.id}>{dealer.name}</option>)}
             </select>
           </Field>
-          <Field label="Assign to" required>
-            <select className={ui.select} disabled={disabled} value={selectedAssignee} onChange={(e) => setSelectedAssignee(e.target.value)}>
-              <option value="">— Select assignee —</option>
-              {commercialAssignees.map((u) => (
-                <option key={u.id} value={u.id}>{u.display_name}{u.role === 'super_admin' || u.role === 'commercial_supervisor' ? ' (Supervisor)' : ''}</option>
-              ))}
-            </select>
-          </Field>
+          {/* Only Commercial GL is assigned at intake. A specialty intake is claimed
+              by the quoting team that owns the line, so asking Customer Service to
+              pick a person here would be asking them to make a decision that is not
+              theirs and that the rotation-free shared-claim model exists to avoid. */}
+          {isSpecialtyRouted ? (
+            <Field label="Assignment">
+              <p className={`${ui.info} mt-2`}>
+                Handled by the specialty quoting team. Nobody to choose.
+              </p>
+            </Field>
+          ) : (
+            <Field label="Assign to" required>
+              <select className={ui.select} disabled={disabled} value={selectedAssignee} onChange={(e) => setSelectedAssignee(e.target.value)}>
+                <option value="">— Select assignee —</option>
+                {commercialAssignees.map((u) => (
+                  <option key={u.id} value={u.id}>{u.display_name}{u.role === 'super_admin' || u.role === 'commercial_supervisor' ? ' (Supervisor)' : ''}</option>
+                ))}
+              </select>
+            </Field>
+          )}
         </div>
       </Section>
       )}
@@ -1158,11 +1193,11 @@ export default function IntakeForm({
 
       {!readOnly ? (
         <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3 text-sm font-semibold text-slate-500"><CheckCircle2 className="h-5 w-5 text-emerald-500" /> Drafts can be reopened. Submission sends the intake to {isCommercialRouted ? 'the Commercial Board' : 'Sales'}.</div>
+          <div className="flex items-center gap-3 text-sm font-semibold text-slate-500"><CheckCircle2 className="h-5 w-5 text-emerald-500" /> Drafts can be reopened. Submission sends the intake to {isSpecialtyRouted ? 'the specialty quoting team' : isCommercialRouted ? 'the Commercial Board' : 'Sales'}.</div>
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className={ui.btnGhost} disabled={busy} onClick={onDone}>Close</button>
             <button type="button" className={ui.btnSecondary} disabled={busy} onClick={() => void persist(false)}><Save className="h-4 w-4" /> Save Draft</button>
-            <button type="button" className={ui.btnPrimary} disabled={busy} onClick={() => void persist(true)}><Send className="h-4 w-4" /> {isCommercialRouted ? 'Submit to Commercial' : 'Submit to Sales'}</button>
+            <button type="button" className={ui.btnPrimary} disabled={busy} onClick={() => void persist(true)}><Send className="h-4 w-4" /> {isSpecialtyRouted ? 'Submit to Specialty Team' : isCommercialRouted ? 'Submit to Commercial' : 'Submit to Sales'}</button>
           </div>
         </div>
       ) : null}

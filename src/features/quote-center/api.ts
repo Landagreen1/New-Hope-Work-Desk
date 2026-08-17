@@ -21,6 +21,7 @@ import type {
   DuplicateCandidate,
   DuplicateCheckInput,
   JourneyDetail,
+  JourneyRecord,
   JourneySearchRow,
   StageCount,
   StageFilter,
@@ -104,6 +105,26 @@ export async function getJourneyTimeline(
   });
   throwIfError(error);
   return (data as TimelineEntry[]) ?? [];
+}
+
+/**
+ * The customer information behind a journey.
+ *
+ * Fetched when a journey is opened rather than with the search, because it is the
+ * heaviest part of the record — the whole intake form with its drivers, vehicles and
+ * owners — and a result card never shows it.
+ */
+export async function getJourneyRecord(
+  intakeId: string | null,
+  workItemId: string | null,
+): Promise<JourneyRecord> {
+  if (!intakeId && !workItemId) return { intake: null, quote: null };
+  const { data, error } = await getSupabase().rpc('quote_center_journey_record', {
+    p_intake_id: intakeId,
+    p_work_item_id: workItemId,
+  });
+  throwIfError(error);
+  return (data as JourneyRecord) ?? { intake: null, quote: null };
 }
 
 /**

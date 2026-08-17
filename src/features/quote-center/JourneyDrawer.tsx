@@ -28,8 +28,10 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { AppRole } from '@/lib/types';
+import IntakeDataDisplay, { type IntakeDataDetails } from '../cs-intake/IntakeDataDisplay';
 import { ui } from '../nhwd-shared/ui';
-import { addJourneyNote, getJourney, getJourneyTimeline } from './api';
+import { addJourneyNote, getJourney, getJourneyRecord, getJourneyTimeline } from './api';
+import SpecialtyStatusPanel from './SpecialtyStatusPanel';
 import { getQuoteCenterPermissions } from './permissions';
 import {
   formatPhone,
@@ -39,7 +41,7 @@ import {
   notSoldReasonLabel,
   stageTone,
 } from './status';
-import type { JourneyDetail, TimelineEntry, TimelineOrigin } from './types';
+import type { JourneyDetail, JourneyRecord, TimelineEntry, TimelineOrigin } from './types';
 
 /** Plain-language titles for the raw event names in the three logs. */
 const EVENT_TITLES: Record<string, string> = {
@@ -145,6 +147,8 @@ export default function JourneyDrawer({
   const permissions = useMemo(() => getQuoteCenterPermissions(role), [role]);
   const [journey, setJourney] = useState<JourneyDetail | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  /** The customer's actual answers, whichever origin they came from. */
+  const [record, setRecord] = useState<JourneyRecord>({ intake: null, quote: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
@@ -167,21 +171,27 @@ export default function JourneyDrawer({
       let isCurrent = true;
 
       getJourney(journey)
-        .then((record) => {
+        .then((found) => {
           if (!isCurrent) return null;
-          if (!record) {
+          if (!found) {
             setError('This record is no longer available.');
             setJourney(null);
             return null;
           }
           setError(null);
-          setJourney(record);
-          // Fetched after the record so the header paints immediately rather than
-          // waiting on three merged event logs.
-          return getJourneyTimeline(record.intake_id, record.work_item_id);
+          setJourney(found);
+          // Fetched after the journey so the header paints immediately rather than
+          // waiting on the merged event logs and the full intake form.
+          return Promise.all([
+            getJourneyTimeline(found.intake_id, found.work_item_id),
+            getJourneyRecord(found.intake_id, found.work_item_id),
+          ]);
         })
-        .then((entries) => {
-          if (isCurrent && entries) setTimeline(entries);
+        .then((loaded) => {
+          if (!isCurrent || !loaded) return;
+          const [entries, detail] = loaded;
+          setTimeline(entries);
+          setRecord(detail);
         })
         .catch((caught: unknown) => {
           if (!isCurrent) return;
@@ -465,6 +475,144 @@ export default function JourneyDrawer({
                 </div>
               </section>
 
+              {/*
+                What the customer actually told us.
+                Which of the two blocks below appears depends on where the quote came
+                from, because the origins genuinely record different things — an
+                intake has drivers and coverage, a WhatsApp quote has a dealer and a
+                note. A converted intake shows both.
+              */}
+              {record.intake ? (
+                <section className={`${ui.card} overflow-hidden`}>
+                  <div className={ui.cardHeader}>
+                    <div>
+                      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]">
+                        <ClipboardList className="h-4 w-4" /> Intake form
+                      </div>
+                      <h3 className="mt-1 text-lg font-black">Everything the customer gave us</h3>
+                      <p className="mt-1 text-sm font-semibold text-slate-500">
+                        As recorded on the Customer Service intake
+                        {record.intake.started_by_name
+                          ? ` by ${String(record.intake.started_by_name)}`
+                          : ''}
+                        .
+                      </p>
+                    </div>
+                  </div>
+                  <div className={ui.cardPad}>
+                    <IntakeDataDisplay
+                      details={record.intake as IntakeDataDetails}
+                      lineOfBusiness={
+                        record.intake.line_of_business
+                          ? String(record.intake.line_of_business)
+                          : journey.line_of_business
+                      }
+                    />
+                  </div>
+                </section>
+              ) : null}
+
+              {/*
+                A quote taken on WhatsApp, RingCentral, or entered manually has no
+                intake form behind it. What it does have is where it came from and
+                what the agent wrote down, and that was previously not shown at all.
+              */}
+              {record.quote && !record.intake ? (
+                <section className={`${ui.card} ${ui.cardPad}`}>
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#223f7a]">
+                    <Store className="h-4 w-4" /> Quote record
+                  </div>
+                  <h3 className="mt-1 text-lg font-black">How this quote came in</h3>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Taken directly by an agent, so there is no intake form. This is
+                    everything that was recorded.
+                  </p>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <DetailRow
+                      label="Customer"
+                      value={
+                        record.quote.customer_name ? String(record.quote.customer_name) : null
+                      }
+                      icon={<UserRound className="h-3.5 w-3.5 text-slate-400" />}
+                    />
+                    <DetailRow
+                      label="Received through"
+                      value={
+                        record.quote.received_through
+                          ? String(record.quote.received_through)
+                          : null
+                      }
+                    />
+                    <DetailRow
+                      label="Dealer"
+                      value={record.quote.dealer_name ? String(record.quote.dealer_name) : null}
+                      icon={<Store className="h-3.5 w-3.5 text-slate-400" />}
+                    />
+                    <DetailRow
+                      label="Dealer salesperson"
+                      value={
+                        record.quote.salesperson_name
+                          ? String(record.quote.salesperson_name)
+                          : null
+                      }
+                    />
+                    <DetailRow
+                      label="Quote type"
+                      value={lineOfBusinessLabel(null, journey.work_type)}
+                    />
+                    <DetailRow
+                      label="How it was assigned"
+                      value={
+                        record.quote.assignment_method
+                          ? String(record.quote.assignment_method).replace(/_/g, ' ')
+                          : null
+                      }
+                    />
+                    {record.quote.change_type ? (
+                      <DetailRow
+                        label="Change type"
+                        value={String(record.quote.change_type)}
+                      />
+                    ) : null}
+                    {record.quote.original_owner_name &&
+                    record.quote.original_owner_name !== record.quote.assigned_agent_name ? (
+                      <DetailRow
+                        label="Originally taken by"
+                        value={String(record.quote.original_owner_name)}
+                      />
+                    ) : null}
+                  </div>
+
+                  {record.quote.dealer_notes ? (
+                    <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3">
+                      <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">
+                        About this dealer
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-700">
+                        {String(record.quote.dealer_notes)}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {/* For these quotes the note is usually the only place the
+                      customer's situation was written down. */}
+                  {record.quote.note ? (
+                    <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                      <p className="text-[11px] font-black uppercase tracking-[0.12em] text-amber-700">
+                        Agent&apos;s note
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-relaxed text-slate-800">
+                        {String(record.quote.note)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-xs font-semibold text-slate-400">
+                      No note was recorded when this quote was taken.
+                    </p>
+                  )}
+                </section>
+              ) : null}
+
               {/* Add note — available regardless of ownership */}
               {permissions.addQuoteNote ? (
                 <section className={`${ui.card} ${ui.cardPad}`}>
@@ -560,7 +708,17 @@ export default function JourneyDrawer({
                 </div>
               </section>
 
-              {journey.source_commercial_quote_id ? (
+              {/* Specialty handoff. A customer handed to the Trucking or Homeowners team
+                  must not vanish from Quote Center, and Customer Service must be able to
+                  answer a callback without asking the specialty team. */}
+              {journey.specialty_opportunity_id && journey.intake_id ? (
+                <SpecialtyStatusPanel
+                  intakeId={journey.intake_id}
+                  canAct={permissions.addQuoteNote}
+                />
+              ) : null}
+
+              {journey.source_commercial_quote_id && !journey.specialty_opportunity_id ? (
                 <p className="flex items-start gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">
                   <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                   This intake was routed to the Commercial Board. Its ongoing work is tracked

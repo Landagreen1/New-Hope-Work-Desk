@@ -91,6 +91,9 @@ For databases older than v0.7.0, apply the retained migrations in version order.
 - [ ] Confirm `private/` is not committed.
 - [ ] Deploy the private repository to Vercel.
 - [ ] Add the three public Supabase environment variables in Vercel.
+- [ ] Add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` in Vercel for Production, Preview, and Development.
+- [ ] Redeploy with the build cache disabled after adding or rotating `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, since the value is inlined at build time.
+- [ ] Confirm intake address autocomplete returns suggestions on the deployed URL.
 - [ ] Add `SUPABASE_SECRET_KEY` to Vercel as a protected server-only environment variable.
 - [ ] Confirm the secret does not use a `NEXT_PUBLIC_` prefix and is not exposed to browser code.
 - [ ] Test the Manager → Users tab by resetting a test account with a temporary password chosen by management.

@@ -5,6 +5,7 @@ import { type ReactNode } from "react";
 
 import {
   AppSidebar,
+  type ModuleAccess,
   type ModuleId,
   type NavigationState,
   type NavigationTarget,
@@ -14,7 +15,14 @@ import {
 import type { AppRole } from "@/features/nhwd-shared/types";
 import { roleLabel } from "@/lib/permissions";
 
-export type { ModuleId, NavigationState, NavigationTarget, NavigationTargetRecordKind, SubNavId };
+export type {
+  ModuleAccess,
+  ModuleId,
+  NavigationState,
+  NavigationTarget,
+  NavigationTargetRecordKind,
+  SubNavId,
+};
 
 /**
  * SidebarLayout provides the enterprise-grade shell for New Hope Work Desk.
@@ -37,6 +45,7 @@ export function SidebarLayout({
   onSignOut,
   badges,
   headerRight,
+  moduleAccess,
   children,
 }: {
   role: AppRole;
@@ -46,6 +55,8 @@ export function SidebarLayout({
   onSignOut?: () => void;
   badges?: Record<string, number>;
   headerRight?: ReactNode;
+  /** Modules a role alone cannot decide, such as Specialty Quotes. */
+  moduleAccess?: ModuleAccess;
   children: ReactNode;
 }) {
   const displayRoleLabel = roleLabel(role);
@@ -89,6 +100,7 @@ export function SidebarLayout({
           displayName={displayName}
           roleLabel={displayRoleLabel}
           onSignOut={onSignOut}
+          moduleAccess={moduleAccess}
         />
 
         {/* Main content area - scrollable */}

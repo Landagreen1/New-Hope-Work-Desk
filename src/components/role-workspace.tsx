@@ -3,7 +3,7 @@
 import {
   RefreshCw,
 } from "lucide-react";
-import { Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -12,7 +12,12 @@ import {
   type DeskSection,
   type NavigationTarget,
 } from "@/components/app-sidebar";
-import { SidebarLayout, type NavigationState, type SubNavId } from "@/components/sidebar-layout";
+import {
+  SidebarLayout,
+  type ModuleAccess,
+  type NavigationState,
+  type SubNavId,
+} from "@/components/sidebar-layout";
 import { WorkDeskApp } from "@/components/work-desk-app";
 import QuoteCenter from "@/features/quote-center/QuoteCenter";
 import CommercialBoard from "@/features/commercial/CommercialBoard";
@@ -28,6 +33,11 @@ import type { ProfileLite } from "@/features/nhwd-shared/types";
 import { NotificationPanel } from "@/features/notifications/NotificationPanel";
 import PolicyFollowUpPage from "@/features/renewals/PolicyFollowUpPage";
 import SalesReportingCenter from "@/features/reporting/SalesReportingCenter";
+import { canAccessSpecialtyModule } from "@/features/specialty/api";
+import QuotingTeamsAdmin from "@/features/specialty/QuotingTeamsAdmin";
+import SpecialtyWorkspace, {
+  type SpecialtySection,
+} from "@/features/specialty/SpecialtyWorkspace";
 import WorkloadLog from "@/features/workload/WorkloadLog";
 import { getRolePermissions } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
@@ -110,6 +120,23 @@ function subNavToAgentTab(subNav: SubNavId): "desk" | "performance" | undefined 
   }
 }
 
+/**
+ * Maps the sidebar identifier to the Specialty Quotes destination.
+ *
+ * Anything the module does not own resolves to Work, so a stale navigation state
+ * lands on the operational surface rather than nowhere.
+ */
+function subNavToSpecialtySection(subNav: SubNavId): SpecialtySection {
+  switch (subNav) {
+    case "specialty_database":
+      return "quotes";
+    case "specialty_reports":
+      return "reports";
+    default:
+      return "work";
+  }
+}
+
 export function RoleWorkspace({
   sessionProfile,
   initialData,
@@ -136,6 +163,29 @@ export function RoleWorkspace({
     ),
   );
 
+  /**
+   * Whether this account is a member of any quoting team.
+   *
+   * Specialty Quotes is the one module whose visibility a role cannot answer, so the
+   * database is asked once. It starts false, which is correct rather than merely safe:
+   * no role's default navigation is a specialty screen, so nobody is bounced when the
+   * answer arrives and the item appears.
+   *
+   * This only decides whether to render the nav item. `specialty_can_access()` and the
+   * RLS policies are what actually refuse a non-member.
+   */
+  const [moduleAccess, setModuleAccess] = useState<ModuleAccess>({ specialtyQuotes: false });
+
+  useEffect(() => {
+    let cancelled = false;
+    void canAccessSpecialtyModule().then((allowed) => {
+      if (!cancelled) setModuleAccess({ specialtyQuotes: allowed });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSignOut = useCallback(async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -155,11 +205,14 @@ export function RoleWorkspace({
   );
 
   const permissions = getRolePermissions(sessionProfile.role);
-  const activeNavigation = resolveNavigationForRole(sessionProfile.role, navigation);
+  const activeNavigation = resolveNavigationForRole(sessionProfile.role, navigation, moduleAccess);
 
-  const handleNavigate = useCallback((nav: NavigationState) => {
-    setNavigation(resolveNavigationForRole(sessionProfile.role, nav));
-  }, [sessionProfile.role]);
+  const handleNavigate = useCallback(
+    (nav: NavigationState) => {
+      setNavigation(resolveNavigationForRole(sessionProfile.role, nav, moduleAccess));
+    },
+    [moduleAccess, sessionProfile.role],
+  );
 
   /**
    * Drops the record target once the owning screen has opened it.
@@ -284,6 +337,28 @@ export function RoleWorkspace({
       return <ManagerCustomerServiceWorkspace profile={profile} initialSubNav="intakes" />;
     }
 
+    // --- Specialty Quotes ---
+    // One module for Trucking, Homeowners and whatever line of business is routed to a
+    // quoting team next. Rendered directly rather than as a WorkDeskApp tab, for the
+    // same reason Quote Center is: that component is already 12,500 lines and keeping
+    // new screens out of it is the point.
+    //
+    // No permission check here beyond the access flag. Membership is the boundary and
+    // it is enforced by `specialty_can_access()` inside every RPC the module calls, so
+    // an account that reached this branch without membership sees the module's own
+    // refusal rather than a blank screen.
+    if (module === "specialty_quotes" && moduleAccess.specialtyQuotes) {
+      return (
+        <Suspense fallback={<LoadingWorkspace label="Specialty Quotes" />}>
+          <SpecialtyWorkspace
+            initialProfile={profile}
+            embedded
+            activeSection={subNavToSpecialtySection(subNav)}
+          />
+        </Suspense>
+      );
+    }
+
     // --- Commercial ---
     if (module === "commercial" && permissions.commercial) {
       return (
@@ -350,6 +425,15 @@ export function RoleWorkspace({
 
     // --- User Administration ---
     if (module === "user_admin" && permissions.userAdministration) {
+      // Quoting Teams is a settings screen, so it lives here rather than adding a
+      // fourth destination to Specialty Quotes.
+      if (subNav === "ua_quoting_teams") {
+        return (
+          <Suspense fallback={<LoadingWorkspace label="Quoting Teams" />}>
+            <QuotingTeamsAdmin initialProfile={profile} embedded />
+          </Suspense>
+        );
+      }
       return (
         <WorkDeskApp
           sessionProfile={sessionProfile}
@@ -373,6 +457,7 @@ export function RoleWorkspace({
       navigation={activeNavigation}
       onNavigate={handleNavigate}
       onSignOut={() => void handleSignOut()}
+      moduleAccess={moduleAccess}
       headerRight={
         <NotificationPanel
           profile={{

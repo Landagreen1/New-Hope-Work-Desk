@@ -1,3 +1,29 @@
+# v1.16.0 — Specialty Quotes Engine
+
+- Added **Specialty Quotes**, one collaborative quoting module for Trucking and Homeowners, replacing the practice of routing those intakes onto the Commercial Board.
+- Added **Quoting Teams** under User Administration. A manager creates a team, sets its members and their capabilities, chooses its assignment method, and routes a line of business to it — no migration and no developer.
+- Access to Specialty Quotes comes from team membership, not from an application role. No `trucking_agent` or `homeowners_agent` role exists; Oscar and Jason are Super Admins and Brenda is Customer Service, and all three are ordinary team members.
+- Seeded the Trucking Team (Oscar, Jason) and the Homeowners Team (Oscar, Jason, Brenda), both on Shared Claim with collaborative editing enabled.
+- **Assignment is accountability, not ownership.** Every eligible team member can open, edit, add notes to, upload documents to and work the carrier markets of any of the team's quotes, whoever is assigned. No row-level policy anywhere in the engine tests the assignee.
+- Added the Specialty Quote Opportunity, with the nine-stage workflow New → Information Needed → Ready to Market → Marketing → Options Ready → Price Sent → Follow-Up → Sold / Not Sold.
+- Added **Carrier Markets**: one quote holds many carriers, each with its own status, submission date, follow-up date, premium, down payment, terms, documents, notes and decline reason. A five-carrier quote is one record, not five.
+- Added a price comparison across viable quotes, and an explicit **Price Sent** action that freezes a snapshot of exactly what the customer was shown. Receiving a carrier quote no longer implies the customer has a price.
+- Required a structured reason for Not Sold, and a bound carrier plus a premium for Sold. Reopening a closed quote is a manager action.
+- Added a structured **Information Needed** list that Customer Service can see and answer from Quote Center, so a customer callback no longer needs a new intake.
+- Added workflow templates that seed the standard Trucking and Homeowners checklists when a quote arrives.
+- Added one chronological activity timeline per quote, merged with the originating intake's own history. Every entry records the employee who actually acted, never the assignee.
+- Added contributor tracking derived from recorded actions, reported separately from primary assignment.
+- Added Specialty reporting: pipeline, needs-attention, employee workload, contribution, pipeline timing, carrier performance and lost business.
+- Made claiming atomic: two members clicking Claim at the same moment produce one winner and a message naming them, and the quote stays fully workable by both.
+- Made collaborative editing safe: a save against a stale version is refused with a conflict message instead of overwriting a teammate.
+- Added a linked-intake edit flow so a specialty member can correct customer, business, property, vehicle and driver information on the original intake rather than in a second copy.
+- Routed new Trucking and Homeowners intakes to the specialty team that owns the line. Customer Service no longer picks an assignee for those lines.
+- Stopped Trucking and Homeowners from reaching the Commercial Board, with two independent guards, so one live quote can never appear in two places.
+- Migrated existing live Trucking and Homeowners commercial cards into Specialty Quotes with their comments, attachments, checklists, history, assignee and original timestamps intact. The commercial rows are kept and simply stop appearing on the board.
+- Extended Quote Center so a customer handed to a specialty team keeps a truthful status — Submitted to Specialty Team, Information Needed, Being Quoted, Options Ready, Price Sent, Sold, Not Sold — instead of reading "On Commercial Board".
+- Commercial GL is deliberately unchanged: same board, same routing, same reports, same attachments and checklists.
+- Added Supabase migrations v1.16.0 through v1.16.7, each with its own post-conditions.
+
 # v0.9.4.1
 
 - Allowed quotes to proceed without a salesperson when the selected source has zero active salespeople.

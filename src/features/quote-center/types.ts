@@ -68,12 +68,29 @@ export interface JourneySearchRow {
 }
 
 /**
+ * The Specialty Quotes overlay, appended to `quote_center_journeys` by v1.16.5.
+ *
+ * Present on the detail row rather than on the search row: the search's
+ * `stage`/`stage_label` already carry the specialty status, so a card needs nothing
+ * extra, and the drawer is where the specialty panel is offered.
+ */
+export interface SpecialtyOverlay {
+  /** Non-null when this customer's work is with a specialty quoting team. */
+  specialty_opportunity_id: string | null;
+  specialty_reference: string | null;
+  /** How many shared information items the specialty team is still waiting on. */
+  specialty_information_needed: number;
+}
+
+/**
  * The full journey record behind the detail drawer.
  *
  * A superset of {@link JourneySearchRow}: search returns only card fields, and
  * the extra detail is fetched when a journey is actually opened.
  */
-export interface JourneyDetail extends Omit<JourneySearchRow, 'total_count' | 'possible_duplicate'> {
+export interface JourneyDetail
+  extends Omit<JourneySearchRow, 'total_count' | 'possible_duplicate'>,
+    SpecialtyOverlay {
   insured_first_name: string | null;
   insured_last_name: string | null;
   insured_dob: string | null;
@@ -121,6 +138,41 @@ export interface TimelineEntry {
   actor_name: string;
   note: string | null;
   detail: Record<string, unknown> | null;
+}
+
+/**
+ * The customer information behind a journey.
+ *
+ * Both halves are optional because which one exists depends on where the quote came
+ * from. A Customer Service intake fills `intake` with every answer on the form; a
+ * WhatsApp, RingCentral or manually created quote fills `quote` with the dealer, the
+ * salesperson, the customer name and the agent's note. A converted intake has both.
+ *
+ * Loosely typed on purpose: `intake` is the whole `cs_intake_submissions` row plus
+ * its children, and the fields present differ by line of business. The renderer
+ * reads what it needs and ignores the rest, which is preferable to a ~120-field
+ * interface that would drift from the table on the next migration.
+ */
+export interface JourneyRecord {
+  intake: (Record<string, unknown> & {
+    line_of_business?: string | null;
+    drivers?: Record<string, unknown>[];
+    vehicles?: Record<string, unknown>[];
+    owners?: Record<string, unknown>[];
+  }) | null;
+  quote: (Record<string, unknown> & {
+    customer_name?: string | null;
+    dealer_name?: string | null;
+    dealer_notes?: string | null;
+    salesperson_name?: string | null;
+    received_through?: string | null;
+    assignment_method?: string | null;
+    work_type?: string | null;
+    note?: string | null;
+    change_type?: string | null;
+    assigned_agent_name?: string | null;
+    original_owner_name?: string | null;
+  }) | null;
 }
 
 /** A possible existing record surfaced while a new intake is being started. */

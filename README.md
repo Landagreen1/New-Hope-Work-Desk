@@ -59,7 +59,10 @@ Read `UPGRADE-v0.9.4.1.md` for the full deployment and test sequence.
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 NEXT_PUBLIC_AUTH_EMAIL_DOMAIN
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 SUPABASE_SECRET_KEY
 ```
 
 `SUPABASE_SECRET_KEY` is server-only. Never commit it or expose it through a `NEXT_PUBLIC_` variable.
+
+`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` drives Places Autocomplete on every intake address field. It needs **Maps JavaScript API** and **Places API (New)** enabled in Google Cloud, and an HTTP referrer restriction covering `localhost` plus the deployed domains. Because it is a `NEXT_PUBLIC_` value it is compiled into the browser bundle, so rotating it requires a redeploy, not just an environment change. If it is unset, the address fields show "Address lookup is unavailable" rather than failing silently.
