@@ -42,12 +42,14 @@ const sharedDrafts = code('v1.15.0-quote-center-shared-drafts.sql');
 const sharedNotes = code('v1.15.1-quote-center-shared-notes.sql');
 const search = code('v1.15.2-quote-center-search.sql');
 const attribution = code('v1.15.3-intake-completion-attribution.sql');
+const journeyRecord = code('v1.15.4-quote-center-journey-record.sql');
 
 const ALL = [
   ['v1.15.0', sharedDrafts],
   ['v1.15.1', sharedNotes],
   ['v1.15.2', search],
   ['v1.15.3', attribution],
+  ['v1.15.4', journeyRecord],
 ] as const;
 
 describe('migration safety', () => {
@@ -403,6 +405,54 @@ describe('duplicate detection', () => {
     // Merging is a manager workflow with human review; the check only surfaces.
     for (const [name, sql] of ALL) {
       expect(sql, name).not.toContain('merge_quote_records');
+    }
+  });
+});
+
+describe('the journey record', () => {
+  it('returns both halves so either origin can be rendered', () => {
+    // An intake-originated quote has form answers; a WhatsApp or manual quote has a
+    // dealer and a note. Returning a fixed shape with two nullable halves is what
+    // lets one drawer handle both without pretending they are the same.
+    expect(journeyRecord).toContain("jsonb_build_object('intake', v_intake, 'quote', v_quote)");
+  });
+
+  it('includes the intake children, in their entered order', () => {
+    for (const child of ['drivers', 'vehicles', 'owners']) {
+      expect(journeyRecord, child).toContain(`'${child}', (`);
+    }
+    expect(journeyRecord).toContain('order by dr.position');
+    expect(journeyRecord).toContain('order by v.position');
+    expect(journeyRecord).toContain('order by o.position');
+  });
+
+  it('gates the intake half on per-record read access, not only on the screen check', () => {
+    expect(journeyRecord).toContain('public.can_view_quote_center()');
+    expect(journeyRecord).toContain('public.can_read_cs_intake(p_intake_id)');
+  });
+
+  it('supplies the dealer and salesperson a WhatsApp or manual quote came from', () => {
+    expect(journeyRecord).toContain("'dealer_name', d.name");
+    expect(journeyRecord).toContain("'salesperson_name', dsp.name");
+    expect(journeyRecord).toContain("'received_through', st.received_through");
+    expect(journeyRecord).toContain("'customer_name', st.customer_name");
+  });
+
+  it('finds the agent note in whichever lifecycle table still holds the row', () => {
+    // work_items has the note, pending_pricing_quotes has it too, quote_outcomes
+    // has neither — so it is coalesced rather than read from one table.
+    expect(journeyRecord).toContain('from public.work_items w where w.id = st.source_work_item_id');
+    expect(journeyRecord).toContain('from public.pending_pricing_quotes p');
+  });
+
+  it('falls back to the conversion event when the quote row was deleted', () => {
+    // The customer's information must not disappear with a manager-deleted row.
+    expect(journeyRecord).toContain("we.event_type = 'created_from_cs_intake'");
+  });
+
+  it('writes nothing', () => {
+    for (const verb of ['insert into', 'update public.', 'delete from']) {
+      expect(journeyRecord, verb).not.toContain(verb);
     }
   });
 });

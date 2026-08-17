@@ -65,10 +65,26 @@ export interface IntakeDataDetails {
   current_expiration?: string | null;
   // Notes
   csr_notes?: string | null;
+  /**
+   * Line-of-business specific answers.
+   *
+   * Deliberately loose. A Renters intake and a Trucking intake record entirely
+   * different things, and enumerating all eight LOBs here would add ~70 optional
+   * fields to a type whose job is the shape common to every intake. The fields that
+   * matter per LOB are declared once in LOB_SECTIONS below and read from here.
+   */
+  [key: string]: unknown;
 }
 
 interface IntakeDataDisplayProps {
   details: IntakeDataDetails;
+  /**
+   * Which line of business this intake is, so its own answers can be shown.
+   *
+   * Optional: callers that only have the flat conversion payload (the Intake Queue)
+   * omit it and see the common sections exactly as before.
+   */
+  lineOfBusiness?: string | null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -112,6 +128,157 @@ function hasAny(...values: (string | number | boolean | null | undefined)[]): bo
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Line-of-business answers                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The questions each line of business actually asks.
+ *
+ * Declared as data rather than as eight more JSX blocks: the sections differ only
+ * in which fields they list, and a table makes it obvious what is shown for a
+ * Renters quote versus a Trucking one. Empty values are dropped at render, so a
+ * partly filled intake shows what it has instead of a wall of "N/A".
+ */
+type LobField = [key: string, label: string, kind?: 'date' | 'money' | 'bool' | 'list'];
+
+const LOB_SECTIONS: Record<string, { title: string; fields: LobField[] }> = {
+  renters: {
+    title: 'Rental Property',
+    fields: [
+      ['renters_property_address', 'Property address'],
+      ['renters_unit', 'Unit / Apt'],
+      ['renters_city', 'City'],
+      ['renters_state', 'State'],
+      ['renters_zip', 'ZIP'],
+      ['renters_landlord_name', 'Landlord'],
+      ['renters_personal_property_value', 'Personal property value', 'money'],
+      ['renters_liability_limit', 'Liability limit', 'money'],
+      ['renters_move_in_date', 'Move-in date'],
+    ],
+  },
+  motorcycle: {
+    title: 'Motorcycle',
+    fields: [
+      ['moto_year', 'Year'],
+      ['moto_make', 'Make'],
+      ['moto_model', 'Model'],
+      ['moto_vin', 'VIN'],
+      ['moto_cc', 'Engine (cc)'],
+      ['moto_type', 'Type'],
+    ],
+  },
+  boat: {
+    title: 'Watercraft',
+    fields: [
+      ['boat_year', 'Year'],
+      ['boat_make', 'Make'],
+      ['boat_model', 'Model'],
+      ['boat_hin', 'Hull ID (HIN)'],
+      ['boat_length', 'Length'],
+      ['boat_type', 'Type'],
+      ['boat_hp', 'Horsepower'],
+      ['boat_value', 'Value', 'money'],
+      ['boat_trailer_included', 'Trailer included', 'bool'],
+    ],
+  },
+  trailer: {
+    title: 'Trailer / Mobile Home',
+    fields: [
+      ['trailer_year', 'Year'],
+      ['trailer_make', 'Make'],
+      ['trailer_model', 'Model'],
+      ['trailer_vin', 'VIN'],
+      ['trailer_length', 'Length'],
+      ['trailer_type', 'Type'],
+      ['trailer_value', 'Value', 'money'],
+      ['trailer_park_name', 'Park name'],
+      ['trailer_lot_number', 'Lot number'],
+    ],
+  },
+  non_owners: {
+    title: 'Non-Owners / SR-22',
+    fields: [
+      ['sr22_filing_state', 'SR-22 filing state'],
+      ['court_order_date', 'Court order date', 'date'],
+      ['no_document_type', 'Document type'],
+      ['no_document_number', 'Document number'],
+      ['no_document_state', 'Issuing state'],
+      ['no_document_expiration', 'Document expiration', 'date'],
+    ],
+  },
+  trucking: {
+    title: 'Trucking Operation',
+    fields: [
+      ['business_type', 'Type of work'],
+      ['years_in_business', 'Years in business'],
+      ['dot_number', 'DOT number'],
+      ['mc_number', 'MC number'],
+      ['mcs150_date', 'MCS-150 date', 'date'],
+      ['cargo_type', 'Cargo type'],
+      ['power_unit_count', 'Power units'],
+      ['operating_radius_miles', 'Operating radius (miles)'],
+    ],
+  },
+  commercial_gl: {
+    title: 'Commercial Operation',
+    fields: [
+      ['business_type', 'Type of work'],
+      ['years_in_business', 'Years in business'],
+      ['ein', 'EIN'],
+      ['states_of_operation', 'States of operation'],
+      ['employee_count', 'Employees'],
+      ['annual_payroll', 'Annual payroll', 'money'],
+      ['coverage_types_needed', 'Coverage needed', 'list'],
+    ],
+  },
+  homeowners: {
+    title: 'Property',
+    fields: [
+      ['property_address_street', 'Property address'],
+      ['property_address_city', 'City'],
+      ['property_address_state', 'State'],
+      ['property_address_zip', 'ZIP'],
+      ['dwelling_type', 'Dwelling type'],
+      ['year_built', 'Year built'],
+      ['square_footage', 'Square footage'],
+      ['roof_type', 'Roof type'],
+      ['roof_age', 'Roof age'],
+      ['coverage_amount', 'Coverage amount', 'money'],
+      ['prior_claims', 'Prior claims', 'bool'],
+      ['prior_claims_detail', 'Prior claims detail'],
+    ],
+  },
+  commercial_auto: {
+    title: 'Business',
+    fields: [
+      ['business_type', 'Type of work'],
+      ['years_in_business', 'Years in business'],
+      ['dot_number', 'DOT number'],
+      ['dot_not_applicable', 'DOT not applicable', 'bool'],
+      ['operating_radius_miles', 'Operating radius (miles)'],
+    ],
+  },
+};
+
+/** Renders one LOB value according to its declared kind. */
+function formatLobValue(raw: unknown, kind: LobField[2]): string | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (kind === 'bool') return raw ? 'Yes' : 'No';
+  if (kind === 'list') {
+    const items = Array.isArray(raw) ? raw.filter(Boolean) : [raw];
+    return items.length ? items.join(', ') : null;
+  }
+  if (kind === 'money') {
+    const numeric = typeof raw === 'number' ? raw : Number(String(raw).replace(/[^0-9.]/g, ''));
+    return Number.isFinite(numeric) && numeric > 0
+      ? `$${numeric.toLocaleString()}`
+      : String(raw);
+  }
+  if (kind === 'date') return fmtDate(String(raw));
+  return String(raw);
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Section Sub-Components                                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -139,8 +306,14 @@ function Field({ label, value }: { label: string; value: string }) {
 /*  Main Component                                                             */
 /* -------------------------------------------------------------------------- */
 
-export default function IntakeDataDisplay({ details }: IntakeDataDisplayProps) {
+export default function IntakeDataDisplay({ details, lineOfBusiness }: IntakeDataDisplayProps) {
   const d = details;
+
+  // The answers specific to this line of business, with blanks dropped.
+  const lobSection = lineOfBusiness ? LOB_SECTIONS[lineOfBusiness] : undefined;
+  const lobValues = (lobSection?.fields ?? [])
+    .map(([key, label, kind]) => ({ label, value: formatLobValue(d[key], kind) }))
+    .filter((entry): entry is { label: string; value: string } => entry.value !== null);
 
   // Determine which sections have content
   const hasPersonalInfo = hasAny(
@@ -163,7 +336,10 @@ export default function IntakeDataDisplay({ details }: IntakeDataDisplayProps) {
   );
   const hasNotes = hasAny(d.csr_notes);
 
-  if (!hasPersonalInfo && !hasDrivers && !hasVehicles && !hasCoverage && !hasCurrentPolicy && !hasNotes) {
+  if (
+    !hasPersonalInfo && !hasDrivers && !hasVehicles && !hasCoverage
+    && !hasCurrentPolicy && !hasNotes && lobValues.length === 0
+  ) {
     return (
       <div className={ui.empty}>
         No intake data available.
@@ -198,6 +374,18 @@ export default function IntakeDataDisplay({ details }: IntakeDataDisplayProps) {
             )}
             {d.business_name && <Field label="Business Name" value={val(d.business_name)} />}
             {d.dot_number && <Field label="DOT Number" value={val(d.dot_number)} />}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Whatever this line of business asked about — the rental property, the
+          motorcycle, the trucking operation, and so on. */}
+      {lobSection && lobValues.length > 0 && (
+        <SectionCard title={lobSection.title}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {lobValues.map((entry) => (
+              <Field key={entry.label} label={entry.label} value={entry.value} />
+            ))}
           </div>
         </SectionCard>
       )}

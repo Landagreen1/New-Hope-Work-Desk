@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest --run",
-    "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs --run integration.test",
+    "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs --run --no-file-parallelism integration.test",
     "bootstrap-users": "node --env-file=.env.local scripts/bootstrap-users.mjs",
     "verify-row-retention": "node --env-file=.env.local scripts/verify-attendance-row-retention.mjs",
     "verify-payroll-parity": "node --env-file=.env.local scripts/verify-payroll-parity.mjs",

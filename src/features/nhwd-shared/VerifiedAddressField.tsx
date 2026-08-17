@@ -33,20 +33,25 @@ import {
  * Google Maps browser key.
  *
  * Read from the environment so it can be rotated and referrer-restricted without
- * a code change. The literal fallback is the key this project has been shipping
- * inline since the intake form was written; it is kept only so that address
- * verification does not silently stop working in an environment where the
- * variable has not been set yet. Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY and the
- * fallback is never reached.
+ * a code change. There is deliberately no inline fallback. An earlier version
+ * kept the shipped key hardcoded here, which meant a missing or misspelled
+ * variable quietly kept using the old key and made a rotation look like it had
+ * taken effect when it had not. Because NEXT_PUBLIC_ values are inlined at build
+ * time, a change to this variable only reaches users after a rebuild.
  */
-const API_KEY =
-  process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? 'AIzaSyC4u00lSMI5AEXrDRlo_HrO8x7la5LiHeY';
+const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 
 let loadPromise: Promise<void> | null = null;
 
 function ensureGoogleMaps(): Promise<void> {
   if (typeof window === 'undefined') return Promise.reject(new Error('No window'));
   if (window.google?.maps?.places) return Promise.resolve();
+  // Requesting the Maps script without a key still fires onload, so the field
+  // would look healthy and simply never return a suggestion. Reject instead so
+  // the caller shows the visible "lookup unavailable" warning.
+  if (!API_KEY) {
+    return Promise.reject(new Error('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set'));
+  }
   if (loadPromise) return loadPromise;
 
   loadPromise = new Promise((resolve, reject) => {

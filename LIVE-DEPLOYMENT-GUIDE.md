@@ -56,6 +56,7 @@ Fill:
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 NEXT_PUBLIC_AUTH_EMAIL_DOMAIN=workdesk.newhope.local
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_BROWSER_KEY
 SUPABASE_SECRET_KEY=YOUR_SERVER_SIDE_SECRET_KEY
 ```
 
@@ -195,10 +196,13 @@ Add:
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 NEXT_PUBLIC_AUTH_EMAIL_DOMAIN
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 SUPABASE_SECRET_KEY
 ```
 
 `SUPABASE_SECRET_KEY` must be stored only as a protected server environment variable. Never prefix it with `NEXT_PUBLIC_`. The deployed server route `/api/admin/users` requires it for manager-created users and password resets.
+
+`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` must be set for Production, Preview, and Development, otherwise Places Autocomplete on the intake address fields stops returning suggestions. It is inlined into the browser bundle at build time, so after adding or rotating it you must redeploy with the build cache disabled before the change reaches users.
 
 
 Deploy the project.

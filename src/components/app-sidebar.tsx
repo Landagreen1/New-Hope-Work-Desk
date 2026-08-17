@@ -20,7 +20,9 @@ import {
   ShieldCheck,
   Table2,
   TrendingUp,
+  Truck,
   UserCog,
+  Users,
   X,
 } from "lucide-react";
 import { useCallback, useState } from "react";
@@ -38,9 +40,37 @@ export type ModuleId =
   | "sales"
   | "customer_service"
   | "commercial"
+  /**
+   * Specialty Quotes: Trucking and Homeowners, and whatever line of business is
+   * routed to a quoting team next. One module, not one per line — the whole point of
+   * the engine is that adding Commercial later is configuration rather than another
+   * board.
+   *
+   * Unlike every other module here, this one is not offered on the strength of a
+   * role. Access is membership of a quoting team, so `getModulesForRole` takes it as
+   * an explicit access flag resolved at runtime. See {@link ModuleAccess}.
+   */
+  | "specialty_quotes"
   | "renewals"
   | "time_attendance"
   | "user_admin";
+
+/**
+ * Module visibility that a role alone cannot answer.
+ *
+ * Specialty Quotes is granted by team membership, which lives in
+ * `quoting_team_members` rather than in `profiles.role`. `RoleWorkspace` asks the
+ * database once (`specialty_can_access()`) and passes the answer down. Everything
+ * that reasons about which modules exist takes the same flag, so the sidebar, the
+ * navigation resolver and the content router cannot disagree — a member would
+ * otherwise be bounced out of the module they had just opened.
+ *
+ * Hiding the item is a courtesy, not the boundary: the RPCs and RLS policies refuse a
+ * non-member regardless of what the sidebar shows.
+ */
+export interface ModuleAccess {
+  specialtyQuotes?: boolean;
+}
 
 export type SubNavId =
   // Sales
@@ -75,6 +105,14 @@ export type SubNavId =
    * consolidation. Sales-capable roles reach intakes through Quote Center.
    */
   | "cs_intakes"
+  // Specialty Quotes — three destinations and no more. Team administration is a
+  // settings screen and lives under User Administration.
+  /** The operational surface. Opens on all of the team's active work, not only mine. */
+  | "specialty_work"
+  /** Search and browse every specialty quote, closed included. */
+  | "specialty_database"
+  /** Pipeline, workload, contribution, timing, carriers, lost business. */
+  | "specialty_reports"
   // Commercial
   | "commercial_board"
   | "commercial_database"
@@ -92,7 +130,13 @@ export type SubNavId =
   | "ta_payroll"
   | "ta_workforce"
   // User Admin
-  | "ua_users";
+  | "ua_users"
+  /**
+   * Quoting Teams. Under administration on purpose: changing who handles a line of
+   * insurance is a settings act, and putting it inside Specialty Quotes would make a
+   * fourth quoting destination out of a screen most people never open.
+   */
+  | "ua_quoting_teams";
 
 /**
  * What a {@link NavigationTarget}'s `recordId` names.
@@ -200,7 +244,11 @@ interface ModuleDefinition {
 
 // ---------- Module Definitions ----------
 
-function getModulesForRole(role: AppRole, badges?: Record<string, number>): ModuleDefinition[] {
+function getModulesForRole(
+  role: AppRole,
+  badges?: Record<string, number>,
+  access?: ModuleAccess,
+): ModuleDefinition[] {
   const permissions = getRolePermissions(role);
   const isCS = role === "customer_service";
 
@@ -282,6 +330,25 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
     });
   }
 
+  // Specialty Quotes.
+  //
+  // Offered on membership rather than on role, which is why the flag is passed in
+  // rather than derived from `permissions`. Oscar and Jason are super_admin and Brenda
+  // is customer_service; all three are ordinary members, and no new role was invented
+  // for any of them.
+  if (access?.specialtyQuotes) {
+    modules.push({
+      id: "specialty_quotes",
+      label: "Specialty Quotes",
+      icon: Truck,
+      subItems: [
+        { id: "specialty_work", label: "Work", icon: ClipboardList, badge: badges?.specialty_work },
+        { id: "specialty_database", label: "Quotes", icon: Search },
+        { id: "specialty_reports", label: "Reports", icon: BarChart3 },
+      ],
+    });
+  }
+
   // Renewals
   if (permissions.renewals) {
     modules.push({
@@ -324,6 +391,7 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
       icon: UserCog,
       subItems: [
         { id: "ua_users", label: "Users & Sources", icon: UserCog },
+        { id: "ua_quoting_teams", label: "Quoting Teams", icon: Users },
       ],
     });
   }
@@ -384,8 +452,9 @@ export function getDefaultNavigation(role: AppRole): NavigationState {
 export function resolveNavigationForRole(
   role: AppRole,
   navigation: NavigationState,
+  access?: ModuleAccess,
 ): NavigationState {
-  const modules = getModulesForRole(role);
+  const modules = getModulesForRole(role, undefined, access);
 
   const isOffered = (candidate: NavigationState) =>
     modules
@@ -440,6 +509,7 @@ export function AppSidebar({
   displayName,
   roleLabel,
   onSignOut,
+  moduleAccess,
 }: {
   role: AppRole;
   navigation: NavigationState;
@@ -448,14 +518,16 @@ export function AppSidebar({
   displayName?: string;
   roleLabel?: string;
   onSignOut?: () => void;
+  /** Modules a role alone cannot decide. See {@link ModuleAccess}. */
+  moduleAccess?: ModuleAccess;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedModules, setExpandedModules] = useState<Set<ModuleId>>(
     () => new Set([navigation.module]),
   );
 
-  const modules = getModulesForRole(role, badges);
-  const safeNavigation = resolveNavigationForRole(role, navigation);
+  const modules = getModulesForRole(role, badges, moduleAccess);
+  const safeNavigation = resolveNavigationForRole(role, navigation, moduleAccess);
 
   const toggleModule = useCallback((moduleId: ModuleId) => {
     setExpandedModules((prev) => {

@@ -491,17 +491,43 @@ export async function addIntakeNote(submissionId: string, note: string): Promise
 }
 
 /**
- * Submit an intake for commercial-routed LOBs (homeowners, trucking, commercial_gl).
- * Creates a commercial_quotes card on the Better Trello board and marks the intake as converted.
- * Returns the new commercial quote card ID.
+ * Submit a Commercial GL intake. Creates a commercial_quotes card on the board and
+ * marks the intake converted. Returns the new commercial quote card ID.
+ *
+ * Trucking and Homeowners no longer come through here. As of v1.16.5 they go to
+ * Specialty Quotes via {@link submitSpecialtyIntake}, and this RPC refuses them — as
+ * does a trigger on commercial_quotes — so the same live quote cannot end up on both
+ * the Commercial Board and the specialty list. Commercial GL is deliberately
+ * unchanged.
  */
 export async function submitCommercialIntake(id: string, assignTo?: string): Promise<string> {
   const { data, error } = await getSupabase().rpc('cs_intake_submit_commercial', {
     p_submission_id: id,
-    ...(assignTo ? { p_assigned_to: assignTo } : {}),
+    p_assigned_to: assignTo ?? null,
   });
   throwIfError(error);
   return data as string;
+}
+
+/**
+ * Submit a Trucking or Homeowners intake into Specialty Quotes.
+ *
+ * Returns the new specialty opportunity id. Customer Service does not choose an
+ * assignee: the line of business routes the work to a quoting team, every eligible
+ * member is notified, and one of them claims it. Idempotent per intake, so a retried
+ * request returns the opportunity that already exists rather than making a second one.
+ */
+export async function submitSpecialtyIntake(id: string): Promise<string> {
+  const { data, error } = await getSupabase().rpc('cs_intake_submit_specialty', {
+    p_submission_id: id,
+  });
+  throwIfError(error);
+  return data as string;
+}
+
+/** True for the lines of business that Specialty Quotes now owns. */
+export function isSpecialtyLob(lob: string | null | undefined): boolean {
+  return lob === 'trucking' || lob === 'homeowners';
 }
 
 /**

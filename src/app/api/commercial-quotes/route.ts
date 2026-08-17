@@ -64,6 +64,14 @@ export async function GET(request: Request) {
     query = query.eq("is_deleted", false);
   }
 
+  // Trucking and Homeowners cards whose live work moved to Specialty Quotes are not
+  // listed here any more. The rows and all their comments, attachments, checklists and
+  // column history are untouched — they are still fetchable by id, and the specialty
+  // opportunity references them — but showing them on the board as well would mean the
+  // same live quote existing in two places, which is exactly what the migration set out
+  // to prevent. Commercial GL is unaffected: no GL card is ever stamped.
+  query = query.is("migrated_to_specialty_at", null);
+
   if (boardColumn) {
     query = query.eq("board_column", boardColumn);
   }

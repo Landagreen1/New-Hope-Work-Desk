@@ -43,6 +43,9 @@ export async function GET() {
       profiles!commercial_quotes_assigned_to_fkey(display_name, initials)
     `)
     .eq("is_deleted", false)
+    // Cards adopted by Specialty Quotes are reported on there, with their real stage
+    // timestamps, rather than being counted twice. Commercial GL is unaffected.
+    .is("migrated_to_specialty_at", null)
     .in("board_column", ["sold", "not_sold", "commission_approved", "commission_not_approved"]);
 
   if (quotesError) {
