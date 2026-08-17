@@ -175,7 +175,7 @@ export interface NavigationTarget {
 }
 
 /** The sections of My Desk, mirrored from WorkDeskApp so navigation can name one. */
-export type DeskSection = "work" | "intake" | "pricing" | "workload";
+export type DeskSection = "work" | "intake" | "pricing" | "outcomes" | "workload";
 
 export interface NavigationState {
   module: ModuleId;

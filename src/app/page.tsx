@@ -19,7 +19,7 @@ import type { SessionProfile } from '@/lib/types';
  * Its only caller is the retired `/tools/cs-intake/queue` route, which redirects
  * here so an old bookmark still lands on the intake queue.
  */
-const DESK_SECTIONS = ['work', 'intake', 'pricing', 'workload'] as const;
+const DESK_SECTIONS = ['work', 'intake', 'pricing', 'outcomes', 'workload'] as const;
 
 function deskSectionFrom(value: string | string[] | undefined): DeskSection | undefined {
   const candidate = Array.isArray(value) ? value[0] : value;
