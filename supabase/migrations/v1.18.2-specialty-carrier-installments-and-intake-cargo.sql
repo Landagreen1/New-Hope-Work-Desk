@@ -53,6 +53,7 @@ begin
     'carrier_markets', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', m.id, 'carrier_id', m.carrier_id, 'carrier_name', c.name,
+        'market_directory_id', c.market_directory_id,
         'status', m.status,
         'handled_by', m.handled_by, 'handled_by_name', handler.display_name,
         'submitted_at', m.submitted_at, 'submitted_by', m.submitted_by,

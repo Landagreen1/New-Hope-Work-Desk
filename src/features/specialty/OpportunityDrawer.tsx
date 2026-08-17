@@ -2001,10 +2001,7 @@ function CarrierMarketExtensionsBlock({
   detail: OpportunityDetail;
   profileId: string;
 }) {
-  // The extensions need a market_directory_id to show readiness, questions, and PDF generation.
-  // For now, pass null — the components handle null gracefully by not rendering.
-  // Once specialty_carriers is extended with market_directory_id in the detail payload, wire it here.
-  const marketDirectoryId: string | null = null;
+  const marketDirectoryId = market.market_directory_id ?? null;
   const lineOfBusiness = detail.opportunity.line_of_business;
 
   return (

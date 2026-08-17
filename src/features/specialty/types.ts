@@ -148,6 +148,7 @@ export interface CarrierMarket {
   id: string;
   carrier_id: string;
   carrier_name: string;
+  market_directory_id: string | null;
   status: CarrierMarketStatus;
   handled_by: string | null;
   handled_by_name: string | null;
