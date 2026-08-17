@@ -197,6 +197,19 @@ const unreadSubmissionColumnArbs = {
   court_order_date: fc.constant(null),
   // Commercial card link
   source_commercial_quote_id: fc.constant(null),
+  // Shared-draft attribution, concurrency, and address verification (v1.15.0)
+  last_edited_by: fc.constant(null),
+  last_edited_at: fc.constant(null),
+  completed_by: fc.constant(null),
+  version: fc.constant(1),
+  source_work_item_id: fc.constant(null),
+  addr_verified: fc.constant(false),
+  addr_place_id: fc.constant(null),
+  addr_formatted: fc.constant(null),
+  renters_addr_verified: fc.constant(false),
+  renters_place_id: fc.constant(null),
+  renters_formatted: fc.constant(null),
+  renters_same_as_customer: fc.constant(false),
 };
 
 /** Generate a CsIntakeSubmission row representing a NON-RC intake in 'submitted' status */

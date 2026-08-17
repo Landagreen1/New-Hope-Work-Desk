@@ -16,11 +16,11 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Search,
   ShieldCheck,
   Table2,
   TrendingUp,
   UserCog,
-  UsersRound,
   X,
 } from "lucide-react";
 import { useCallback, useState } from "react";
@@ -46,20 +46,35 @@ export type SubNavId =
   // Sales
   | "sales_overview"
   | "sales_work"
-  | "sales_databases"
+  /**
+   * The one lookup destination for Customer Service and Sales alike: every
+   * lifecycle stage of every customer quote journey, searchable from one field.
+   *
+   * Supersedes the Quotes Database (`sales_databases`), the CS Quote Intakes list
+   * (`cs_intakes` for sales-capable roles) and the lookup half of the Sales Queue
+   * (`cs_queue`). Those all answered "where is this customer?" and an employee had
+   * to guess which one held the answer.
+   */
+  | "quote_center"
   /** The Sales Reporting Center: Overview, Agents, Sources, Review & Integrity. */
   | "sales_reporting_center"
   /** The twenty-four original reports, retained unchanged for comparison. */
   | "sales_reports"
-  // Sales Agent sub-tabs
+  // Sales Agent
+  /**
+   * My Desk. Now includes the work that used to be Pending Pricing, the Intake
+   * Queue and the Workload Log, as sections rather than separate destinations.
+   */
   | "sales_desk"
-  | "sales_pricing"
-  | "sales_intake_queue"
-  | "sales_team"
   | "sales_performance"
   // Customer Service
+  /**
+   * Commercial intake creation and tracking. Retained only for the roles that have
+   * no Sales access — commercial and commercial_supervisor — because that is their
+   * only route to the intake form and commercial routing is out of scope for this
+   * consolidation. Sales-capable roles reach intakes through Quote Center.
+   */
   | "cs_intakes"
-  | "cs_queue"
   // Commercial
   | "commercial_board"
   | "commercial_database"
@@ -114,11 +129,59 @@ export interface NavigationTarget {
   openDrawer?: boolean;
 }
 
+/** The sections of My Desk, mirrored from WorkDeskApp so navigation can name one. */
+export type DeskSection = "work" | "intake" | "pricing" | "workload";
+
 export interface NavigationState {
   module: ModuleId;
   subNav: SubNavId;
   /** Set only by a navigation that names a record, such as an inbox selection. */
   target?: NavigationTarget;
+  /**
+   * Which section of My Desk to open.
+   *
+   * Only meaningful with `subNav: "sales_desk"`. This is what lets a stale
+   * navigation state naming the retired Pending Pricing or Intake Queue screen
+   * land on the equivalent section instead of merely on My Desk.
+   */
+  deskSection?: DeskSection;
+}
+
+/**
+ * Where a retired sub-navigation identifier goes.
+ *
+ * Removing a screen without this would send someone to whichever item happens to
+ * be first in the module, which is an unexplained jump when there is a deliberate
+ * replacement. Each entry below names the replacement and why it is the right one:
+ * the three questions a screen can answer — where is this customer, what do I need
+ * to do, how is the team performing — each have exactly one destination now.
+ *
+ * Kept as a plain string map rather than typed against `SubNavId`, because these
+ * identifiers no longer exist in that union. That is the point.
+ */
+const RETIRED_SUBNAV_ALIASES: Record<
+  string,
+  { module: ModuleId; subNav: SubNavId; deskSection?: DeskSection }
+> = {
+  // "Where is this customer?" → Quote Center.
+  sales_databases: { module: "sales", subNav: "quote_center" },
+  cs_queue: { module: "sales", subNav: "sales_desk", deskSection: "intake" },
+  // "What do I need to do?" → the matching section of My Desk.
+  sales_pricing: { module: "sales", subNav: "sales_desk", deskSection: "pricing" },
+  sales_intake_queue: { module: "sales", subNav: "sales_desk", deskSection: "intake" },
+  // "How is the team performing?" → Performance.
+  sales_team: { module: "sales", subNav: "sales_performance" },
+};
+
+/**
+ * The replacement for a retired identifier, if there is one.
+ *
+ * Exported so the regression test can assert the mapping without restating it.
+ */
+export function retiredNavigationReplacement(
+  subNav: string,
+): { module: ModuleId; subNav: SubNavId; deskSection?: DeskSection } | undefined {
+  return RETIRED_SUBNAV_ALIASES[subNav];
 }
 
 interface SubNavItem {
@@ -145,27 +208,28 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
 
   // Sales module
   if (permissions.sales) {
+    // Two destinations for everyone who works quotes: what I have to do, and where
+    // a customer is. Supervisors and managers add oversight and reporting on top.
     const salesSubs: SubNavItem[] = permissions.manageSales
       ? [
           { id: "sales_overview", label: "Overview", icon: ShieldCheck },
-          { id: "sales_work", label: "Work & Pricing", icon: ClipboardList, badge: badges?.sales_work },
-          { id: "sales_databases", label: "Databases", icon: Table2 },
+          { id: "sales_work", label: "Work", icon: ClipboardList, badge: badges?.sales_work },
+          { id: "quote_center", label: "Quote Center", icon: Search },
           { id: "sales_reporting_center", label: "Reporting Center", icon: BarChart3 },
           // Retained until the new centre has been compared against these for a full
           // reporting period. Spec: .kiro/specs/sales-reporting-center-redesign,
-          // Requirement 1.
+          // Requirement 1. Not a lookup destination, so it does not compete with
+          // Quote Center.
           { id: "sales_reports", label: "Legacy Reports", icon: Table2 },
         ]
       : isCS
         ? [
-            { id: "sales_desk", label: "My Desk", icon: Gauge },
+            { id: "sales_desk", label: "My Desk", icon: Gauge, badge: badges?.sales_desk },
+            { id: "quote_center", label: "Quote Center", icon: Search },
           ]
         : [
             { id: "sales_desk", label: "My Desk", icon: Gauge, badge: badges?.sales_desk },
-            { id: "sales_pricing", label: "Pending Pricing", icon: Clock, badge: badges?.sales_pricing },
-            { id: "sales_intake_queue", label: "Intake Queue", icon: ClipboardCheck, badge: badges?.sales_intake_queue },
-            { id: "sales_team", label: "My Team", icon: UsersRound },
-            { id: "sales_databases", label: "Databases", icon: Table2 },
+            { id: "quote_center", label: "Quote Center", icon: Search },
             { id: "sales_performance", label: "Performance", icon: TrendingUp },
           ];
 
@@ -177,16 +241,22 @@ function getModulesForRole(role: AppRole, badges?: Record<string, number>): Modu
     });
   }
 
-  // Customer Service
-  if (permissions.customerService) {
+  // Customer Service.
+  //
+  // Only for roles that have no Sales access — in practice commercial and
+  // commercial_supervisor. For everyone else this module held two screens that
+  // Quote Center and My Desk now cover, and leaving it would put the old and the
+  // new lookup systems side by side, which is exactly what this consolidation is
+  // meant to end.
+  //
+  // Commercial roles keep it because it is their only route to the intake form and
+  // their routing is deliberately unchanged.
+  if (permissions.customerService && !permissions.sales) {
     modules.push({
       id: "customer_service",
       label: "Customer Service",
       icon: Headphones,
-      subItems: [
-        { id: "cs_intakes", label: "Quote Intakes", icon: Headphones },
-        { id: "cs_queue", label: "Sales Queue", icon: ClipboardCheck },
-      ],
+      subItems: [{ id: "cs_intakes", label: "Quote Intakes", icon: Headphones }],
     });
   }
 
@@ -267,7 +337,10 @@ export function getDefaultNavigation(role: AppRole): NavigationState {
     case "commercial_supervisor":
       return { module: "commercial", subNav: "commercial_board" };
     case "customer_service_supervisor":
-      return { module: "customer_service", subNav: "cs_intakes" };
+      // Supervises Customer Service but has Sales access, so the Customer Service
+      // module is no longer offered to them; Quote Center is where they look things
+      // up and My Desk is where the work is.
+      return { module: "sales", subNav: "quote_center" };
     case "manager":
     case "sales_supervisor":
     case "super_admin":
@@ -312,16 +385,43 @@ export function resolveNavigationForRole(
   role: AppRole,
   navigation: NavigationState,
 ): NavigationState {
-  const accessibleModule = getModulesForRole(role).find(
-    (candidate) => candidate.id === navigation.module,
-  );
+  const modules = getModulesForRole(role);
+
+  const isOffered = (candidate: NavigationState) =>
+    modules
+      .find((module) => module.id === candidate.module)
+      ?.subItems.some((subItem) => subItem.id === candidate.subNav) === true;
+
+  // A retired identifier resolves to its documented replacement before anything
+  // else, so someone whose stored state names the old Pending Pricing screen lands
+  // on the pricing section of My Desk rather than merely somewhere in the module.
+  // Falls through to the ordinary rules when the replacement is not offered to this
+  // role.
+  const alias = RETIRED_SUBNAV_ALIASES[navigation.subNav];
+  if (alias !== undefined) {
+    const aliased: NavigationState = {
+      module: alias.module,
+      subNav: alias.subNav,
+      ...(alias.deskSection ? { deskSection: alias.deskSection } : {}),
+    };
+    if (isOffered(aliased)) return aliased;
+  }
+
+  const accessibleModule = modules.find((candidate) => candidate.id === navigation.module);
 
   if (accessibleModule === undefined) return getDefaultNavigation(role);
 
   if (accessibleModule.subItems.some((subItem) => subItem.id === navigation.subNav)) {
-    return navigation.target === undefined || navigation.target.screen === navigation.subNav
+    // A record target only survives while it names the screen being rendered.
+    const keepTarget =
+      navigation.target === undefined || navigation.target.screen === navigation.subNav;
+    return keepTarget
       ? navigation
-      : { module: navigation.module, subNav: navigation.subNav };
+      : {
+          module: navigation.module,
+          subNav: navigation.subNav,
+          ...(navigation.deskSection ? { deskSection: navigation.deskSection } : {}),
+        };
   }
 
   const firstSubItem = accessibleModule.subItems[0];

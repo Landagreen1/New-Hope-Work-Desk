@@ -6,19 +6,27 @@ import {
   CheckCircle2,
   FileText,
   Plus,
+  RefreshCw,
   RotateCcw,
   Save,
   Send,
   ShieldCheck,
   Trash2,
+  TriangleAlert,
   UserRound,
   UsersRound,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { ui } from '../nhwd-shared/ui';
+import DuplicateWarning from '../quote-center/DuplicateWarning';
+import type { DuplicateCandidate } from '../quote-center/types';
 import VinDecoder from './VinDecoder';
-import AddressAutocomplete from './AddressAutocomplete';
+import VerifiedAddressField from '../nhwd-shared/VerifiedAddressField';
+import {
+  deriveFromCustomerAddress,
+  type VerifiedAddressValue,
+} from '../nhwd-shared/verified-address';
 import {
   type CsIntakeDriver,
   type CsIntakeLob,
@@ -29,6 +37,8 @@ import {
   type Dealer,
   type DealerSalesperson,
   type DesiredCoverage,
+  DraftConflictError,
+  getIntake,
   listDealers,
   listSalespeople,
   listCommercialAssignees,
@@ -104,6 +114,12 @@ interface Props {
   };
   readOnly?: boolean;
   onDone: () => void;
+  /**
+   * Opens an existing customer record found by the duplicate check, so the
+   * employee continues that history instead of starting a second one. When
+   * omitted the duplicate panel is informational only.
+   */
+  onOpenExisting?: (candidate: DuplicateCandidate) => void;
 }
 
 function Field({ label, required, children, hint }: { label: string; required?: boolean; children: React.ReactNode; hint?: string }) {
@@ -133,7 +149,13 @@ function Section({ icon, title, subtitle, children }: { icon: React.ReactNode; t
   );
 }
 
-export default function IntakeForm({ profileId, initial, readOnly = false, onDone }: Props) {
+export default function IntakeForm({
+  profileId,
+  initial,
+  readOnly = false,
+  onDone,
+  onOpenExisting,
+}: Props) {
   const [lobPicked, setLobPicked] = useState<boolean>(!!initial);
   const [submission, setSubmission] = useState<DraftSubmission>(() => {
     const row = initial?.submission;
@@ -167,6 +189,8 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Set when a save was refused because another employee saved first. */
+  const [conflict, setConflict] = useState<string | null>(null);
 
   const isCommercial = submission.line_of_business === 'commercial_auto';
   const currentLob = submission.line_of_business as ExtendedLob;
@@ -175,6 +199,26 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
   const isCommercialRouted = isCommercialRoute(currentLob);
   const isFromRenewal = Boolean(submission.source_renewal_id);
   const disabled = readOnly || busy;
+
+  /**
+   * Whether to run the duplicate check at all.
+   *
+   * Only while the intake is still being written — once it is submitted the
+   * decision has been made and a warning would be noise. And only once at least
+   * one real identity signal exists, because asking on a half-typed name would
+   * warn on nearly everyone.
+   */
+  const identityPhoneDigits = (submission.insured_phone_primary ?? '').replace(/\D/g, '');
+  const hasIdentitySignal =
+    identityPhoneDigits.length >= 10 ||
+    Boolean(submission.insured_email?.trim()) ||
+    Boolean(submission.business_name?.trim()) ||
+    Boolean(submission.insured_dob) ||
+    (Boolean(submission.insured_first_name?.trim()) && Boolean(submission.insured_last_name?.trim()));
+  const showDuplicateCheck =
+    hasIdentitySignal &&
+    !isFromRenewal &&
+    (!submission.status || submission.status === 'draft' || submission.status === 'returned');
 
   useEffect(() => {
     listDealers().then(setDealers).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load sources.'));
@@ -341,13 +385,20 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       if (!s.trailer_type || !String(s.trailer_type).trim()) return 'Trailer type is required.';
     }
 
-    // Renters validation
+    // Renters validation. The rental property is the insured risk, so its address
+    // has to be a place Google actually returned. cs_intake_submit enforces the
+    // same rule server-side; this check only produces the better message.
     if (currentLob === 'renters') {
       const s = submission as Record<string, unknown>;
       if (!s.renters_property_address || !String(s.renters_property_address).trim()) return 'Rental property address is required.';
       if (!s.renters_city || !String(s.renters_city).trim()) return 'City is required for renters.';
       if (!s.renters_state || !String(s.renters_state).trim()) return 'State is required for renters.';
       if (!s.renters_zip || !String(s.renters_zip).trim()) return 'ZIP is required for renters.';
+      if (!s.renters_addr_verified) {
+        return s.renters_same_as_customer
+          ? 'Verify the customer address by choosing it from the address suggestions. The rental property inherits that verification.'
+          : 'Choose the rental property address from the address suggestions so it can be verified.';
+      }
     }
 
     // Personal auto / commercial auto standard validation
@@ -404,7 +455,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         comprehensive_deductible: submission.comprehensive_deductible || null,
         collision_deductible: submission.collision_deductible || null,
       };
-      const id = await saveDraft(
+      const saved = await saveDraft(
         profileId,
         {
           ...submission,
@@ -415,8 +466,12 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         drivers,
         vehicles,
         owners,
+        submission.version ?? null,
       );
-      patch({ id });
+      const id = saved.id;
+      // The stored version has moved on, so hold the new one: otherwise the very
+      // next save from this editor would look stale to the concurrency check.
+      patch({ id, version: saved.version } as Partial<DraftSubmission>);
       if (alsoSubmit) {
         if (isCommercialRouted) {
           const cardId = await submitCommercialIntake(id, selectedAssignee || undefined);
@@ -430,7 +485,34 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         setNotice('Draft saved.');
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The intake could not be saved.');
+      if (caught instanceof DraftConflictError) {
+        // Another employee saved while this editor was open. Refusing the write
+        // and asking for a reload is the whole point — their information must not
+        // be silently replaced by this older copy.
+        setConflict(caught.message);
+      } else {
+        setError(caught instanceof Error ? caught.message : 'The intake could not be saved.');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Reloads the stored intake, discarding this editor's unsaved copy. */
+  async function reloadAfterConflict() {
+    if (!submission.id) return;
+    setBusy(true);
+    try {
+      const fresh = await getIntake(submission.id);
+      if (!fresh) throw new Error('The intake could not be reloaded.');
+      setSubmission({ ...(fresh.submission as unknown as DraftSubmission) });
+      setDrivers(fresh.drivers);
+      setVehicles(fresh.vehicles);
+      setOwners(fresh.owners ?? []);
+      setConflict(null);
+      setNotice('Reloaded the latest saved information.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The intake could not be reloaded.');
     } finally {
       setBusy(false);
     }
@@ -535,7 +617,58 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
     renters_personal_property_value: (sub.renters_personal_property_value as string) || '',
     renters_liability_limit: (sub.renters_liability_limit as string) || '',
     renters_move_in_date: (sub.renters_move_in_date as string) || '',
+    renters_place_id: (sub.renters_place_id as string) || null,
+    renters_formatted: (sub.renters_formatted as string) || null,
+    renters_addr_verified: Boolean(sub.renters_addr_verified),
+    renters_same_as_customer: Boolean(sub.renters_same_as_customer),
   };
+
+  // ── Address adapters ───────────────────────────────────────────────────────
+  // The submission is a flat row of columns; VerifiedAddressField works with a
+  // single address object. These two functions are the only place that mapping
+  // lives, for either address.
+  const customerAddress: VerifiedAddressValue = {
+    street: submission.addr_street || '',
+    unit: submission.addr_unit || '',
+    city: submission.addr_city || '',
+    state: submission.addr_state || '',
+    zip: submission.addr_zip || '',
+    placeId: (sub.addr_place_id as string) || null,
+    formatted: (sub.addr_formatted as string) || null,
+    verified: Boolean(sub.addr_verified),
+  };
+
+  function applyCustomerAddress(next: VerifiedAddressValue) {
+    const changes: Record<string, unknown> = {
+      addr_street: next.street || null,
+      addr_unit: next.unit || null,
+      addr_city: next.city || null,
+      addr_state: next.state || null,
+      addr_zip: next.zip || null,
+      addr_place_id: next.placeId,
+      addr_formatted: next.formatted,
+      addr_verified: next.verified,
+    };
+
+    // A rental address marked "same as customer" tracks the customer address,
+    // including its verification. Letting the two drift would leave a Renters
+    // intake claiming a verified rental address that no longer matches anything.
+    if (Boolean(sub.renters_same_as_customer)) {
+      const derived = deriveFromCustomerAddress(next);
+      Object.assign(changes, {
+        renters_property_address: derived.street || null,
+        renters_unit: derived.unit || null,
+        renters_city: derived.city || null,
+        renters_state: derived.state || null,
+        renters_zip: derived.zip || null,
+        renters_place_id: derived.placeId,
+        renters_formatted: derived.formatted,
+        renters_addr_verified: derived.verified,
+      });
+    }
+
+    patch(changes as Partial<DraftSubmission>);
+  }
 
   // If LOB hasn't been picked yet, show the picker
   if (!lobPicked) {
@@ -565,6 +698,59 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
       ) : null}
       {error ? <div className={ui.error}>{error}</div> : null}
       {notice ? <div className={ui.success}>{notice}</div> : null}
+
+      {/*
+        A shared draft can be open in two places at once. When the stored version
+        has moved on, the save is refused rather than applied, and the employee is
+        told plainly and offered the newer information.
+      */}
+      {conflict ? (
+        <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 px-4 py-4">
+          <div className="flex items-start gap-3">
+            <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+            <div className="flex-1">
+              <p className="text-sm font-black text-amber-950">{conflict}</p>
+              <p className="mt-1 text-xs font-semibold text-amber-800">
+                Nothing was overwritten. Reload to see what your teammate added, then
+                re-enter anything of yours that is still missing.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={ui.btnPrimary}
+                  disabled={busy}
+                  onClick={() => void reloadAfterConflict()}
+                >
+                  <RefreshCw className="h-4 w-4" /> Reload latest information
+                </button>
+                <button type="button" className={ui.btnGhost} onClick={() => setConflict(null)}>
+                  Keep editing my copy
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/*
+        Possible existing records, checked in the background as identity details
+        are entered. Never blocks: it prevents the accidental duplicate while
+        leaving the legitimate second quote alone.
+      */}
+      {!readOnly && showDuplicateCheck ? (
+        <DuplicateWarning
+          input={{
+            excludeIntakeId: submission.id ?? null,
+            phone: submission.insured_phone_primary ?? null,
+            email: submission.insured_email ?? null,
+            firstName: submission.insured_first_name ?? null,
+            lastName: submission.insured_last_name ?? null,
+            businessName: submission.business_name ?? null,
+            dob: submission.insured_dob ?? null,
+          }}
+          onOpenExisting={onOpenExisting}
+        />
+      ) : null}
 
       {/* Header with LOB change option */}
       <section className="rounded-[26px] border border-[#c9d5e9] bg-gradient-to-br from-white to-[#eef3fb] p-5 shadow-sm sm:p-6">
@@ -832,6 +1018,7 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
         <OtherPersonalSection
           lob={currentLob}
           data={otherPersonalData}
+          customerAddress={customerAddress}
           onChange={(opPatch) => {
             patch(opPatch as unknown as Partial<DraftSubmission>);
           }}
@@ -851,32 +1038,23 @@ export default function IntakeForm({ profileId, initial, readOnly = false, onDon
           <Field label="Preferred language"><select className={ui.select} disabled={disabled} value={submission.preferred_language || ''} onChange={(event) => patch({ preferred_language: event.target.value || null })}><option value="">Not specified</option><option value="English">English</option><option value="Spanish">Spanish</option><option value="Other">Other</option></select></Field>
           <Field label="Preferred contact"><select className={ui.select} disabled={disabled} value={submission.preferred_contact || ''} onChange={(event) => patch({ preferred_contact: event.target.value || null })}><option value="">Not specified</option><option value="Call">Call</option><option value="SMS">SMS</option><option value="WhatsApp">WhatsApp</option><option value="Email">Email</option></select></Field>
         </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="lg:col-span-2"><Field label="Street address" required><AddressAutocomplete defaultValue={submission.addr_street || ''} disabled={disabled} onChange={(val) => patch({ addr_street: val || null })} onAddressSelected={({ street, unit, city, state, zip }) => patch({ addr_street: street || null, addr_unit: unit, addr_city: city || null, addr_state: state || null, addr_zip: zip || null })} /></Field></div>
-          <Field label="Unit / Apt"><input className={ui.input} disabled={disabled} value={submission.addr_unit || ''} onChange={(event) => patch({ addr_unit: event.target.value || null })} /></Field>
-          <Field label="City" required><input className={ui.input} disabled={disabled} value={submission.addr_city || ''} onChange={(event) => patch({ addr_city: event.target.value || null })} /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="State" required><select className={ui.select} disabled={disabled} value={submission.addr_state || ''} onChange={(event) => patch({ addr_state: event.target.value || null })}><option value="">—</option>{US_STATES.map((state) => <option key={state}>{state}</option>)}</select></Field>
-            <Field label="ZIP" required><input className={ui.input} disabled={disabled} value={submission.addr_zip || ''} onChange={(event) => {
-              const zip = event.target.value || null;
-              patch({ addr_zip: zip });
-              // Auto-fill city and state from ZIP using Zippopotam API
-              if (zip && zip.length === 5 && /^\d{5}$/.test(zip)) {
-                fetch(`https://api.zippopotam.us/us/${zip}`)
-                  .then(r => r.ok ? r.json() : null)
-                  .then(data => {
-                    if (data?.places?.[0]) {
-                      const place = data.places[0];
-                      patch({
-                        addr_city: place['place name'] || submission.addr_city,
-                        addr_state: place['state abbreviation'] || submission.addr_state,
-                      });
-                    }
-                  })
-                  .catch(() => {});
-              }
-            }} /></Field>
-          </div>
+        {/*
+          Customer / mailing address. One reusable control now owns the whole
+          address, including whether it was actually verified. The previous
+          version wired the autocomplete to the street line only and left city,
+          state and ZIP as independent inputs with a ZIP-lookup side effect —
+          which meant an address could be assembled by hand and there was no way
+          to tell that apart from one Google returned.
+        */}
+        <div className="mt-5">
+          <p className={`${ui.sectionTitle} mb-1`}>Customer / Mailing Address</p>
+          <VerifiedAddressField
+            value={customerAddress}
+            onChange={applyCustomerAddress}
+            disabled={disabled}
+            required
+            hint="Pick the address from the suggestions so the structured city, state and ZIP come from Google rather than being typed."
+          />
         </div>
       </Section>
 

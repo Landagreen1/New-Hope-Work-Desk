@@ -7,6 +7,7 @@ import {
   canAccessSales,
   canAccessSalesIntakeQueue,
 } from '@/lib/permissions';
+import { viewQuoteCenter as canViewQuoteCenter } from '@/features/quote-center/permissions';
 
 export type ModuleRole = AppRole;
 export type ModuleStatus = 'active' | 'planned';
@@ -52,11 +53,23 @@ export const appModules: AppModule[] = [
     status: 'active',
   },
   {
+    // The queue is work, so it is now the Intake section of My Desk rather than a
+    // destination of its own. The id and route are kept so an existing `cs-intake-queue`
+    // lookup still resolves; the route redirects to My Desk with that section open.
     id: 'cs-intake-queue',
     name: 'Sales Intake Queue',
-    description: 'Claim or assign completed Customer Service intakes and convert them into quotes.',
-    route: '/tools/cs-intake/queue',
+    description: 'Moved into My Desk. Opens the Intake section of the Work Desk.',
+    route: '/?desk=intake',
     roles: rolesWhere(canAccessSalesIntakeQueue),
+    status: 'active',
+  },
+  {
+    id: 'quote-center',
+    name: 'Quote Center',
+    description:
+      'One search across every stage of a customer quote journey: drafts, submitted intakes, active quotes, price sent, sold and not sold.',
+    route: '/',
+    roles: rolesWhere(canViewQuoteCenter),
     status: 'active',
   },
   {

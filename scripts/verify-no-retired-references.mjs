@@ -147,6 +147,18 @@ const EXEMPT_PATHS = [
     reason: 'this script names every target by construction',
     endsWith: 'never',
   },
+  {
+    path: 'src/components/app-sidebar.tsx',
+    reason:
+      'holds RETIRED_SUBNAV_ALIASES, which must name the retired quote identifiers in order to resolve a stored navigation state that still uses one. Naming them there is the replacement, not a leftover reference.',
+    endsWith: 'never',
+  },
+  {
+    path: 'src/components/__tests__/retired-quote-navigation.test.ts',
+    reason:
+      'asserts that each retired quote identifier resolves to its replacement, which requires naming them.',
+    endsWith: 'never',
+  },
 ];
 
 /**
@@ -247,6 +259,61 @@ const TARGETS = [
     ignores:
       '/api/time-clock, /api/time-clock/breaks, /api/time-clock/entries (all preserved), /api/attendance/records (its replacement)',
   },
+
+  // ── Quote Center consolidation ────────────────────────────────────────────
+  //
+  // Five sub-navigation identifiers were retired when the four overlapping quote
+  // lookup screens collapsed into Quote Center and My Desk. Each is still
+  // recognised at runtime by RETIRED_SUBNAV_ALIASES in app-sidebar.tsx, which is
+  // deliberate — a user's stored navigation state may still name one — but no
+  // source file should be *offering* them any more.
+  //
+  // The aliases themselves are the one legitimate remaining use, so
+  // `app-sidebar.tsx` is exempt below for exactly the reason the deletion targets
+  // were: it is the file whose job is to name them.
+  {
+    id: 'sales_databases',
+    group: 'quote-navigation',
+    clearedBy: 'quote-center',
+    pattern: /\bsales_databases\b/g,
+    matches: 'the retired Databases screen identifier, replaced by quote_center',
+    ignores: 'quote_center, commercial_database, sales_desk',
+  },
+  {
+    id: 'sales_pricing',
+    group: 'quote-navigation',
+    clearedBy: 'quote-center',
+    pattern: /\bsales_pricing\b/g,
+    matches:
+      'the retired Pending Pricing screen identifier, replaced by the pricing section of My Desk',
+    ignores: 'pending_pricing_quotes, priceSentAt, sales_desk',
+  },
+  {
+    id: 'sales_intake_queue',
+    group: 'quote-navigation',
+    clearedBy: 'quote-center',
+    pattern: /\bsales_intake_queue\b/g,
+    matches:
+      'the retired Intake Queue screen identifier, replaced by the intake section of My Desk',
+    ignores: 'IntakeQueue (the component, which is still rendered), cs_intake_submissions',
+  },
+  {
+    id: 'sales_team',
+    group: 'quote-navigation',
+    clearedBy: 'quote-center',
+    pattern: /\bsales_team\b/g,
+    matches: 'the retired My Team screen identifier, replaced by sales_performance',
+    ignores: 'MyTeamPanel (the component, now rendered under Performance), TeamPerformanceTable',
+  },
+  {
+    id: 'cs_queue',
+    group: 'quote-navigation',
+    clearedBy: 'quote-center',
+    pattern: /\bcs_queue\b/g,
+    matches:
+      'the retired Customer Service Sales Queue identifier, which rendered the same IntakeQueue component as sales_intake_queue',
+    ignores: 'cs_intakes (retained for commercial roles), cs_intake_submissions',
+  },
 ];
 
 /** How each group is described in the verdict. */
@@ -254,9 +321,10 @@ const GROUP_LABEL = {
   component: 'Superseded components (gate for task 24.2)',
   route: 'Superseded routes (gate for task 24.3)',
   navigation: 'Retired navigation identifiers (gate for task 24.4)',
+  'quote-navigation': 'Retired quote lookup identifiers (gate for the Quote Center consolidation)',
 };
 
-const GROUP_ORDER = ['component', 'route', 'navigation'];
+const GROUP_ORDER = ['component', 'route', 'navigation', 'quote-navigation'];
 
 // ─── Comment blanking ────────────────────────────────────────────────────────
 

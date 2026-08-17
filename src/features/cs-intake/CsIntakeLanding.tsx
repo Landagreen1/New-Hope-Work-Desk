@@ -17,6 +17,7 @@ import {
   type CsIntakeOwner,
   type CsIntakeSubmission,
   type CsIntakeVehicle,
+  type IntakeInvolvement,
 } from './api';
 
 type LoadedIntake = {
@@ -61,7 +62,14 @@ export default function CsIntakeLanding({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [rows, setRows] = useState<CsIntakeSubmission[]>([]);
+  /**
+   * The intakes this employee has a hand in, each tagged with how: started,
+   * completed, or edited. A shared draft finished by a teammate is listed for both
+   * of them, described accurately for each.
+   */
+  const [rows, setRows] = useState<(CsIntakeSubmission & { _involvement: IntakeInvolvement[] })[]>(
+    [],
+  );
   const [selected, setSelected] = useState<LoadedIntake | null>(null);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
@@ -179,9 +187,16 @@ export default function CsIntakeLanding({
     );
   }
 
-  const drafts = rows.filter((row) => row.status === 'draft').length;
-  const submitted = rows.filter((row) => ['submitted', 'claimed'].includes(row.status)).length;
-  const converted = rows.filter((row) => row.status === 'converted').length;
+  // Started and completed are counted separately, because a shared draft can be
+  // started by one employee and finished by another. Reporting only one of them
+  // would either hide the work of whoever picked the draft up or take credit away
+  // from whoever opened it.
+  const startedByMe = rows.filter((row) => row._involvement.includes('started')).length;
+  const completedByMe = rows.filter((row) => row._involvement.includes('completed')).length;
+  const drafts = rows.filter((row) => ['draft', 'returned'].includes(row.status)).length;
+  const helpedOn = rows.filter(
+    (row) => !row._involvement.includes('started') && row._involvement.length > 0,
+  ).length;
 
   return (
     <ModuleShell
@@ -195,21 +210,30 @@ export default function CsIntakeLanding({
       {error ? <div className={`${ui.error} mb-5`}>{error}</div> : null}
 
       {/* Summary stats */}
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className={ui.stat}>
-          <p className={ui.statLabel}>Drafts</p>
+          <p className={ui.statLabel}>Drafts Started</p>
+          <p className={ui.statValue}>{startedByMe}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">Records you opened</p>
+        </div>
+        <div className={ui.stat}>
+          <p className={ui.statLabel}>Intakes Completed</p>
+          <p className={ui.statValue}>{completedByMe}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            You finished and submitted these
+          </p>
+        </div>
+        <div className={ui.stat}>
+          <p className={ui.statLabel}>Unfinished Drafts</p>
           <p className={ui.statValue}>{drafts}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">Ready for your attention</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">Still need information</p>
         </div>
         <div className={ui.stat}>
-          <p className={ui.statLabel}>Submitted / Claimed</p>
-          <p className={ui.statValue}>{submitted}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">In the queue for Sales</p>
-        </div>
-        <div className={ui.stat}>
-          <p className={ui.statLabel}>Converted to Quotes</p>
-          <p className={ui.statValue}>{converted}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">Successfully claimed by an Agent</p>
+          <p className={ui.statLabel}>Helped On</p>
+          <p className={ui.statValue}>{helpedOn}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            Teammates&apos; drafts you worked on
+          </p>
         </div>
       </section>
 

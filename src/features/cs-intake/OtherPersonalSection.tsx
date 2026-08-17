@@ -2,6 +2,12 @@
 
 import { Anchor, Car, Home, Key } from 'lucide-react';
 import { ui } from '../nhwd-shared/ui';
+import VerifiedAddressField from '../nhwd-shared/VerifiedAddressField';
+import {
+  deriveFromCustomerAddress,
+  emptyVerifiedAddress,
+  type VerifiedAddressValue,
+} from '../nhwd-shared/verified-address';
 import type { ExtendedLob } from './LobPicker';
 
 export interface OtherPersonalData {
@@ -42,6 +48,13 @@ export interface OtherPersonalData {
   renters_personal_property_value: string;
   renters_liability_limit: string;
   renters_move_in_date: string;
+  /** Google Place ID of the verified rental property, when one was selected. */
+  renters_place_id: string | null;
+  renters_formatted: string | null;
+  /** True only while the rental address is the one Google returned. */
+  renters_addr_verified: boolean;
+  /** When true the rental address is derived from the customer address. */
+  renters_same_as_customer: boolean;
 }
 
 interface Props {
@@ -49,6 +62,11 @@ interface Props {
   data: OtherPersonalData;
   onChange: (patch: Partial<OtherPersonalData>) => void;
   disabled?: boolean;
+  /**
+   * The customer's verified address, so "Same as Customer Address" can derive
+   * the rental property from it instead of asking for it twice.
+   */
+  customerAddress?: VerifiedAddressValue;
 }
 
 function Field({ label, required, children, hint }: { label: string; required?: boolean; children: React.ReactNode; hint?: string }) {
@@ -226,7 +244,55 @@ function TrailerFields({ data, onChange, disabled }: Omit<Props, 'lob'>) {
   );
 }
 
-function RentersFields({ data, onChange, disabled }: Omit<Props, 'lob'>) {
+/**
+ * Renters.
+ *
+ * The customer's mailing address and the rental property are two genuinely
+ * different addresses and stay separate. What changed is that the rental
+ * property — the actual insured risk — is now entered through the same
+ * Google-verified control as the customer address instead of four free-text
+ * boxes, and "Same as Customer Address" derives it rather than making the
+ * employee type it twice.
+ */
+function RentersFields({ data, onChange, disabled, customerAddress }: Omit<Props, 'lob'>) {
+  const rentalAddress: VerifiedAddressValue = {
+    street: data.renters_property_address,
+    unit: data.renters_unit,
+    city: data.renters_city,
+    state: data.renters_state,
+    zip: data.renters_zip,
+    placeId: data.renters_place_id,
+    formatted: data.renters_formatted,
+    verified: data.renters_addr_verified,
+  };
+
+  function writeRentalAddress(next: VerifiedAddressValue, sameAsCustomer: boolean) {
+    onChange({
+      renters_property_address: next.street,
+      renters_unit: next.unit,
+      renters_city: next.city,
+      renters_state: next.state,
+      renters_zip: next.zip,
+      renters_place_id: next.placeId,
+      renters_formatted: next.formatted,
+      renters_addr_verified: next.verified,
+      renters_same_as_customer: sameAsCustomer,
+    });
+  }
+
+  function handleSameAsCustomer(checked: boolean) {
+    if (!checked) {
+      // Unticking leaves the copied values in place as a starting point but drops
+      // the inherited verification, because the employee is about to change the
+      // address and it is no longer the place that was verified.
+      writeRentalAddress({ ...rentalAddress, verified: false, placeId: null, formatted: null }, false);
+      return;
+    }
+    writeRentalAddress(deriveFromCustomerAddress(customerAddress ?? emptyVerifiedAddress()), true);
+  }
+
+  const sameAsCustomer = data.renters_same_as_customer;
+
   return (
     <section className={ui.card}>
       <div className={ui.cardHeader}>
@@ -241,24 +307,40 @@ function RentersFields({ data, onChange, disabled }: Omit<Props, 'lob'>) {
         </div>
       </div>
       <div className={ui.cardPad}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <Field label="Property address" required>
-              <input type="text" className={ui.input} value={data.renters_property_address} onChange={(e) => onChange({ renters_property_address: e.target.value })} placeholder="Street address of rental" disabled={disabled} />
-            </Field>
-          </div>
-          <Field label="Unit / Apt">
-            <input type="text" className={ui.input} value={data.renters_unit} onChange={(e) => onChange({ renters_unit: e.target.value })} placeholder="Apt, Suite, Unit" disabled={disabled} />
-          </Field>
-          <Field label="City" required>
-            <input type="text" className={ui.input} value={data.renters_city} onChange={(e) => onChange({ renters_city: e.target.value })} placeholder="City" disabled={disabled} />
-          </Field>
-          <Field label="State" required>
-            <input type="text" className={ui.input} value={data.renters_state} onChange={(e) => onChange({ renters_state: e.target.value })} placeholder="State" disabled={disabled} />
-          </Field>
-          <Field label="ZIP" required>
-            <input type="text" className={ui.input} value={data.renters_zip} onChange={(e) => onChange({ renters_zip: e.target.value })} placeholder="ZIP code" disabled={disabled} />
-          </Field>
+        <p className={`${ui.sectionTitle} mb-1`}>Rental Property Address</p>
+        <p className="mb-3 text-sm font-semibold text-slate-500">
+          The property being insured. This may differ from the customer&apos;s mailing address.
+        </p>
+
+        <label className={`${ui.checkboxRow} mb-4 rounded-2xl border border-[#c9d5e9] bg-[#f8faff] px-4 py-3`}>
+          <input
+            type="checkbox"
+            checked={sameAsCustomer}
+            disabled={disabled}
+            onChange={(event) => handleSameAsCustomer(event.target.checked)}
+          />
+          <span className="font-black text-[#223f7a]">Same as Customer Address</span>
+          <span className="ml-1 text-xs font-semibold text-slate-500">
+            Copies the verified customer address, including its verification.
+          </span>
+        </label>
+
+        <VerifiedAddressField
+          value={rentalAddress}
+          onChange={(next) => writeRentalAddress(next, false)}
+          disabled={disabled || sameAsCustomer}
+          readOnlySummary={sameAsCustomer}
+          required
+          requireVerification
+          streetLabel="Rental property address"
+          hint={
+            sameAsCustomer
+              ? 'Derived from the customer address above. Untick to enter a different property.'
+              : 'Choose the property from the suggestions. A typed rental address cannot be submitted.'
+          }
+        />
+
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Landlord name">
             <input type="text" className={ui.input} value={data.renters_landlord_name} onChange={(e) => onChange({ renters_landlord_name: e.target.value })} placeholder="Property owner / management co." disabled={disabled} />
           </Field>
@@ -282,7 +364,7 @@ function RentersFields({ data, onChange, disabled }: Omit<Props, 'lob'>) {
   );
 }
 
-export default function OtherPersonalSection({ lob, data, onChange, disabled }: Props) {
+export default function OtherPersonalSection({ lob, data, onChange, disabled, customerAddress }: Props) {
   switch (lob) {
     case 'motorcycle':
       return <MotorcycleFields data={data} onChange={onChange} disabled={disabled} />;
@@ -291,7 +373,14 @@ export default function OtherPersonalSection({ lob, data, onChange, disabled }: 
     case 'trailer':
       return <TrailerFields data={data} onChange={onChange} disabled={disabled} />;
     case 'renters':
-      return <RentersFields data={data} onChange={onChange} disabled={disabled} />;
+      return (
+        <RentersFields
+          data={data}
+          onChange={onChange}
+          disabled={disabled}
+          customerAddress={customerAddress}
+        />
+      );
     default:
       return null;
   }

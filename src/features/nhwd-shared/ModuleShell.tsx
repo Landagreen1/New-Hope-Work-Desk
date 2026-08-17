@@ -86,9 +86,11 @@ export function ModuleShell({
             {role && canAccessCustomerService(role) && (
               <Link href="/tools/cs-intake" className={ui.btnGhost}><ClipboardList className="h-4 w-4" />Quote Intake</Link>
             )}
-            {role && canAccessSalesIntakeQueue(role) && (
-              <Link href="/tools/cs-intake/queue" className={ui.btnGhost}>Sales Intake Queue</Link>
-            )}
+            {/*
+              The Sales Intake Queue link is gone from here. The queue is work, so it
+              lives as the Intake section of My Desk; offering it as a route as well
+              made one screen reachable three ways.
+            */}
             {role && canAccessRenewals(role) && (
               <Link href="/tools/renewals" className={ui.btnGhost}>Renewals</Link>
             )}
