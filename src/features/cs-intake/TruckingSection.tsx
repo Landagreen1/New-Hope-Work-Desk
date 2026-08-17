@@ -122,19 +122,8 @@ export default function TruckingSection({ data, onChange, disabled }: TruckingSe
             </Field>
           </div>
 
-          {/* Operations Row */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Cargo Type">
-              <input
-                type="text"
-                className={ui.input}
-                value={data.cargo_type}
-                onChange={(e) => onChange({ cargo_type: e.target.value })}
-                placeholder="e.g. General freight, Refrigerated, Hazmat"
-                disabled={disabled}
-              />
-            </Field>
-
+          {/* Operations Row — Cargo Type moved to dedicated CargoSection */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Power Units" hint="Number of trucks">
               <input
                 type="number"

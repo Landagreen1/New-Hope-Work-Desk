@@ -52,12 +52,13 @@ import DatePicker from '../nhwd-shared/DatePicker';
 import LobPicker, { type ExtendedLob, isCommercialRoute } from './LobPicker';
 import NonOwnersSection, { type NonOwnersData } from './NonOwnersSection';
 import TruckingSection, { type TruckingData } from './TruckingSection';
+import CargoSection, { type CargoData, type CargoCommodity } from './CargoSection';
 import CommercialGlSection, { type CommercialGlData, emptyOwner } from './CommercialGlSection';
 import HomeownersSection, { type HomeownersData } from './HomeownersSection';
 import OtherPersonalSection, { type OtherPersonalData } from './OtherPersonalSection';
 
 const US_STATES = [
-  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
+  'AL','AK','AZ','AR','CA','CO','CT','DC','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
 const emptyDriver = (position = 1): CsIntakeDriver => ({
@@ -113,6 +114,7 @@ interface Props {
     drivers: CsIntakeDriver[];
     vehicles: CsIntakeVehicle[];
     owners?: CsIntakeOwner[];
+    commodities?: CargoCommodity[];
   };
   readOnly?: boolean;
   onDone: () => void;
@@ -182,6 +184,9 @@ export default function IntakeForm({
   const [vehicles, setVehicles] = useState<CsIntakeVehicle[]>(initial?.vehicles?.length ? initial.vehicles : (submission.line_of_business === 'commercial_gl' ? [] : [emptyVehicle()]));
   const [owners, setOwners] = useState<CsIntakeOwner[]>(
     initial?.owners?.length ? initial.owners : [emptyOwner()],
+  );
+  const [commodities, setCommodities] = useState<CargoCommodity[]>(
+    initial?.commodities?.length ? initial.commodities : [],
   );
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [salespeople, setSalespeople] = useState<DealerSalesperson[]>([]);
@@ -480,6 +485,7 @@ export default function IntakeForm({
         drivers,
         vehicles,
         owners,
+        commodities,
         submission.version ?? null,
       );
       const id = saved.id;
@@ -530,6 +536,7 @@ export default function IntakeForm({
       setDrivers(fresh.drivers);
       setVehicles(fresh.vehicles);
       setOwners(fresh.owners ?? []);
+      setCommodities(fresh.commodities ?? []);
       setConflict(null);
       setNotice('Reloaded the latest saved information.');
     } catch (caught) {
@@ -604,6 +611,26 @@ export default function IntakeForm({
   };
 
   const sub = submission as Record<string, unknown>;
+  const cargoData: CargoData = {
+    commodities,
+    primary_commodity: (sub.primary_commodity as string) || '',
+    cargo_description: (sub.cargo_description as string) || '',
+    broker_load_board: sub.broker_load_board as boolean | null ?? null,
+    commodity_mix_known: sub.commodity_mix_known as boolean | null ?? null,
+    typical_load_value: sub.typical_load_value as number | null ?? null,
+    max_load_value: sub.max_load_value as number | null ?? null,
+    requested_cargo_limit: sub.requested_cargo_limit as number | null ?? null,
+    cargo_deductible: sub.cargo_deductible as number | null ?? null,
+    refrigerated: sub.refrigerated as boolean | null ?? null,
+    temperature_controlled_equipment: sub.temperature_controlled_equipment as boolean | null ?? null,
+    reefer_breakdown_requested: (sub.reefer_breakdown_requested as string) || '',
+    hazmat: (sub.hazmat as string) || '',
+    high_value_cargo_flag: (sub.high_value_cargo_flag as boolean) || false,
+    auto_hauling_vehicles_per_load: sub.auto_hauling_vehicles_per_load as number | null ?? null,
+    auto_hauling_max_value: sub.auto_hauling_max_value as number | null ?? null,
+    machinery_max_value: sub.machinery_max_value as number | null ?? null,
+    excluded_cargo: (sub.excluded_cargo as Record<string, string>) || {},
+  };
   const otherPersonalData: OtherPersonalData = {
     moto_year: (sub.moto_year as string) || '',
     moto_make: (sub.moto_make as string) || '',
@@ -958,6 +985,41 @@ export default function IntakeForm({
             if ('operating_radius_miles' in truckPatch) mapped.operating_radius_miles = truckPatch.operating_radius_miles;
             patch(mapped);
           }}
+          disabled={disabled}
+        />
+      )}
+
+      {/* Cargo / Commodities section (Trucking only) */}
+      {currentLob === 'trucking' && (
+        <CargoSection
+          data={cargoData}
+          onChange={(cargoPatch) => {
+            const mapped: Record<string, unknown> = {};
+            if ('commodities' in cargoPatch && cargoPatch.commodities !== undefined) {
+              setCommodities(cargoPatch.commodities);
+            }
+            if ('primary_commodity' in cargoPatch) mapped.primary_commodity = cargoPatch.primary_commodity || null;
+            if ('cargo_description' in cargoPatch) mapped.cargo_description = cargoPatch.cargo_description || null;
+            if ('broker_load_board' in cargoPatch) mapped.broker_load_board = cargoPatch.broker_load_board;
+            if ('commodity_mix_known' in cargoPatch) mapped.commodity_mix_known = cargoPatch.commodity_mix_known;
+            if ('typical_load_value' in cargoPatch) mapped.typical_load_value = cargoPatch.typical_load_value;
+            if ('max_load_value' in cargoPatch) mapped.max_load_value = cargoPatch.max_load_value;
+            if ('requested_cargo_limit' in cargoPatch) mapped.requested_cargo_limit = cargoPatch.requested_cargo_limit;
+            if ('cargo_deductible' in cargoPatch) mapped.cargo_deductible = cargoPatch.cargo_deductible;
+            if ('refrigerated' in cargoPatch) mapped.refrigerated = cargoPatch.refrigerated;
+            if ('temperature_controlled_equipment' in cargoPatch) mapped.temperature_controlled_equipment = cargoPatch.temperature_controlled_equipment;
+            if ('reefer_breakdown_requested' in cargoPatch) mapped.reefer_breakdown_requested = cargoPatch.reefer_breakdown_requested || null;
+            if ('hazmat' in cargoPatch) mapped.hazmat = cargoPatch.hazmat || null;
+            if ('high_value_cargo_flag' in cargoPatch) mapped.high_value_cargo_flag = cargoPatch.high_value_cargo_flag;
+            if ('auto_hauling_vehicles_per_load' in cargoPatch) mapped.auto_hauling_vehicles_per_load = cargoPatch.auto_hauling_vehicles_per_load;
+            if ('auto_hauling_max_value' in cargoPatch) mapped.auto_hauling_max_value = cargoPatch.auto_hauling_max_value;
+            if ('machinery_max_value' in cargoPatch) mapped.machinery_max_value = cargoPatch.machinery_max_value;
+            if ('excluded_cargo' in cargoPatch) mapped.excluded_cargo = cargoPatch.excluded_cargo;
+            if (Object.keys(mapped).length > 0) {
+              patch(mapped as Partial<DraftSubmission>);
+            }
+          }}
+          cargoRequested={true}
           disabled={disabled}
         />
       )}

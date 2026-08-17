@@ -92,6 +92,24 @@ export interface CsIntakeSubmission {
   mcs150_date: string | null;
   cargo_type: string | null;
   power_unit_count: number | null;
+  // Trucking — Cargo / Commodity Classification (v1.18.0)
+  primary_commodity: string | null;
+  cargo_description: string | null;
+  broker_load_board: boolean | null;
+  commodity_mix_known: boolean | null;
+  typical_load_value: number | null;
+  max_load_value: number | null;
+  requested_cargo_limit: number | null;
+  cargo_deductible: number | null;
+  refrigerated: boolean | null;
+  temperature_controlled_equipment: boolean | null;
+  reefer_breakdown_requested: string | null;
+  hazmat: string | null;
+  high_value_cargo_flag: boolean;
+  auto_hauling_vehicles_per_load: number | null;
+  auto_hauling_max_value: number | null;
+  machinery_max_value: number | null;
+  excluded_cargo: Record<string, string> | null;
   // Commercial GL fields
   ein: string | null;
   states_of_operation: string | null;
@@ -164,6 +182,14 @@ export interface CsIntakeOwner {
   phone: string | null;
   email: string | null;
   ownership_percentage: number | null;
+}
+
+export interface CsIntakeCommodity {
+  id?: string;
+  submission_id?: string;
+  category: string;
+  frequency: 'mostly' | 'sometimes' | 'occasionally';
+  is_primary: boolean;
 }
 
 export interface Dealer {
@@ -314,6 +340,7 @@ export async function getIntake(id: string): Promise<{
   drivers: CsIntakeDriver[];
   vehicles: CsIntakeVehicle[];
   owners: CsIntakeOwner[];
+  commodities: CsIntakeCommodity[];
   events: IntakeEvent[];
 } | null> {
   const supabase = getSupabase();
@@ -324,15 +351,17 @@ export async function getIntake(id: string): Promise<{
     .single();
   if (error || !submission) return null;
 
-  const [driversResult, vehiclesResult, ownersResult, eventsResult] = await Promise.all([
+  const [driversResult, vehiclesResult, ownersResult, commoditiesResult, eventsResult] = await Promise.all([
     supabase.from('cs_intake_drivers').select('*').eq('submission_id', id).order('position'),
     supabase.from('cs_intake_vehicles').select('*').eq('submission_id', id).order('position'),
     supabase.from('cs_intake_owners').select('*').eq('submission_id', id).order('position'),
+    supabase.from('cs_intake_commodities').select('*').eq('submission_id', id).order('created_at'),
     supabase.from('cs_intake_events').select('*').eq('submission_id', id).order('created_at', { ascending: false }),
   ]);
   throwIfError(driversResult.error);
   throwIfError(vehiclesResult.error);
   throwIfError(ownersResult.error);
+  throwIfError(commoditiesResult.error);
   throwIfError(eventsResult.error);
 
   return {
@@ -340,6 +369,7 @@ export async function getIntake(id: string): Promise<{
     drivers: (driversResult.data as CsIntakeDriver[]) ?? [],
     vehicles: (vehiclesResult.data as CsIntakeVehicle[]) ?? [],
     owners: (ownersResult.data as CsIntakeOwner[]) ?? [],
+    commodities: (commoditiesResult.data as CsIntakeCommodity[]) ?? [],
     events: (eventsResult.data as IntakeEvent[]) ?? [],
   };
 }
@@ -414,6 +444,7 @@ export async function saveDraft(
   drivers: CsIntakeDriver[],
   vehicles: CsIntakeVehicle[],
   owners: CsIntakeOwner[] = [],
+  commodities: CsIntakeCommodity[] = [],
   expectedVersion?: number | null,
 ): Promise<SaveDraftResult> {
   const supabase = getSupabase();
@@ -438,7 +469,7 @@ export async function saveDraft(
 
     // Children are attached through the same atomic path the next save uses, so
     // there is only one code path that writes them.
-    return saveDraft(profileId, { ...submission, id: created.id }, drivers, vehicles, owners, created.version);
+    return saveDraft(profileId, { ...submission, id: created.id }, drivers, vehicles, owners, commodities, created.version);
   }
 
   const { data, error } = await supabase.rpc('cs_intake_save_draft', {
@@ -447,6 +478,7 @@ export async function saveDraft(
     p_drivers: stripChildIds(drivers),
     p_vehicles: stripChildIds(vehicles),
     p_owners: stripChildIds(owners),
+    p_commodities: stripChildIds(commodities),
     p_expected_version: expectedVersion ?? null,
   });
 

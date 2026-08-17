@@ -27,6 +27,7 @@ import {
   profileName,
   restoreCustomerIntake,
   returnIntake,
+  type CsIntakeCommodity,
   type CsIntakeDriver,
   type CsIntakeOwner,
   type CsIntakeSubmission,
@@ -38,6 +39,7 @@ type LoadedIntake = {
   drivers: CsIntakeDriver[];
   vehicles: CsIntakeVehicle[];
   owners?: CsIntakeOwner[];
+  commodities?: CsIntakeCommodity[];
 };
 
 type ModalMode = 'view' | 'edit';
@@ -308,7 +310,7 @@ export default function IntakeQueue({
     try {
       const detail = await getIntake(row.id);
       if (detail) {
-        setSelected({ submission: detail.submission, drivers: detail.drivers, vehicles: detail.vehicles, owners: detail.owners });
+        setSelected({ submission: detail.submission, drivers: detail.drivers, vehicles: detail.vehicles, owners: detail.owners, commodities: detail.commodities });
         setModalMode('view');
       }
     } catch (caught) {
@@ -411,7 +413,7 @@ export default function IntakeQueue({
     try {
       const detail = await getIntake(row.id);
       if (detail) {
-        setSelected({ submission: detail.submission, drivers: detail.drivers, vehicles: detail.vehicles, owners: detail.owners });
+        setSelected({ submission: detail.submission, drivers: detail.drivers, vehicles: detail.vehicles, owners: detail.owners, commodities: detail.commodities });
         setModalMode('edit');
       }
     } catch (caught) {

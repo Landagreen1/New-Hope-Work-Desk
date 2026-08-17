@@ -31,7 +31,7 @@ import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 import { getIntake } from '../cs-intake/api';
 import IntakeForm from '../cs-intake/IntakeForm';
-import type { CsIntakeDriver, CsIntakeOwner, CsIntakeSubmission, CsIntakeVehicle } from '../cs-intake/api';
+import type { CsIntakeCommodity, CsIntakeDriver, CsIntakeOwner, CsIntakeSubmission, CsIntakeVehicle } from '../cs-intake/api';
 import { getStageCounts, searchJourneys } from './api';
 import JourneyDrawer from './JourneyDrawer';
 import { getQuoteCenterPermissions } from './permissions';
@@ -85,6 +85,7 @@ type IntakeEditorState =
       drivers: CsIntakeDriver[];
       vehicles: CsIntakeVehicle[];
       owners: CsIntakeOwner[];
+      commodities?: CsIntakeCommodity[];
     };
 
 /**
@@ -317,6 +318,7 @@ export default function QuoteCenter({
           drivers: loaded.drivers,
           vehicles: loaded.vehicles,
           owners: loaded.owners ?? [],
+          commodities: loaded.commodities ?? [],
         });
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : 'That intake could not be opened.');
@@ -527,6 +529,7 @@ export default function QuoteCenter({
                     drivers: intakeEditor.drivers,
                     vehicles: intakeEditor.vehicles,
                     owners: intakeEditor.owners,
+                    commodities: intakeEditor.commodities,
                   }
                 : undefined
             }
