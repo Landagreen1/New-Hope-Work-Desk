@@ -3075,7 +3075,7 @@ export function WorkDeskApp({
   // Unclaimed intakes count for agent Intake Queue badge
   const [unclaimedIntakeCount, setUnclaimedIntakeCount] = useState(0);
   const refreshIntakeCount = useCallback(async () => {
-    if (sessionProfile.role !== 'agent' && sessionProfile.role !== 'sales_supervisor') return;
+    if (sessionProfile.role !== 'agent' && sessionProfile.role !== 'customer_service' && sessionProfile.role !== 'sales_supervisor') return;
     try {
       const res = await fetch('/api/intakes');
       const body = await res.json();
@@ -5116,7 +5116,9 @@ export function WorkDeskApp({
                   ) : (
                     <EmptyState
                       title="No quotes waiting on a decision"
-                      note="When you mark a quote Price Sent, it will move here."
+                      note={myActiveWork.length > 0
+                        ? `You have ${myActiveWork.length} active quote${myActiveWork.length === 1 ? "" : "s"} in My Work. Once you mark one "Price Sent", it moves here automatically.`
+                        : "When you mark a quote Price Sent, it will move here."}
                     />
                   )}
                 </div>
@@ -5167,10 +5169,13 @@ export function WorkDeskApp({
                     <summary className="cursor-pointer list-none p-4 font-black text-rose-800 [&::-webkit-details-marker]:hidden">Not Sold quotes in this period · {agentPerformanceSummary.notSold.length}</summary>
                     <div className="divide-y divide-slate-100 border-t border-rose-100">
                       {agentPerformanceSummary.notSold.map((quote) => (
-                        <button key={quote.id} type="button" onClick={() => openQuoteLog(quote.sourceWorkItemId)} className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-rose-50/40">
+                        <div key={quote.id} className="flex w-full items-center justify-between gap-4 px-4 py-3 hover:bg-rose-50/40">
                           <div><p className="font-black">{quote.customer}</p><p className="mt-1 text-xs font-semibold text-slate-500">{quote.source} · {quote.salesperson} · {formatDateTime(quote.statusDate)}</p></div>
-                          <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">Open Log</span>
-                        </button>
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => requestChangeOutcome(quote)} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">Mark Sold</button>
+                            <button type="button" onClick={() => openQuoteLog(quote.sourceWorkItemId)} className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">Open Log</button>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </details>

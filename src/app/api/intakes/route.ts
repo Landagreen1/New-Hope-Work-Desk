@@ -23,9 +23,11 @@ export async function GET() {
   }
 
   const { data, error } = await supabase
-    .from("customer_intakes")
-    .select("*")
-    .order("created_at", { ascending: false })
+    .from("cs_intake_submissions")
+    .select("id,status,submitted_at,line_of_business")
+    .not("line_of_business", "in", '("commercial_gl","homeowners","trucking")')
+    .in("status", ["submitted", "claimed"])
+    .order("submitted_at", { ascending: true })
     .limit(500);
 
   if (error) {
