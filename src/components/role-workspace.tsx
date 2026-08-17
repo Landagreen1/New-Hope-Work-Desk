@@ -95,6 +95,7 @@ function subNavToManagerTab(
     case "sales_reports":
       return "reports";
     case "ua_users":
+    case "ua_sources":
       return "administration";
     // sales_databases is gone: the manager Quotes Database it opened is superseded
     // by Quote Center, which is rendered directly rather than as a WorkDeskApp tab.
@@ -425,7 +426,7 @@ export function RoleWorkspace({
     }
 
     // --- User Administration ---
-    if (module === "user_admin" && permissions.userAdministration) {
+    if (module === "user_admin" && (permissions.userAdministration || permissions.sourceAdministration)) {
       // Quoting Teams is a settings screen, so it lives here rather than adding a
       // fourth destination to Specialty Quotes.
       if (subNav === "ua_quoting_teams") {

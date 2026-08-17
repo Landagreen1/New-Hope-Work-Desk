@@ -131,6 +131,7 @@ export type SubNavId =
   | "ta_workforce"
   // User Admin
   | "ua_users"
+  | "ua_sources"
   /**
    * Quoting Teams. Under administration on purpose: changing who handles a line of
    * insurance is a settings act, and putting it inside Specialty Quotes would make a
@@ -384,17 +385,27 @@ function getModulesForRole(
     });
   }
 
-  // User Admin (broad manager/super_admin only)
-  if (permissions.userAdministration) {
+  // User Admin — full access for manager/super_admin; source-only for sales_supervisor
+  if (permissions.userAdministration || permissions.sourceAdministration) {
+    const adminSubItems: SubNavItem[] = [];
+    if (permissions.userAdministration) {
+      adminSubItems.push(
+        { id: "ua_users", label: "Users & Sources", icon: UserCog },
+      );
+    } else if (permissions.sourceAdministration) {
+      adminSubItems.push(
+        { id: "ua_sources", label: "Sources & Salespeople", icon: Building2 },
+      );
+    }
+    adminSubItems.push(
+      { id: "ua_quoting_teams", label: "Quoting Teams", icon: Users },
+      { id: "ua_market_directory", label: "Market Directory", icon: Building2 },
+    );
     modules.push({
       id: "user_admin",
       label: "User Administration",
       icon: UserCog,
-      subItems: [
-        { id: "ua_users", label: "Users & Sources", icon: UserCog },
-        { id: "ua_quoting_teams", label: "Quoting Teams", icon: Users },
-        { id: "ua_market_directory", label: "Market Directory", icon: Building2 },
-      ],
+      subItems: adminSubItems,
     });
   }
 

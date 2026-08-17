@@ -53,6 +53,7 @@ import { useRouter } from "next/navigation";
 import { loadDashboardData } from "@/lib/dashboard-data";
 import {
   APP_ROLES,
+  canAdministerSources,
   canAdministerUsers,
   canManageSales,
   canViewManagerAlerts,
@@ -6328,13 +6329,14 @@ function ManagerView({
   embedded?: boolean;
 }) {
   const canAccessUserAdministration = canAdministerUsers(actorRole);
+  const canAccessSourceAdministration = canAdministerSources(actorRole);
   const [reportView, setReportView] = useState<ReportView>("executive");
   const [reportDrillDown, setReportDrillDown] = useState<DrillDownFilter | null>(null);
   const [workView, setWorkView] = useState<"tasks" | "pricing" | "workload">("tasks");
   const [managerDatabaseView, setManagerDatabaseView] = useState<"quotes" | "workloads">("quotes");
   const [administrationView, setAdministrationView] = useState<
     "controls" | "users" | "sources"
-  >("users");
+  >(canAdministerUsers(actorRole) ? "users" : "sources");
   const selectedReport =
     reportNavigationItems.find((item) => item.id === reportView) ??
     reportNavigationItems[0];
@@ -7721,42 +7723,46 @@ function ManagerView({
         </section>
       ) : null}
 
-      {managerTab === "administration" && canAccessUserAdministration ? (
+      {managerTab === "administration" && canAccessSourceAdministration ? (
         <section className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-              User Administration
+              {canAccessUserAdministration ? "User Administration" : "Source Administration"}
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-500">
-              Users, permissions, sources and salespeople management.
+              {canAccessUserAdministration
+                ? "Users, permissions, sources and salespeople management."
+                : "Sources and salespeople management."}
             </p>
           </div>
-          <div className="flex flex-wrap gap-1 rounded-2xl bg-slate-100 p-1.5">
-            <button
-              type="button"
-              onClick={() => setAdministrationView("users")}
-              className={cn(
-                "rounded-xl px-4 py-2.5 text-xs font-black transition",
-                administrationView === "users"
-                  ? "bg-[#223f7a] text-white shadow-sm"
-                  : "text-slate-500 hover:bg-white",
-              )}
-            >
-              Users & Access
-            </button>
-            <button
-              type="button"
-              onClick={() => setAdministrationView("sources")}
-              className={cn(
-                "rounded-xl px-4 py-2.5 text-xs font-black transition",
-                administrationView === "sources"
-                  ? "bg-[#223f7a] text-white shadow-sm"
-                  : "text-slate-500 hover:bg-white",
-              )}
-            >
-              Sources & Salespeople
-            </button>
-          </div>
+          {canAccessUserAdministration ? (
+            <div className="flex flex-wrap gap-1 rounded-2xl bg-slate-100 p-1.5">
+              <button
+                type="button"
+                onClick={() => setAdministrationView("users")}
+                className={cn(
+                  "rounded-xl px-4 py-2.5 text-xs font-black transition",
+                  administrationView === "users"
+                    ? "bg-[#223f7a] text-white shadow-sm"
+                    : "text-slate-500 hover:bg-white",
+                )}
+              >
+                Users & Access
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdministrationView("sources")}
+                className={cn(
+                  "rounded-xl px-4 py-2.5 text-xs font-black transition",
+                  administrationView === "sources"
+                    ? "bg-[#223f7a] text-white shadow-sm"
+                    : "text-slate-500 hover:bg-white",
+                )}
+              >
+                Sources & Salespeople
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -8910,7 +8916,7 @@ function ManagerView({
         </section>
       ) : null}
 
-      {managerTab === "administration" && canAccessUserAdministration && administrationView === "sources" ? <SourceAdminPanel /> : null}
+      {managerTab === "administration" && canAccessSourceAdministration && administrationView === "sources" ? <SourceAdminPanel /> : null}
 
       {managerTab === "administration" && canAccessUserAdministration && administrationView === "users" ? <UserAdminPanel actorRole={actorRole} /> : null}
 

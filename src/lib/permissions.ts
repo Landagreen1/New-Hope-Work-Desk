@@ -27,6 +27,7 @@ export interface RolePermissions {
   manageCustomerService: boolean;
   manageCommercial: boolean;
   userAdministration: boolean;
+  sourceAdministration: boolean;
   attendanceAdministration: boolean;
 }
 
@@ -100,6 +101,14 @@ export function canAdministerUsers(role: AppRole): boolean {
   return isBroadManagerRole(role);
 }
 
+/**
+ * Source (dealership/salesperson) administration. Sales supervisors can manage
+ * the dealer directory and salespeople but cannot touch user accounts or passwords.
+ */
+export function canAdministerSources(role: AppRole): boolean {
+  return isBroadManagerRole(role) || role === "sales_supervisor";
+}
+
 /** Any scoped supervisor. There is no bare "supervisor" role in this project. */
 export function isSupervisorRole(role: AppRole): boolean {
   return (
@@ -137,6 +146,7 @@ export function getRolePermissions(role: AppRole): RolePermissions {
     manageCustomerService: canManageCustomerService(role),
     manageCommercial: canManageCommercial(role),
     userAdministration: canAdministerUsers(role),
+    sourceAdministration: canAdministerSources(role),
     attendanceAdministration: canAdministerAttendance(role),
   };
 }
