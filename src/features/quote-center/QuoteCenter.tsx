@@ -29,6 +29,9 @@ import type { AppRole } from '@/lib/types';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
+import { getIntake } from '../cs-intake/api';
+import IntakeForm from '../cs-intake/IntakeForm';
+import type { CsIntakeDriver, CsIntakeOwner, CsIntakeSubmission, CsIntakeVehicle } from '../cs-intake/api';
 import { getStageCounts, searchJourneys } from './api';
 import JourneyDrawer from './JourneyDrawer';
 import { getQuoteCenterPermissions } from './permissions';
@@ -71,6 +74,65 @@ function formatRelative(value: string | null | undefined): string {
     day: 'numeric',
     year: date.getFullYear() === now.getFullYear() ? undefined : 'numeric',
   });
+}
+
+/** What the intake modal is currently holding. */
+type IntakeEditorState =
+  | { mode: 'new' }
+  | {
+      mode: 'continue';
+      submission: CsIntakeSubmission;
+      drivers: CsIntakeDriver[];
+      vehicles: CsIntakeVehicle[];
+      owners: CsIntakeOwner[];
+    };
+
+/**
+ * The intake form, over the top of Quote Center.
+ *
+ * Starting an intake used to navigate to the standalone Quote Intake page, which
+ * meant landing on a launcher with cross-module links and a list of existing
+ * intakes, then finding a second button to reach the form. Someone with a customer
+ * on the line wants the form, so the form is what opens.
+ */
+function IntakeModal({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6"
+      onMouseDown={onClose}
+      role="presentation"
+    >
+      <div
+        className="mx-auto max-w-6xl rounded-[30px] bg-[#f3f5f9] p-3 shadow-2xl sm:p-5"
+        onMouseDown={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Quote intake"
+      >
+        <div className="mb-3 flex justify-end">
+          <button type="button" className={ui.btnGhost} onClick={onClose}>
+            <X className="h-4 w-4" />
+            Close
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -152,10 +214,6 @@ function ResultCard({
 export interface QuoteCenterProps {
   initialProfile: ProfileLite;
   embedded?: boolean;
-  /** Opens the intake form for a new intake. */
-  onNewIntake?: () => void;
-  /** Opens the intake form on an existing continuable draft. */
-  onContinueIntake?: (intakeId: string) => void;
   /** Sends the employee to My Desk, where queue-governed actions live. */
   onGoToMyDesk?: () => void;
 }
@@ -163,8 +221,6 @@ export interface QuoteCenterProps {
 export default function QuoteCenter({
   initialProfile,
   embedded = false,
-  onNewIntake,
-  onContinueIntake,
   onGoToMyDesk,
 }: QuoteCenterProps) {
   const role = initialProfile.role as AppRole;
@@ -180,6 +236,8 @@ export default function QuoteCenter({
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [openJourneyKey, setOpenJourneyKey] = useState<string | null>(null);
+  /** Non-null while the intake form is open over the search. */
+  const [intakeEditor, setIntakeEditor] = useState<IntakeEditorState | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -231,6 +289,46 @@ export default function QuoteCenter({
       void load(rawQuery.trim(), stage, page);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
+  }, [load, page, rawQuery, stage]);
+
+  /** Opens a blank intake form. One click from the search field. */
+  const startNewIntake = useCallback(() => {
+    setIntakeEditor({ mode: 'new' });
+  }, []);
+
+  /**
+   * Opens an existing draft in the same form, already populated.
+   *
+   * The draft's own answers come with it, so the employee asks only for what is
+   * still missing rather than starting the customer over.
+   */
+  const continueIntake = useCallback(
+    async (intakeId: string) => {
+      setError(null);
+      try {
+        const loaded = await getIntake(intakeId);
+        if (!loaded) {
+          setError('That intake could not be opened. It may have been removed.');
+          return;
+        }
+        setIntakeEditor({
+          mode: 'continue',
+          submission: loaded.submission,
+          drivers: loaded.drivers,
+          vehicles: loaded.vehicles,
+          owners: loaded.owners ?? [],
+        });
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : 'That intake could not be opened.');
+      }
+    },
+    [],
+  );
+
+  const closeIntakeEditor = useCallback(() => {
+    setIntakeEditor(null);
+    // A submitted or saved intake changes what the search should show.
+    void load(rawQuery.trim(), stage, page);
   }, [load, page, rawQuery, stage]);
 
   if (!permissions.viewQuoteCenter) {
@@ -286,7 +384,7 @@ export default function QuoteCenter({
           </div>
 
           {permissions.createIntake ? (
-            <button type="button" className={`${ui.btnPrimary} shrink-0`} onClick={onNewIntake}>
+            <button type="button" className={`${ui.btnPrimary} shrink-0`} onClick={startNewIntake}>
               <FilePlus2 className="h-4 w-4" /> New Intake
             </button>
           ) : null}
@@ -412,10 +510,35 @@ export default function QuoteCenter({
           }}
           onContinueIntake={(intakeId) => {
             setOpenJourneyKey(null);
-            onContinueIntake?.(intakeId);
+            void continueIntake(intakeId);
           }}
           onGoToMyDesk={onGoToMyDesk}
         />
+      ) : null}
+
+      {intakeEditor ? (
+        <IntakeModal onClose={closeIntakeEditor}>
+          <IntakeForm
+            profileId={initialProfile.id}
+            initial={
+              intakeEditor.mode === 'continue'
+                ? {
+                    submission: intakeEditor.submission,
+                    drivers: intakeEditor.drivers,
+                    vehicles: intakeEditor.vehicles,
+                    owners: intakeEditor.owners,
+                  }
+                : undefined
+            }
+            onDone={closeIntakeEditor}
+            // A duplicate found while typing opens that customer's journey rather
+            // than starting a second one for the same person.
+            onOpenExisting={(candidate) => {
+              setIntakeEditor(null);
+              setOpenJourneyKey(candidate.journey_key);
+            }}
+          />
+        </IntakeModal>
       ) : null}
     </ModuleShell>
   );

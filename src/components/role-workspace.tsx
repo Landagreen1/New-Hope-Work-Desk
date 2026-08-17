@@ -217,21 +217,11 @@ export function RoleWorkspace({
     [sessionProfile.role],
   );
 
-  /**
-   * Opens an intake in the Customer Service intake screen.
-   *
-   * Quote Center deliberately does not host the intake form itself: the form is a
-   * large, validated component with its own draft, conflict and submission
-   * handling, and duplicating it would be exactly the kind of parallel
-   * implementation this consolidation is removing. `?edit=<id>` is the route
-   * CsIntakeLanding already supports for opening one record.
-   */
-  const openIntake = useCallback(
-    (intakeId?: string) => {
-      router.push(intakeId ? `/tools/cs-intake?edit=${intakeId}` : '/tools/cs-intake');
-    },
-    [router],
-  );
+  // Quote Center hosts the intake form itself, in a modal over the search. Routing
+  // out to the standalone Quote Intake page meant landing on a launcher with
+  // cross-module links and a list of existing intakes, and hunting for a second
+  // button to reach the form. The form is the thing someone with a customer on the
+  // line wants, so it is what opens.
 
   // Determine what content to render based on sidebar navigation state
   const renderContent = () => {
@@ -248,8 +238,6 @@ export function RoleWorkspace({
           <QuoteCenter
             initialProfile={profile}
             embedded
-            onNewIntake={() => openIntake()}
-            onContinueIntake={(intakeId) => openIntake(intakeId)}
             onGoToMyDesk={() => goToMyDesk()}
           />
         </Suspense>
