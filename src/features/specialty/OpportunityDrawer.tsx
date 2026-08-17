@@ -42,6 +42,12 @@ import DollarInput from '../nhwd-shared/DollarInput';
 import { SideDrawer } from '../time-attendance/shared/SideDrawer';
 import { ui } from '../nhwd-shared/ui';
 import {
+  GenerateApplicationPanel,
+  ReadinessPanel,
+  SupplementalQuestions,
+  UnderwritingResultsPanel,
+} from './market-directory/CarrierMarketExtensions';
+import {
   AlreadyClaimedError,
   SpecialtyConflictError,
   addCarrierMarket,
@@ -1306,7 +1312,6 @@ function CustomerTab({
                   <ReadRow label="DOT" value={intake.dot_number} />
                   <ReadRow label="MC" value={intake.mc_number} />
                   <ReadRow label="MCS-150" value={intake.mcs150_date} />
-                  <ReadRow label="Cargo" value={intake.cargo_type} />
                   <ReadRow label="Power units" value={intake.power_unit_count} />
                   <ReadRow label="Radius" value={intake.operating_radius_miles ? `${intake.operating_radius_miles} mi` : null} />
                   <ReadRow label="States" value={intake.states_of_operation} />
@@ -1341,6 +1346,70 @@ function CustomerTab({
         )}
       </section>
 
+      {/* ── Cargo / Commodities (Trucking) ──────────────────────────────── */}
+      {isTrucking && (
+        <section className={`${ui.card} ${ui.cardPad}`}>
+          <p className={ui.sectionTitle}>Cargo / Commodities</p>
+          <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
+            <div>
+              <ReadRow label="Primary commodity" value={intake.primary_commodity} />
+              <ReadRow label="Cargo coverage desired" value={intake.cargo_coverage_desired === true ? 'Yes' : intake.cargo_coverage_desired === false ? 'No' : null} />
+              <ReadRow label="Broker / Load board" value={intake.broker_load_board === true ? 'Yes' : intake.broker_load_board === false ? 'No' : null} />
+              <ReadRow label="Commodity mix known" value={intake.commodity_mix_known === true ? 'Yes' : intake.commodity_mix_known === false ? 'No' : null} />
+              <ReadRow label="Refrigerated" value={intake.refrigerated === true ? 'Yes' : intake.refrigerated === false ? 'No' : null} />
+              <ReadRow label="Temp-controlled equipment" value={intake.temperature_controlled_equipment === true ? 'Yes' : intake.temperature_controlled_equipment === false ? 'No' : null} />
+              <ReadRow label="Reefer breakdown coverage" value={intake.reefer_breakdown_requested} />
+              <ReadRow label="Hazmat" value={intake.hazmat} />
+              {intake.high_value_cargo_flag ? <ReadRow label="High-value cargo" value="Yes — Specialty Review" /> : null}
+            </div>
+            <div>
+              <ReadRow label="Typical load value" value={formatMoney(intake.typical_load_value)} />
+              <ReadRow label="Maximum load value" value={formatMoney(intake.max_load_value)} />
+              <ReadRow label="Requested cargo limit" value={formatMoney(intake.requested_cargo_limit)} />
+              <ReadRow label="Cargo deductible" value={formatMoney(intake.cargo_deductible)} />
+              <ReadRow label="Cargo description" value={intake.cargo_description} />
+              {intake.cargo_type ? <ReadRow label="Cargo type (legacy)" value={intake.cargo_type} /> : null}
+            </div>
+          </div>
+          {intake.commodities && intake.commodities.length > 0 ? (
+            <div className="mt-3">
+              <p className="mb-2 text-xs font-black uppercase tracking-[0.1em] text-slate-400">Commodity Categories</p>
+              <div className="flex flex-wrap gap-1.5">
+                {intake.commodities.map((c) => (
+                  <span
+                    key={c.category}
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold ${
+                      c.is_primary
+                        ? 'border border-[#223f7a] bg-[#eef3fb] text-[#223f7a]'
+                        : 'border border-slate-200 bg-white text-slate-600'
+                    }`}
+                  >
+                    {c.category.replace(/_/g, ' ')}{c.is_primary ? ' (Primary)' : ''} — {c.frequency}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {intake.excluded_cargo && Object.keys(intake.excluded_cargo).length > 0 ? (
+            <div className="mt-3">
+              <p className="mb-2 text-xs font-black uppercase tracking-[0.1em] text-slate-400">Excluded / Prohibited Cargo</p>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(intake.excluded_cargo).map(([item, answer]) => (
+                  <span
+                    key={item}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold ${
+                      answer === 'yes' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-500'
+                    }`}
+                  >
+                    {item}: {answer}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
+      )}
+
       {intake.vehicles.length > 0 ? (
         <section className={ui.card}>
           <div className={ui.cardHeader}>
@@ -1358,7 +1427,10 @@ function CustomerTab({
                   <th className={ui.th}>Make</th>
                   <th className={ui.th}>Model</th>
                   <th className={ui.th}>VIN</th>
+                  {isTrucking ? <th className={ui.th}>Truck Type</th> : null}
                   <th className={ui.th}>Ownership</th>
+                  {isTrucking ? <th className={ui.th}>Phys. Damage</th> : null}
+                  {isTrucking ? <th className={ui.th}>PD Deductible</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -1369,7 +1441,10 @@ function CustomerTab({
                     <td className={ui.td}>{vehicle.make ?? '—'}</td>
                     <td className={ui.td}>{vehicle.model ?? '—'}</td>
                     <td className={ui.td}>{vehicle.vin ?? (vehicle.vin_pending ? 'Pending' : '—')}</td>
+                    {isTrucking ? <td className={ui.td}>{vehicle.truck_type?.replace(/_/g, ' ') ?? '—'}</td> : null}
                     <td className={ui.td}>{vehicle.ownership ?? '—'}</td>
+                    {isTrucking ? <td className={ui.td}>{vehicle.physical_damage_value ? formatMoney(vehicle.physical_damage_value) : '—'}</td> : null}
+                    {isTrucking ? <td className={ui.td}>{vehicle.physical_damage_deductible ? formatMoney(vehicle.physical_damage_deductible) : '—'}</td> : null}
                   </tr>
                 ))}
               </tbody>
@@ -1393,6 +1468,8 @@ function CustomerTab({
                   <th className={ui.th}>Licence</th>
                   <th className={ui.th}>State</th>
                   <th className={ui.th}>Years</th>
+                  {isTrucking ? <th className={ui.th}>CDL</th> : null}
+                  {isTrucking ? <th className={ui.th}>CDL Date</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -1406,6 +1483,8 @@ function CustomerTab({
                     <td className={ui.td}>{driver.license_number ?? '—'}</td>
                     <td className={ui.td}>{driver.license_state ?? '—'}</td>
                     <td className={ui.td}>{driver.years_licensed ?? '—'}</td>
+                    {isTrucking ? <td className={ui.td}>{driver.cdl ? 'Yes' : 'No'}</td> : null}
+                    {isTrucking ? <td className={ui.td}>{driver.cdl_date ?? '—'}</td> : null}
                   </tr>
                 ))}
               </tbody>
@@ -1592,6 +1671,7 @@ function CarriersTab({
               key={market.id}
               market={market}
               detail={detail}
+              profileId={profileId}
               expanded={expanded === market.id}
               onToggle={() => setExpanded((current) => (current === market.id ? null : market.id))}
               run={run}
@@ -1607,6 +1687,7 @@ function CarriersTab({
 function CarrierMarketRow({
   market,
   detail,
+  profileId,
   expanded,
   onToggle,
   run,
@@ -1614,6 +1695,7 @@ function CarrierMarketRow({
 }: {
   market: CarrierMarket;
   detail: OpportunityDetail;
+  profileId: string;
   expanded: boolean;
   onToggle: () => void;
   run: Runner;
@@ -1629,6 +1711,12 @@ function CarrierMarketRow({
   const [infoRequested, setInfoRequested] = useState(market.info_requested ?? '');
   const [notes, setNotes] = useState(market.notes ?? '');
   const [followUp, setFollowUp] = useState(market.follow_up_date ?? '');
+  const [installmentCount, setInstallmentCount] = useState<number | null>(market.installment_count ?? null);
+  const [installmentAmount, setInstallmentAmount] = useState<number | null>(market.installment_amount ?? null);
+  const [newNote, setNewNote] = useState('');
+
+  // Per-carrier notes from the opportunity's notes array
+  const carrierNotes = (detail.notes ?? []).filter((n) => n.carrier_market_id === market.id);
 
   // Mirrors the server's validation, so the form can name what is missing before the
   // round trip rather than surfacing a constraint violation.
@@ -1730,6 +1818,19 @@ function CarrierMarketRow({
                 <Field label="Carrier follow-up date">
                   <DatePicker value={followUp} onChange={setFollowUp} className="mt-2" />
                 </Field>
+                <Field label="# of Installments">
+                  <input
+                    type="number"
+                    min="1"
+                    className={ui.input}
+                    value={installmentCount ?? ''}
+                    onChange={(event) => setInstallmentCount(event.target.value === '' ? null : Number(event.target.value))}
+                    placeholder="e.g. 9"
+                  />
+                </Field>
+                <Field label="Installment Amount">
+                  <DollarInput value={installmentAmount} onChange={setInstallmentAmount} />
+                </Field>
               </div>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1794,6 +1895,8 @@ function CarrierMarketRow({
                           info_requested: infoRequested.trim() || null,
                           notes: notes.trim() || null,
                           follow_up_date: followUp || null,
+                          installment_count: installmentCount,
+                          installment_amount: installmentAmount,
                         },
                         market.version,
                       );
@@ -1826,8 +1929,108 @@ function CarrierMarketRow({
               </div>
             </>
           ) : null}
+
+          {/* ── Per-carrier note log ────────────────────────────────────────── */}
+          {carrierNotes.length > 0 || detail.can_edit ? (
+            <div className="mt-4 rounded-2xl border border-slate-100 bg-white p-4">
+              <p className="text-xs font-black uppercase tracking-[0.1em] text-slate-400 mb-2">Carrier Notes Log</p>
+              {carrierNotes.length > 0 ? (
+                <div className="space-y-2 mb-3 max-h-48 overflow-y-auto">
+                  {carrierNotes.map((note) => (
+                    <div key={note.id} className="rounded-xl bg-slate-50 px-3 py-2">
+                      <p className="text-sm text-slate-800">{note.content}</p>
+                      <p className="mt-1 text-[11px] font-bold text-slate-400">
+                        {note.author_name ?? 'Unknown'} · {formatRelative(note.created_at)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {detail.can_edit && !detail.opportunity.result ? (
+                <div className="flex gap-2">
+                  <input
+                    className={`${ui.input} mt-0 flex-1`}
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    placeholder="Add a note for this carrier..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newNote.trim()) {
+                        void run(
+                          async () => { await addNote(detail.opportunity.id, newNote.trim(), { carrierMarketId: market.id }); },
+                          'Note added.',
+                        ).then((ok) => { if (ok) setNewNote(''); });
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className={ui.btnPrimary}
+                    disabled={busy || !newNote.trim()}
+                    onClick={() => {
+                      void run(
+                        async () => { await addNote(detail.opportunity.id, newNote.trim(), { carrierMarketId: market.id }); },
+                        'Note added.',
+                      ).then((ok) => { if (ok) setNewNote(''); });
+                    }}
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* ── Market Directory Extensions (readiness, questions, PDF) ─────── */}
+          <CarrierMarketExtensionsBlock
+            market={market}
+            detail={detail}
+            profileId={profileId}
+          />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function CarrierMarketExtensionsBlock({
+  market,
+  detail,
+  profileId,
+}: {
+  market: CarrierMarket;
+  detail: OpportunityDetail;
+  profileId: string;
+}) {
+  // The extensions need a market_directory_id to show readiness, questions, and PDF generation.
+  // For now, pass null — the components handle null gracefully by not rendering.
+  // Once specialty_carriers is extended with market_directory_id in the detail payload, wire it here.
+  const marketDirectoryId: string | null = null;
+  const lineOfBusiness = detail.opportunity.line_of_business;
+
+  return (
+    <div className="mt-4 space-y-3">
+      <ReadinessPanel
+        carrierMarketId={market.id}
+        marketDirectoryId={marketDirectoryId}
+        lineOfBusiness={lineOfBusiness}
+      />
+      <SupplementalQuestions
+        carrierMarketId={market.id}
+        marketDirectoryId={marketDirectoryId}
+        lineOfBusiness={lineOfBusiness}
+        profileId={profileId}
+      />
+      <UnderwritingResultsPanel
+        carrierMarketId={market.id}
+        profileId={profileId}
+      />
+      <GenerateApplicationPanel
+        carrierMarketId={market.id}
+        opportunityId={detail.opportunity.id}
+        marketDirectoryId={marketDirectoryId}
+        lineOfBusiness={lineOfBusiness}
+        profileId={profileId}
+      />
     </div>
   );
 }

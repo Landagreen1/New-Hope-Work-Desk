@@ -162,6 +162,8 @@ export interface CarrierMarket {
   payment_terms: string | null;
   deductible: string | null;
   coverage_notes: string | null;
+  installment_count: number | null;
+  installment_amount: number | null;
   quote_received_at: string | null;
   quote_received_by_name: string | null;
   decline_reason: string | null;
@@ -312,9 +314,32 @@ export interface LinkedIntake {
   collision_deductible: string | null;
   created_by_name: string | null;
   submitted_at: string | null;
+  // Cargo / Commodity Classification (v1.18.0+)
+  primary_commodity: string | null;
+  cargo_description: string | null;
+  broker_load_board: boolean | null;
+  commodity_mix_known: boolean | null;
+  typical_load_value: number | null;
+  max_load_value: number | null;
+  requested_cargo_limit: number | null;
+  cargo_deductible: number | null;
+  refrigerated: boolean | null;
+  temperature_controlled_equipment: boolean | null;
+  reefer_breakdown_requested: string | null;
+  hazmat: string | null;
+  high_value_cargo_flag: boolean | null;
+  cargo_coverage_desired: boolean | null;
+  excluded_cargo: Record<string, string> | null;
+  commodities: IntakeCommodityRow[];
   drivers: IntakeDriverRow[];
   vehicles: IntakeVehicleRow[];
   owners: Record<string, unknown>[];
+}
+
+export interface IntakeCommodityRow {
+  category: string;
+  frequency: string;
+  is_primary: boolean;
 }
 
 export interface IntakeVehicleRow {
@@ -330,6 +355,9 @@ export interface IntakeVehicleRow {
   usage: string | null;
   annual_mileage: number | null;
   garaging_zip: string | null;
+  truck_type: string | null;
+  physical_damage_value: number | null;
+  physical_damage_deductible: number | null;
 }
 
 export interface IntakeDriverRow {
@@ -345,6 +373,8 @@ export interface IntakeDriverRow {
   license_status: string | null;
   years_licensed: number | null;
   sr22_required: boolean;
+  cdl: boolean;
+  cdl_date: string | null;
 }
 
 export interface WorkflowStage {

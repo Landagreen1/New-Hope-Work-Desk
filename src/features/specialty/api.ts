@@ -404,6 +404,8 @@ export interface CarrierMarketPatch {
   decline_reason?: string | null;
   info_requested?: string | null;
   notes?: string | null;
+  installment_count?: number | null;
+  installment_amount?: number | null;
 }
 
 export async function updateCarrierMarket(
