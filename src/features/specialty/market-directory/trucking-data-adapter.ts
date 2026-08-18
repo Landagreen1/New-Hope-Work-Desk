@@ -61,15 +61,30 @@ function extractBusiness(intake: LinkedIntake): TruckingBusiness {
 }
 
 function extractOwners(intake: LinkedIntake): TruckingOwner[] {
-  if (!intake.owners || !Array.isArray(intake.owners)) return [];
+  // If cs_intake_owners has entries, use them
+  if (intake.owners && Array.isArray(intake.owners) && intake.owners.length > 0) {
+    return intake.owners.map((owner) => ({
+      name: (owner as Record<string, unknown>).name as string | null ?? null,
+      dob: (owner as Record<string, unknown>).dob as string | null ?? null,
+      license_number: (owner as Record<string, unknown>).license_number as string | null ?? null,
+      license_state: (owner as Record<string, unknown>).license_state as string | null ?? null,
+      ownership_percentage: (owner as Record<string, unknown>).ownership_percentage as number | null ?? null,
+    }));
+  }
 
-  return intake.owners.map((owner) => ({
-    name: (owner as Record<string, unknown>).name as string | null ?? null,
-    dob: (owner as Record<string, unknown>).dob as string | null ?? null,
-    license_number: (owner as Record<string, unknown>).license_number as string | null ?? null,
-    license_state: (owner as Record<string, unknown>).license_state as string | null ?? null,
-    ownership_percentage: (owner as Record<string, unknown>).ownership_percentage as number | null ?? null,
-  }));
+  // Fallback: the insured person IS the owner for most trucking operations
+  const insuredName = [intake.insured_first_name, intake.insured_last_name].filter(Boolean).join(' ');
+  if (insuredName) {
+    return [{
+      name: insuredName,
+      dob: intake.insured_dob ?? null,
+      license_number: null,
+      license_state: null,
+      ownership_percentage: null,
+    }];
+  }
+
+  return [];
 }
 
 function extractDrivers(intake: LinkedIntake): TruckingDriver[] {
@@ -122,12 +137,14 @@ function extractOperations(intake: LinkedIntake): TruckingOperations {
 function extractCoverages(intake: LinkedIntake): TruckingCoverages {
   return {
     auto_liability_limit: intake.liability_limit ?? null,
-    cargo_limit: null, // Not explicitly in current intake
-    physical_damage: null,
+    cargo_limit: intake.requested_cargo_limit ? `$${intake.requested_cargo_limit.toLocaleString()}` : null,
+    cargo_deductible: intake.cargo_deductible ? `$${intake.cargo_deductible.toLocaleString()}` : null,
+    physical_damage: intake.desired_coverage === 'full_coverage' || intake.desired_coverage === 'both_prices' || null,
     general_liability: null,
     trailer_interchange: null,
     comprehensive_deductible: intake.comprehensive_deductible ?? null,
     collision_deductible: intake.collision_deductible ?? null,
+    medical_payments: null, // Collected via JSA-specific supplemental question
   };
 }
 

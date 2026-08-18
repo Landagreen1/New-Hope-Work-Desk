@@ -297,11 +297,13 @@ export interface TruckingOperations {
 export interface TruckingCoverages {
   auto_liability_limit: string | null;
   cargo_limit: string | null;
+  cargo_deductible: string | null;
   physical_damage: boolean | null;
   general_liability: boolean | null;
   trailer_interchange: boolean | null;
   comprehensive_deductible: string | null;
   collision_deductible: string | null;
+  medical_payments: string | null;
 }
 
 export interface TruckingPriorInsurance {

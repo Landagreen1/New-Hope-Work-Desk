@@ -124,6 +124,14 @@ function fillFormFields(
   trySet(form, 'Owners Name', dataPacket.owners[0]?.name ?? '');
   trySet(form, 'DOB 1', dataPacket.owners[0]?.dob ?? '');
 
+  // CDL radio group - default to Yes for trucking
+  try {
+    const cdlGroup = form.getRadioGroup('CDL');
+    const cdlOptions = cdlGroup.getOptions();
+    const yesOption = cdlOptions.find(o => o.toLowerCase().includes('yes') || o === 'Choice1');
+    if (yesOption) cdlGroup.select(yesOption);
+  } catch { /* CDL radio group not found */ }
+
   // Entity type checkboxes
   const entity = (biz.entity_type ?? '').toLowerCase();
   tryCheck(form, 'Individual', entity.includes('individual') || entity.includes('sole'));
@@ -184,16 +192,39 @@ function fillFormFields(
   trySet(form, 'IFTAs if available 2', '');
 
   // ── Page 2: Coverages and Limits ─────────────────────────────────────────
-  tryCheck(form, 'Auto Liability', true);
+  tryCheck(form, 'Auto Liability', !!cov.auto_liability_limit);
   trySet(form, 'Limits', cov.auto_liability_limit ?? '');
-  trySet(form, 'UMUIM Limits', '');
-  trySet(form, 'Deductible', cov.collision_deductible ?? '');
-  tryCheck(form, 'Comprehensive', true);
-  tryCheck(form, 'Collision', true);
-  tryCheck(form, 'Physical Damage', !!cov.collision_deductible || !!cov.comprehensive_deductible);
+  trySet(form, 'UMUIM Limits', supplementalAnswers['UM/UIM Limit'] ?? '');
+
+  tryCheck(form, 'Physical Damage', !!cov.comprehensive_deductible || !!cov.collision_deductible);
+  trySet(form, 'Deductible', [
+    cov.comprehensive_deductible ? `Comp: ${cov.comprehensive_deductible}` : '',
+    cov.collision_deductible ? `Coll: ${cov.collision_deductible}` : '',
+  ].filter(Boolean).join(' / '));
+  tryCheck(form, 'Comprehensive', !!cov.comprehensive_deductible);
+  tryCheck(form, 'Collision', !!cov.collision_deductible);
+
   tryCheck(form, 'Cargo', !!cov.cargo_limit);
   trySet(form, 'Limits 1', cov.cargo_limit ?? '');
-  trySet(form, 'Deductible_2', '');
+  trySet(form, 'Deductible_2', cov.cargo_deductible ?? '');
+
+  // Trailer Interchange
+  const tiLimit = supplementalAnswers['Trailer Interchange Limit'] ?? '';
+  tryCheck(form, 'Trailer Interchange Limits', !!tiLimit || !!cov.trailer_interchange);
+  trySet(form, 'Limits 2', tiLimit);
+  trySet(form, 'Deductible_3', '');
+
+  // General Liability
+  const glLimit = supplementalAnswers['General Liability Limit'] ?? '';
+  tryCheck(form, 'General Liability', !!glLimit || !!cov.general_liability);
+  trySet(form, 'Limits_2', glLimit);
+  trySet(form, 'Payroll', '');
+  trySet(form, 'Receipts', '');
+
+  // Medical Payments
+  const medPayLimit = supplementalAnswers['Medical Payments Limit'] ?? cov.medical_payments ?? '';
+  tryCheck(form, 'Medical Payments', !!medPayLimit);
+  trySet(form, 'Limits_3', medPayLimit);
 
   // ── Page 2: Power Unit Information (5 rows) ──────────────────────────────
   const maxVeh = Math.min(dataPacket.vehicles.length, template.max_vehicles ?? 5);
