@@ -95,6 +95,7 @@ async function fillOfficialTemplate(input: PdfGenerationInput): Promise<PdfGener
 
 /**
  * Fills AcroForm fields by matching field names to our data.
+ * Field names come from inspecting the actual official JSA PDF with pdf-lib.
  */
 function fillFormFields(
   form: ReturnType<typeof PDFDocument.prototype.getForm>,
@@ -108,135 +109,166 @@ function fillFormFields(
   const cov = dataPacket.coverages;
   const prior = dataPacket.prior_insurance;
 
-  // Build a flat data map from our structured data
-  const dataMap: Record<string, string> = {
-    // Business / Applicant
-    'applicant_name': biz.legal_name ?? '',
-    'Applicant Name': biz.legal_name ?? '',
-    'dba': biz.dba ?? '',
-    'DBA': biz.dba ?? '',
-    'mailing_address': [biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip].filter(Boolean).join(', '),
-    'Mailing Address': [biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip].filter(Boolean).join(', '),
-    'location_address': [biz.garaging_street, biz.garaging_city, biz.garaging_state, biz.garaging_zip].filter(Boolean).join(', '),
-    'Location Address': [biz.garaging_street, biz.garaging_city, biz.garaging_state, biz.garaging_zip].filter(Boolean).join(', '),
-    'owner_name': dataPacket.owners[0]?.name ?? '',
-    "Owner's Name": dataPacket.owners[0]?.name ?? '',
-    'owner_dob': dataPacket.owners[0]?.dob ?? '',
-    'DOB': dataPacket.owners[0]?.dob ?? '',
-    'dot_number': biz.dot_number ?? '',
-    'DOT #': biz.dot_number ?? '',
-    'mc_number': biz.mc_number ?? '',
-    'MC #': biz.mc_number ?? '',
-    'fein': biz.fein ?? '',
-    'FEIN': biz.fein ?? '',
-    'phone': biz.phone ?? '',
-    'Phone': biz.phone ?? '',
-    'email': biz.email ?? '',
-    'Email': biz.email ?? '',
-    'entity_type': biz.entity_type ?? '',
-    'years_insured': biz.years_in_business?.toString() ?? '',
-    'Years Insured Under This Name': biz.years_in_business?.toString() ?? '',
-    'years_experience': biz.years_experience?.toString() ?? biz.years_in_business?.toString() ?? '',
-    'Years Experience': biz.years_experience?.toString() ?? biz.years_in_business?.toString() ?? '',
-    'description_operations': ops.commodities ?? '',
-    'Description of Risk/Operations': ops.commodities ?? '',
+  // ── Page 1: General Information ──────────────────────────────────────────
+  trySet(form, 'Agent Name', 'Jason Toro');
+  trySet(form, 'Agent Email', 'jtoro@newhopeins.com');
+  trySet(form, 'Agency Name', 'New Hope Insurance');
+  trySet(form, 'Agent', '');
 
-    // Operations
-    'radius_operations': ops.states ?? `${ops.radius ?? ''} miles`,
-    'Radius of Operations': ops.states ?? `${ops.radius ?? ''} miles`,
-    'commodities': ops.commodities ?? '',
+  trySet(form, 'Applicant Name 1', biz.legal_name ?? '');
+  trySet(form, 'Applicant Name 2', biz.dba ?? '');
+  trySet(form, 'Mailing Address', [biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip].filter(Boolean).join(', '));
+  trySet(form, 'Location Address 1', [biz.garaging_street ?? biz.mailing_street, biz.garaging_city ?? biz.mailing_city].filter(Boolean).join(', '));
+  trySet(form, 'Location Address 2', [biz.garaging_state ?? biz.mailing_state, biz.garaging_zip ?? biz.mailing_zip].filter(Boolean).join(' '));
 
-    // Coverages
-    'auto_liability_limits': cov.auto_liability_limit ?? '',
-    'Auto Liability Limits': cov.auto_liability_limit ?? '',
-    'Limits': cov.auto_liability_limit ?? '',
-    'physical_damage_deductible': `Comp: ${cov.comprehensive_deductible ?? ''} Coll: ${cov.collision_deductible ?? ''}`,
-    'Deductible': cov.collision_deductible ?? '',
-    'cargo_limits': cov.cargo_limit ?? '',
-    'Cargo Limits': cov.cargo_limit ?? '',
+  trySet(form, 'Owners Name', dataPacket.owners[0]?.name ?? '');
+  trySet(form, 'DOB 1', dataPacket.owners[0]?.dob ?? '');
 
-    // Prior insurance
-    'current_carrier': prior.carrier ?? '',
-    'Insurance Company': prior.carrier ?? '',
-    'policy_number': prior.policy_number ?? '',
-    'Policy Number': prior.policy_number ?? '',
-    'current_premium': prior.premium?.toString() ?? '',
+  // Entity type checkboxes
+  const entity = (biz.entity_type ?? '').toLowerCase();
+  tryCheck(form, 'Individual', entity.includes('individual') || entity.includes('sole'));
+  tryCheck(form, 'Partnership', entity.includes('partnership'));
+  tryCheck(form, 'Corporation', entity.includes('corp'));
+  tryCheck(form, 'Joint Venture', entity.includes('joint'));
+  tryCheck(form, 'LLC', entity.includes('llc'));
+  tryCheck(form, 'Nonprofit', entity.includes('nonprofit') || entity.includes('non-profit'));
 
-    // Agent
-    'agent_name': 'Jason Toro',
-    'Agent Name': 'Jason Toro',
-    'agent_email': 'jtoro@newhopeins.com',
-    'Agent Email': 'jtoro@newhopeins.com',
-    'agency_name': 'New Hope Insurance',
-    'Agency Name': 'New Hope Insurance',
-  };
+  trySet(form, 'DOT', biz.dot_number ?? '');
+  trySet(form, 'MC', biz.mc_number ?? '');
+  trySet(form, 'Years Insured Under This Name', biz.years_in_business?.toString() ?? '');
+  trySet(form, 'Years Experience', biz.years_experience?.toString() ?? biz.years_in_business?.toString() ?? '');
+  trySet(form, 'Renewal Date', supplementalAnswers['Desired effective date'] ?? '');
 
-  // Add supplemental answers
-  for (const [key, val] of Object.entries(supplementalAnswers)) {
-    if (val) dataMap[key] = val;
-  }
+  trySet(form, 'Description of RiskOperations 1', ops.commodities ?? '');
+  trySet(form, 'Description of RiskOperations 2', '');
 
-  // Try to fill each field
-  const fields = form.getFields();
-  let filledCount = 0;
-  for (const field of fields) {
-    const fieldName = field.getName();
-    const value = dataMap[fieldName];
-    if (value !== undefined) {
-      try {
-        const textField = form.getTextField(fieldName);
-        textField.setText(value);
-        filledCount++;
-      } catch {
-        // Field might be a checkbox or other type — skip
+  const narrative = supplementalAnswers['Target Premium']
+    ? `Target Premium: ${supplementalAnswers['Target Premium']}`
+    : '';
+  trySet(form, 'Narrative Target premiumHow JSA can help you write the account 1', narrative);
+
+  // Underwriting questions (radio groups)
+  // The radio groups are named undefined_2q through undefined_2aas for Q1-Q12
+  const radioNames = ['undefined_2q', 'undefined_2w', 'undefined_2e', 'undefined_2r', 'undefined_2t',
+    'undefined_2y', 'undefined_2u', 'undefined_2d', 'undefined_2f', 'undefined_2s', 'undefined_2a', 'undefined_2aas'];
+  const qAnswers = [
+    supplementalAnswers['Has the applicant been cancelled or non-renewed in the last three years?'] ?? 'No',
+    prior.lapse ? 'Yes' : 'No',
+    'No', // fraud
+    'No', // bankruptcies
+    'No', // losses over 250k
+    supplementalAnswers['Hazmat hauling?'] ?? supplementalAnswers['Transport hazardous materials?'] ?? 'No',
+    ops.interstate === null ? 'Yes' : ops.interstate ? 'Yes' : 'No',
+    ops.for_hire === null ? 'Yes' : ops.for_hire ? 'Yes' : 'No',
+    'Yes', // all vehicles listed
+    supplementalAnswers['Any Owner Operators?'] ?? 'No',
+    'No', // rent units
+    'No', // team drivers
+  ];
+
+  for (let i = 0; i < radioNames.length && i < qAnswers.length; i++) {
+    try {
+      const radioGroup = form.getRadioGroup(radioNames[i]);
+      const options = radioGroup.getOptions();
+      const answer = qAnswers[i].toLowerCase().includes('yes') ? 'Yes' : 'No';
+      // Try to select the matching option
+      const matchingOption = options.find(o => o.toLowerCase().includes(answer.toLowerCase()));
+      if (matchingOption) {
+        radioGroup.select(matchingOption);
       }
-    }
+    } catch { /* radio group may not exist or have different structure */ }
   }
 
-  if (filledCount === 0 && fields.length > 0) {
-    warnings.push(
-      `The template has ${fields.length} form fields but none matched our data keys. ` +
-      `Field names found: ${fields.slice(0, 10).map(f => f.getName()).join(', ')}`,
-    );
-  }
+  // Radius of Operations
+  trySet(form, 'IFTAs if available 1', ops.states ?? `${ops.radius ?? ''} miles`);
+  trySet(form, 'IFTAs if available 2', '');
 
-  // Fill driver rows
-  for (let i = 0; i < Math.min(dataPacket.drivers.length, template.max_drivers ?? 10); i++) {
-    const d = dataPacket.drivers[i];
-    const name = [d.first_name, d.last_name].filter(Boolean).join(' ');
-    trySetField(form, `driver_${i + 1}_name`, name);
-    trySetField(form, `Driver Name_${i + 1}`, name);
-    trySetField(form, `driver_${i + 1}_dob`, d.dob ?? '');
-    trySetField(form, `driver_${i + 1}_state`, d.license_state ?? '');
-    trySetField(form, `driver_${i + 1}_license`, d.license_number ?? '');
-    trySetField(form, `driver_${i + 1}_exp`, d.years_licensed?.toString() ?? '');
-  }
+  // ── Page 2: Coverages and Limits ─────────────────────────────────────────
+  tryCheck(form, 'Auto Liability', true);
+  trySet(form, 'Limits', cov.auto_liability_limit ?? '');
+  trySet(form, 'UMUIM Limits', '');
+  trySet(form, 'Deductible', cov.collision_deductible ?? '');
+  tryCheck(form, 'Comprehensive', true);
+  tryCheck(form, 'Collision', true);
+  tryCheck(form, 'Physical Damage', !!cov.collision_deductible || !!cov.comprehensive_deductible);
+  tryCheck(form, 'Cargo', !!cov.cargo_limit);
+  trySet(form, 'Limits 1', cov.cargo_limit ?? '');
+  trySet(form, 'Deductible_2', '');
 
-  // Fill vehicle rows
-  for (let i = 0; i < Math.min(dataPacket.vehicles.length, template.max_vehicles ?? 15); i++) {
+  // ── Page 2: Power Unit Information (5 rows) ──────────────────────────────
+  const maxVeh = Math.min(dataPacket.vehicles.length, template.max_vehicles ?? 5);
+  for (let i = 0; i < maxVeh; i++) {
     const v = dataPacket.vehicles[i];
-    trySetField(form, `vehicle_${i + 1}_year`, v.year?.toString() ?? '');
-    trySetField(form, `vehicle_${i + 1}_make`, v.make ?? '');
-    trySetField(form, `vehicle_${i + 1}_type`, v.type ?? '');
-    trySetField(form, `vehicle_${i + 1}_vin`, v.vin ?? '');
-    trySetField(form, `vehicle_${i + 1}_value`, v.value?.toString() ?? '');
+    const row = `Row${i + 1}`;
+    trySet(form, `Year${row}`, v.year?.toString() ?? '');
+    trySet(form, `Make${row}`, v.make ?? '');
+    trySet(form, `Body Type Tractor Box Truck Flatbed Truck Dump Truck etc${row}`, v.type ?? '');
+    trySet(form, `VIN${row}`, v.vin ?? '');
+    trySet(form, `Actual Cash Value${row}`, v.value?.toString() ?? '');
+    trySet(form, `Owned Leased or Owner Operator${row}`, 'Owned');
+    trySet(form, `Additional Insured  Lessor${row}`, '');
   }
 
-  // Check overflow
-  if (dataPacket.drivers.length > (template.max_drivers ?? 10)) {
-    warnings.push(`${dataPacket.drivers.length} drivers exceed the template's ${template.max_drivers} rows. Attach a continuation schedule.`);
+  // ── Page 2: Driver Information (5 rows) ──────────────────────────────────
+  const maxDrv = Math.min(dataPacket.drivers.length, template.max_drivers ?? 5);
+  for (let i = 0; i < maxDrv; i++) {
+    const d = dataPacket.drivers[i];
+    const row = `Row${i + 1}`;
+    const name = [d.first_name, d.last_name].filter(Boolean).join(' ');
+    trySet(form, `Driver Name${row}`, name);
+    trySet(form, `DOB${row}`, d.dob ?? '');
+    trySet(form, `State${row}`, d.license_state ?? '');
+    trySet(form, `License ${row}`, d.license_number ?? '');
+    trySet(form, ` of years CDL experience${row}`, d.years_licensed?.toString() ?? '');
+    trySet(form, `Owner  Operator${row}`, 'No');
+    trySet(form, `Violationaccident history for previous 36 months${row}`, '');
   }
-  if (dataPacket.vehicles.length > (template.max_vehicles ?? 15)) {
-    warnings.push(`${dataPacket.vehicles.length} vehicles exceed the template's ${template.max_vehicles} rows. Attach a continuation schedule.`);
+
+  // ── Page 2: Commodity Information ────────────────────────────────────────
+  if (ops.commodities) {
+    trySet(form, 'CommoditiesRow1', ops.commodities);
+    trySet(form, 'Percent HauledRow1', '100%');
+  }
+
+  // ── Page 3: Prior Carrier Information ────────────────────────────────────
+  if (prior.carrier) {
+    trySet(form, 'Policy PeriodRow1', prior.expiration ?? '');
+    trySet(form, '12 month term with no cancellationRow1', 'Yes');
+    trySet(form, 'Insurance CompanyRow1', prior.carrier);
+    trySet(form, 'Line of BusinessRow1', 'AL, PD');
+    trySet(form, 'Policy NumberRow1', prior.policy_number ?? '');
+    trySet(form, 'Number of Power units  Total Insured ValueRow1', dataPacket.vehicles.length.toString());
+  }
+
+  // ── Page 3: Additional Remarks / Signatures ──────────────────────────────
+  trySet(form, 'Agency Address', 'New Hope Insurance, Miami FL');
+  trySet(form, 'Date', new Date().toLocaleDateString('en-US'));
+
+  // Overflow warnings
+  if (dataPacket.drivers.length > (template.max_drivers ?? 5)) {
+    warnings.push(`${dataPacket.drivers.length} drivers exceed the form's 5 rows. Attach a continuation schedule.`);
+  }
+  if (dataPacket.vehicles.length > (template.max_vehicles ?? 5)) {
+    warnings.push(`${dataPacket.vehicles.length} vehicles exceed the form's 5 rows. Attach a continuation schedule.`);
   }
 }
 
-function trySetField(form: ReturnType<typeof PDFDocument.prototype.getForm>, name: string, value: string) {
+function trySet(form: ReturnType<typeof PDFDocument.prototype.getForm>, name: string, value: string) {
   try {
     const field = form.getTextField(name);
     field.setText(value);
   } catch {
     // Field doesn't exist — that's fine
+  }
+}
+
+function tryCheck(form: ReturnType<typeof PDFDocument.prototype.getForm>, name: string, checked: boolean) {
+  try {
+    const field = form.getCheckBox(name);
+    if (checked) field.check();
+    else field.uncheck();
+  } catch {
+    // Field doesn't exist or isn't a checkbox — that's fine
   }
 }
 
