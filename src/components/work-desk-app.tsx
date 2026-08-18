@@ -3034,6 +3034,7 @@ export function WorkDeskApp({
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const refreshTimer = useRef<number | null>(null);
   const refreshInFlight = useRef(false);
+  const refreshQueued = useRef(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(() => new Date());
   const seenNotificationIds = useRef(
     new Set(
@@ -3318,7 +3319,12 @@ export function WorkDeskApp({
 
   const refreshLiveData = useCallback(
     async (silent = false) => {
-      if (refreshInFlight.current) return;
+      if (refreshInFlight.current) {
+        // A fetch is already running — queue a follow-up so RPC callers that
+        // need post-mutation data don't silently get stale state.
+        refreshQueued.current = true;
+        return;
+      }
       refreshInFlight.current = true;
       try {
         const data = await loadDashboardData(supabase);
@@ -3334,6 +3340,12 @@ export function WorkDeskApp({
           );
       } finally {
         refreshInFlight.current = false;
+        // If someone called refreshLiveData while we were busy, run once more
+        // so they get fresh data.
+        if (refreshQueued.current) {
+          refreshQueued.current = false;
+          void refreshLiveData(true);
+        }
       }
     },
     [applyDashboardData, refreshIntakeCount, supabase],
@@ -3685,13 +3697,17 @@ export function WorkDeskApp({
             "Quote marked Sold.",
           );
     if (success) {
+      // Optimistic removal: immediately drop the item from local state so the
+      // agent never sees the quote persist in "My Active Tasks" even if the
+      // full dashboard refresh races with realtime events.
+      setWorkItems((prev) => prev.filter((wi) => wi.id !== quoteResultItem.id));
       setModal(null);
       setQuoteResultItemId(null);
     }
   }
 
   async function finalizePendingPricingSold(item: PendingPricingItem) {
-    await runRpc(
+    const success = await runRpc(
       "finalize_pending_pricing_quote",
       {
         p_pending_id: item.id,
@@ -3701,6 +3717,9 @@ export function WorkDeskApp({
       },
       `${item.customer} marked Sold.`,
     );
+    if (success) {
+      setPendingPricing((prev) => prev.filter((pp) => pp.id !== item.id));
+    }
   }
 
   function requestChangeOutcome(record: QuoteRecord) {
@@ -3796,6 +3815,12 @@ export function WorkDeskApp({
           );
 
     if (success) {
+      // Optimistic removal: drop the item from local state to prevent stale UI
+      if (notSoldTarget.kind === "active") {
+        setWorkItems((prev) => prev.filter((wi) => wi.id !== notSoldTarget.item.id));
+      } else {
+        setPendingPricing((prev) => prev.filter((pp) => pp.id !== notSoldTarget.item.id));
+      }
       setModal(null);
       setQuoteResultItemId(null);
       setNotSoldTarget(null);

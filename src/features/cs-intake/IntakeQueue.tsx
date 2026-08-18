@@ -1,7 +1,7 @@
 'use client';
 
 import { CheckCircle2, Edit3, ExternalLink, Eye, FileText, RefreshCw, RotateCcw, Search, Trash2, UserCheck, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { canManageCustomerService, canManageSales } from '@/lib/permissions';
 import { getSupabase, listActiveAgents, listAllActiveProfiles } from '../nhwd-shared/client';
@@ -169,6 +169,29 @@ export default function IntakeQueue({
     }
   }, []);
 
+  // Debounce realtime-triggered refreshes to avoid hammering the DB
+  const refreshTimer = useRef<number | null>(null);
+  const refreshInFlight = useRef(false);
+  const refreshQueued = useRef(false);
+
+  const debouncedRefresh = useCallback(() => {
+    if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+    refreshTimer.current = window.setTimeout(() => {
+      if (refreshInFlight.current) {
+        refreshQueued.current = true;
+        return;
+      }
+      refreshInFlight.current = true;
+      void refresh().finally(() => {
+        refreshInFlight.current = false;
+        if (refreshQueued.current) {
+          refreshQueued.current = false;
+          debouncedRefresh();
+        }
+      });
+    }, 200);
+  }, [refresh]);
+
   // Load current rotation state on mount
   useEffect(() => {
     async function loadRotation() {
@@ -204,9 +227,9 @@ export default function IntakeQueue({
     const supabase = getSupabase();
     const channel = supabase
       .channel('sales-intake-queue-v1')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cs_intake_submissions' }, () => void refresh())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_intakes' }, () => void refresh())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'work_items' }, () => void refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cs_intake_submissions' }, () => debouncedRefresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_intakes' }, () => debouncedRefresh())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'work_items' }, () => debouncedRefresh())
       .subscribe();
     const interval = window.setInterval(() => void refresh(), 60_000);
     const onFocus = () => void refresh();
@@ -214,13 +237,14 @@ export default function IntakeQueue({
     window.addEventListener('online', onFocus);
     document.addEventListener('visibilitychange', onFocus);
     return () => {
+      if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
       void supabase.removeChannel(channel);
       window.clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('online', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
-  }, [refresh]);
+  }, [refresh, debouncedRefresh]);
 
   // Real-time: rotation state changes
   useEffect(() => {

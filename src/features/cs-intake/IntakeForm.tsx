@@ -16,7 +16,7 @@ import {
   UserRound,
   UsersRound,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ui } from '../nhwd-shared/ui';
 import DuplicateWarning from '../quote-center/DuplicateWarning';
@@ -92,6 +92,7 @@ const emptyVehicle = (position = 1): CsIntakeVehicle => ({
   truck_type: null,
   physical_damage_value: null,
   physical_damage_deductible: null,
+  coverage_type: null,
 });
 
 type DraftSubmission = Partial<CsIntakeSubmission> & {
@@ -214,6 +215,8 @@ export default function IntakeForm({
   const [commercialAssignees, setCommercialAssignees] = useState<{ id: string; display_name: string; role: string }[]>([]);
   const [selectedAssignee, setSelectedAssignee] = useState<string>('');
   const [busy, setBusy] = useState(false);
+  /** Synchronous re-entry guard — prevents duplicate submissions from rapid clicks. */
+  const persistInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   /** Set when a save was refused because another employee saved first. */
@@ -483,6 +486,10 @@ export default function IntakeForm({
   }
 
   async function persist(alsoSubmit: boolean) {
+    // Synchronous guard: React state is async, so `busy` alone can't block a
+    // double-click that fires two events before the first render disables the button.
+    if (persistInFlight.current) return;
+    persistInFlight.current = true;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -555,11 +562,10 @@ export default function IntakeForm({
         setError(caught instanceof Error ? caught.message : 'The intake could not be saved.');
       }
     } finally {
+      persistInFlight.current = false;
       setBusy(false);
     }
   }
-
-  /** Reloads the stored intake, discarding this editor's unsaved copy. */
   async function reloadAfterConflict() {
     if (!submission.id) return;
     setBusy(true);
@@ -1280,6 +1286,9 @@ export default function IntakeForm({
                 <Field label="Use"><select className={ui.select} disabled={disabled} value={vehicle.usage || 'commute'} onChange={(event) => patchVehicle(index, { usage: event.target.value })}><option value="commute">Commute</option><option value="pleasure">Pleasure</option><option value="business">Business</option><option value="delivery">Delivery</option><option value="rideshare">Rideshare</option></select></Field>
                 <Field label="Annual mileage"><input type="number" min="0" className={ui.input} disabled={disabled} value={vehicle.annual_mileage ?? ''} onChange={(event) => patchVehicle(index, { annual_mileage: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
                 <Field label="Garaging ZIP"><input className={ui.input} disabled={disabled} value={vehicle.garaging_zip || submission.addr_zip || ''} onChange={(event) => patchVehicle(index, { garaging_zip: event.target.value || null })} /></Field>
+                {(currentLob === 'personal_auto' || currentLob === 'commercial_auto') && (
+                  <Field label="Coverage Type"><select className={ui.select} disabled={disabled} value={vehicle.coverage_type || ''} onChange={(event) => patchVehicle(index, { coverage_type: event.target.value || null })}><option value="">Select</option><option value="full_coverage">Full Coverage</option><option value="liability_only">Liability Only</option></select></Field>
+                )}
                 {currentLob === 'trucking' && (
                   <>
                     <Field label="Truck Type"><select className={ui.select} disabled={disabled} value={vehicle.truck_type || ''} onChange={(event) => patchVehicle(index, { truck_type: event.target.value || null })}><option value="">Select</option><option value="box_truck">Box Truck</option><option value="truck_tractor">Truck Tractor</option><option value="sprinter_van">Sprinter Van</option><option value="flatbed">Flatbed</option><option value="reefer">Reefer</option><option value="tanker">Tanker</option><option value="dump_truck">Dump Truck</option><option value="car_hauler">Car Hauler</option><option value="step_van">Step Van</option><option value="other">Other</option></select></Field>

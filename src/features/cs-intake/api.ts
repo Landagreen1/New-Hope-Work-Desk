@@ -175,6 +175,7 @@ export interface CsIntakeVehicle {
   truck_type: string | null;
   physical_damage_value: number | null;
   physical_damage_deductible: number | null;
+  coverage_type: string | null;
 }
 
 export interface CsIntakeOwner {
@@ -444,6 +445,13 @@ function stripChildIds<T extends { id?: string; submission_id?: string }>(rows: 
  *   save. When it no longer matches, a {@link DraftConflictError} is raised
  *   instead of overwriting the other employee's work.
  */
+/**
+ * In-flight creation guard: prevents a rapid second call from creating a
+ * duplicate row when submission.id is still undefined. The promise is shared
+ * so both callers get the same result.
+ */
+let createInFlight: Promise<SaveDraftResult> | null = null;
+
 export async function saveDraft(
   profileId: string,
   submission: Partial<CsIntakeSubmission> & { id?: string },
@@ -457,25 +465,36 @@ export async function saveDraft(
   const row = stripServerOwned(submission);
 
   if (!submission.id) {
-    const { data, error } = await supabase
-      .from('cs_intake_submissions')
-      .insert({ ...row, created_by: profileId, last_edited_by: profileId, last_edited_at: new Date().toISOString() })
-      .select('id,version')
-      .single();
-    throwIfError(error);
-    const created = data as { id: string; version: number };
+    // If another call is already creating a new intake, share its result to
+    // prevent duplicate rows from concurrent rapid clicks.
+    if (createInFlight) {
+      return createInFlight;
+    }
 
-    const { error: eventError } = await supabase.from('cs_intake_events').insert({
-      submission_id: created.id,
-      actor_id: profileId,
-      event_type: 'created',
-      detail: { line_of_business: row.line_of_business },
-    });
-    throwIfError(eventError);
+    const doCreate = async (): Promise<SaveDraftResult> => {
+      const { data, error } = await supabase
+        .from('cs_intake_submissions')
+        .insert({ ...row, created_by: profileId, last_edited_by: profileId, last_edited_at: new Date().toISOString() })
+        .select('id,version')
+        .single();
+      throwIfError(error);
+      const created = data as { id: string; version: number };
 
-    // Children are attached through the same atomic path the next save uses, so
-    // there is only one code path that writes them.
-    return saveDraft(profileId, { ...submission, id: created.id }, drivers, vehicles, owners, commodities, created.version);
+      const { error: eventError } = await supabase.from('cs_intake_events').insert({
+        submission_id: created.id,
+        actor_id: profileId,
+        event_type: 'created',
+        detail: { line_of_business: row.line_of_business },
+      });
+      throwIfError(eventError);
+
+      // Children are attached through the same atomic path the next save uses, so
+      // there is only one code path that writes them.
+      return saveDraft(profileId, { ...submission, id: created.id }, drivers, vehicles, owners, commodities, created.version);
+    };
+
+    createInFlight = doCreate().finally(() => { createInFlight = null; });
+    return createInFlight;
   }
 
   const { data, error } = await supabase.rpc('cs_intake_save_draft', {
