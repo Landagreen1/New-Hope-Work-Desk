@@ -115,7 +115,19 @@ export async function POST(request: Request) {
     }
   }
 
-  // 7. Generate the PDF
+  // 7. Download the blank template PDF (if one has been uploaded)
+  let templatePdfBytes: Uint8Array | null = null;
+  if (template.storage_path) {
+    const { data: templateFileData, error: downloadError } = await supabase.storage
+      .from(template.storage_bucket || 'specialty-quote-documents')
+      .download(template.storage_path);
+
+    if (!downloadError && templateFileData) {
+      templatePdfBytes = new Uint8Array(await templateFileData.arrayBuffer());
+    }
+  }
+
+  // 8. Generate the PDF
   const warnings: string[] = [];
   let pdfBuffer: Buffer;
 
@@ -126,6 +138,7 @@ export async function POST(request: Request) {
       supplementalAnswers,
       maxDrivers: template.max_drivers ?? undefined,
       maxVehicles: template.max_vehicles ?? undefined,
+      templatePdfBytes,
     });
     pdfBuffer = result.buffer;
     warnings.push(...result.warnings);

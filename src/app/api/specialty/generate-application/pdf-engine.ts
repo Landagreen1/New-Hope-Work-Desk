@@ -1,17 +1,19 @@
 /**
  * PDF Generation Engine
  *
- * Uses pdfkit to generate filled PDF applications that replicate the official
- * carrier application layouts (JSA Truck Application, TIA Quick Quote Form).
+ * Uses pdf-lib to fill the actual official carrier application PDFs with
+ * Work Desk data. The blank official template is stored in Supabase storage;
+ * this engine downloads it, fills form fields (AcroForm) or overlays text
+ * at mapped coordinates, and returns the filled PDF buffer.
  *
- * The generated PDFs mirror the exact section structure, field labels, and
- * table formats from the official forms so agents can review and submit them
- * to carriers without re-entry.
+ * Fallback: if no template file is stored (storage_path is null), generates
+ * a structured document using pdfkit.
  *
- * v1.17.0 — Updated with actual form field layouts from official PDFs.
+ * v1.17.0 — Rewritten to fill official forms rather than generate new layouts.
  */
 
-import PDFDocument from 'pdfkit';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import PDFDocumentKit from 'pdfkit';
 
 import type { TruckingDataPacket } from '@/features/specialty/market-directory/types';
 
@@ -29,6 +31,8 @@ export interface PdfGenerationInput {
   supplementalAnswers: Record<string, string | null>;
   maxDrivers?: number;
   maxVehicles?: number;
+  /** The blank template PDF bytes, if available */
+  templatePdfBytes?: Uint8Array | null;
 }
 
 export interface PdfGenerationResult {
@@ -37,26 +41,299 @@ export interface PdfGenerationResult {
 }
 
 /**
- * Generates a PDF from a template configuration and data packet.
- * Routes to the appropriate template-specific generator.
+ * Generates a filled PDF. If templatePdfBytes are provided, fills the actual
+ * official form. Otherwise falls back to pdfkit-generated structured output.
  */
 export async function generatePdfFromTemplate(input: PdfGenerationInput): Promise<PdfGenerationResult> {
-  const { template } = input;
-  const name = template.template_name.toLowerCase();
+  const { templatePdfBytes } = input;
 
-  if (name.includes('tia') || name.includes('quick quote')) {
-    return generateTiaQuickQuote(input);
-  }
-  if (name.includes('jsa') || name.includes('truck application')) {
-    return generateJsaTruckApplication(input);
+  if (templatePdfBytes && templatePdfBytes.length > 0) {
+    return fillOfficialTemplate(input);
   }
 
-  // Fallback: generic structured output
-  return generateGenericApplication(input);
+  // Fallback: generate a structured document with pdfkit
+  return generateFallbackPdf(input);
 }
 
-/** Collects a PDFDocument stream into a Buffer. */
-function finalizePdf(doc: PDFKit.PDFDocument): Promise<Buffer> {
+// ═══════════════════════════════════════════════════════════════════════════════
+// OFFICIAL TEMPLATE FILLING (pdf-lib)
+//
+// Opens the actual blank PDF from JSA/TIA, finds form fields or overlays text
+// at the mapped coordinates, and produces the filled version.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function fillOfficialTemplate(input: PdfGenerationInput): Promise<PdfGenerationResult> {
+  const { template, dataPacket, supplementalAnswers, templatePdfBytes } = input;
+  const warnings: string[] = [];
+
+  const pdfDoc = await PDFDocument.load(templatePdfBytes!);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontSize = 9;
+
+  // Try AcroForm filling first
+  const form = pdfDoc.getForm();
+  const fields = form.getFields();
+
+  if (fields.length > 0) {
+    // The PDF has interactive form fields — fill them by name
+    fillFormFields(form, dataPacket, supplementalAnswers, template, warnings);
+  } else {
+    // No form fields — overlay text at mapped coordinate positions
+    overlayTextOnTemplate(pdfDoc, font, fontSize, dataPacket, supplementalAnswers, template, warnings);
+  }
+
+  // Flatten form so fields appear as static text (not editable in Acrobat)
+  try {
+    form.flatten();
+  } catch {
+    // Some forms may not support flattening — that's OK
+  }
+
+  const filledBytes = await pdfDoc.save();
+  return { buffer: Buffer.from(filledBytes), warnings };
+}
+
+/**
+ * Fills AcroForm fields by matching field names to our data.
+ */
+function fillFormFields(
+  form: ReturnType<typeof PDFDocument.prototype.getForm>,
+  dataPacket: TruckingDataPacket,
+  supplementalAnswers: Record<string, string | null>,
+  template: PdfGenerationInput['template'],
+  warnings: string[],
+) {
+  const biz = dataPacket.business;
+  const ops = dataPacket.operations;
+  const cov = dataPacket.coverages;
+  const prior = dataPacket.prior_insurance;
+
+  // Build a flat data map from our structured data
+  const dataMap: Record<string, string> = {
+    // Business / Applicant
+    'applicant_name': biz.legal_name ?? '',
+    'Applicant Name': biz.legal_name ?? '',
+    'dba': biz.dba ?? '',
+    'DBA': biz.dba ?? '',
+    'mailing_address': [biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip].filter(Boolean).join(', '),
+    'Mailing Address': [biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip].filter(Boolean).join(', '),
+    'location_address': [biz.garaging_street, biz.garaging_city, biz.garaging_state, biz.garaging_zip].filter(Boolean).join(', '),
+    'Location Address': [biz.garaging_street, biz.garaging_city, biz.garaging_state, biz.garaging_zip].filter(Boolean).join(', '),
+    'owner_name': dataPacket.owners[0]?.name ?? '',
+    "Owner's Name": dataPacket.owners[0]?.name ?? '',
+    'owner_dob': dataPacket.owners[0]?.dob ?? '',
+    'DOB': dataPacket.owners[0]?.dob ?? '',
+    'dot_number': biz.dot_number ?? '',
+    'DOT #': biz.dot_number ?? '',
+    'mc_number': biz.mc_number ?? '',
+    'MC #': biz.mc_number ?? '',
+    'fein': biz.fein ?? '',
+    'FEIN': biz.fein ?? '',
+    'phone': biz.phone ?? '',
+    'Phone': biz.phone ?? '',
+    'email': biz.email ?? '',
+    'Email': biz.email ?? '',
+    'entity_type': biz.entity_type ?? '',
+    'years_insured': biz.years_in_business?.toString() ?? '',
+    'Years Insured Under This Name': biz.years_in_business?.toString() ?? '',
+    'years_experience': biz.years_experience?.toString() ?? biz.years_in_business?.toString() ?? '',
+    'Years Experience': biz.years_experience?.toString() ?? biz.years_in_business?.toString() ?? '',
+    'description_operations': ops.commodities ?? '',
+    'Description of Risk/Operations': ops.commodities ?? '',
+
+    // Operations
+    'radius_operations': ops.states ?? `${ops.radius ?? ''} miles`,
+    'Radius of Operations': ops.states ?? `${ops.radius ?? ''} miles`,
+    'commodities': ops.commodities ?? '',
+
+    // Coverages
+    'auto_liability_limits': cov.auto_liability_limit ?? '',
+    'Auto Liability Limits': cov.auto_liability_limit ?? '',
+    'Limits': cov.auto_liability_limit ?? '',
+    'physical_damage_deductible': `Comp: ${cov.comprehensive_deductible ?? ''} Coll: ${cov.collision_deductible ?? ''}`,
+    'Deductible': cov.collision_deductible ?? '',
+    'cargo_limits': cov.cargo_limit ?? '',
+    'Cargo Limits': cov.cargo_limit ?? '',
+
+    // Prior insurance
+    'current_carrier': prior.carrier ?? '',
+    'Insurance Company': prior.carrier ?? '',
+    'policy_number': prior.policy_number ?? '',
+    'Policy Number': prior.policy_number ?? '',
+    'current_premium': prior.premium?.toString() ?? '',
+
+    // Agent
+    'agent_name': 'Jason Toro',
+    'Agent Name': 'Jason Toro',
+    'agent_email': 'jtoro@newhopeins.com',
+    'Agent Email': 'jtoro@newhopeins.com',
+    'agency_name': 'New Hope Insurance',
+    'Agency Name': 'New Hope Insurance',
+  };
+
+  // Add supplemental answers
+  for (const [key, val] of Object.entries(supplementalAnswers)) {
+    if (val) dataMap[key] = val;
+  }
+
+  // Try to fill each field
+  const fields = form.getFields();
+  let filledCount = 0;
+  for (const field of fields) {
+    const fieldName = field.getName();
+    const value = dataMap[fieldName];
+    if (value !== undefined) {
+      try {
+        const textField = form.getTextField(fieldName);
+        textField.setText(value);
+        filledCount++;
+      } catch {
+        // Field might be a checkbox or other type — skip
+      }
+    }
+  }
+
+  if (filledCount === 0 && fields.length > 0) {
+    warnings.push(
+      `The template has ${fields.length} form fields but none matched our data keys. ` +
+      `Field names found: ${fields.slice(0, 10).map(f => f.getName()).join(', ')}`,
+    );
+  }
+
+  // Fill driver rows
+  for (let i = 0; i < Math.min(dataPacket.drivers.length, template.max_drivers ?? 10); i++) {
+    const d = dataPacket.drivers[i];
+    const name = [d.first_name, d.last_name].filter(Boolean).join(' ');
+    trySetField(form, `driver_${i + 1}_name`, name);
+    trySetField(form, `Driver Name_${i + 1}`, name);
+    trySetField(form, `driver_${i + 1}_dob`, d.dob ?? '');
+    trySetField(form, `driver_${i + 1}_state`, d.license_state ?? '');
+    trySetField(form, `driver_${i + 1}_license`, d.license_number ?? '');
+    trySetField(form, `driver_${i + 1}_exp`, d.years_licensed?.toString() ?? '');
+  }
+
+  // Fill vehicle rows
+  for (let i = 0; i < Math.min(dataPacket.vehicles.length, template.max_vehicles ?? 15); i++) {
+    const v = dataPacket.vehicles[i];
+    trySetField(form, `vehicle_${i + 1}_year`, v.year?.toString() ?? '');
+    trySetField(form, `vehicle_${i + 1}_make`, v.make ?? '');
+    trySetField(form, `vehicle_${i + 1}_type`, v.type ?? '');
+    trySetField(form, `vehicle_${i + 1}_vin`, v.vin ?? '');
+    trySetField(form, `vehicle_${i + 1}_value`, v.value?.toString() ?? '');
+  }
+
+  // Check overflow
+  if (dataPacket.drivers.length > (template.max_drivers ?? 10)) {
+    warnings.push(`${dataPacket.drivers.length} drivers exceed the template's ${template.max_drivers} rows. Attach a continuation schedule.`);
+  }
+  if (dataPacket.vehicles.length > (template.max_vehicles ?? 15)) {
+    warnings.push(`${dataPacket.vehicles.length} vehicles exceed the template's ${template.max_vehicles} rows. Attach a continuation schedule.`);
+  }
+}
+
+function trySetField(form: ReturnType<typeof PDFDocument.prototype.getForm>, name: string, value: string) {
+  try {
+    const field = form.getTextField(name);
+    field.setText(value);
+  } catch {
+    // Field doesn't exist — that's fine
+  }
+}
+
+/**
+ * Overlays text at mapped coordinate positions when the PDF has no AcroForm fields.
+ * Uses the field_mapping from the template configuration.
+ */
+function overlayTextOnTemplate(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pdfDoc: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  font: any,
+  fontSize: number,
+  dataPacket: TruckingDataPacket,
+  supplementalAnswers: Record<string, string | null>,
+  template: PdfGenerationInput['template'],
+  warnings: string[],
+) {
+  const biz = dataPacket.business;
+  const ops = dataPacket.operations;
+  const cov = dataPacket.coverages;
+  const prior = dataPacket.prior_insurance;
+  const pages = pdfDoc.getPages();
+
+  // Build data lookup
+  const dataLookup: Record<string, string> = {
+    'business.legal_name': biz.legal_name ?? '',
+    'business.dba': biz.dba ?? '',
+    'business.mailing_address': [biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip].filter(Boolean).join(', '),
+    'business.garaging_address': [biz.garaging_street, biz.garaging_city, biz.garaging_state, biz.garaging_zip].filter(Boolean).join(', '),
+    'business.dot_number': biz.dot_number ?? '',
+    'business.mc_number': biz.mc_number ?? '',
+    'business.fein': biz.fein ?? '',
+    'business.phone': biz.phone ?? '',
+    'business.email': biz.email ?? '',
+    'business.entity_type': biz.entity_type ?? '',
+    'business.years_in_business': biz.years_in_business?.toString() ?? '',
+    'business.years_experience': biz.years_experience?.toString() ?? '',
+    'owners[0].name': dataPacket.owners[0]?.name ?? '',
+    'owners[0].dob': dataPacket.owners[0]?.dob ?? '',
+    'operations.commodities': ops.commodities ?? '',
+    'operations.radius': ops.radius?.toString() ?? '',
+    'operations.states': ops.states ?? '',
+    'coverages.auto_liability_limit': cov.auto_liability_limit ?? '',
+    'coverages.cargo_limit': cov.cargo_limit ?? '',
+    'coverages.comprehensive_deductible': cov.comprehensive_deductible ?? '',
+    'coverages.collision_deductible': cov.collision_deductible ?? '',
+    'prior_insurance.carrier': prior.carrier ?? '',
+    'prior_insurance.policy_number': prior.policy_number ?? '',
+    'prior_insurance.premium': prior.premium?.toString() ?? '',
+    'prior_insurance.expiration': prior.expiration ?? '',
+  };
+
+  // Add supplemental answers
+  for (const [key, val] of Object.entries(supplementalAnswers)) {
+    if (val) dataLookup[`supplemental.${key}`] = val;
+  }
+
+  // Process field_mapping: each entry has { pdf_field, page, x, y } or just { pdf_field, page }
+  const mapping = template.field_mapping as Record<string, { page?: number; x?: number; y?: number; pdf_field?: string }>;
+  let overlaidCount = 0;
+
+  for (const [dataKey, config] of Object.entries(mapping)) {
+    if (!config || typeof config !== 'object') continue;
+    const pageNum = (config.page ?? 1) - 1;
+    if (pageNum >= pages.length || pageNum < 0) continue;
+
+    const value = dataLookup[dataKey] ?? '';
+    if (!value) continue;
+
+    if (config.x !== undefined && config.y !== undefined) {
+      const page = pages[pageNum];
+      page.drawText(value, {
+        x: config.x,
+        y: config.y,
+        size: fontSize,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      overlaidCount++;
+    }
+  }
+
+  if (overlaidCount === 0) {
+    warnings.push(
+      'No coordinate mappings found in the template field_mapping. ' +
+      'The official form was returned as-is. Update the template with x/y coordinates to fill fields.',
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FALLBACK: pdfkit structured document (when no template file exists)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Collects a PDFKit stream into a Buffer. */
+function finalizePdfKit(doc: PDFKit.PDFDocument): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -66,389 +343,18 @@ function finalizePdf(doc: PDFKit.PDFDocument): Promise<Buffer> {
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TIA QUICK QUOTE FORM
-//
-// Mirrors the official Truckers Insurance Associates Quick Quote Form:
-// - Insured Information / Producer Information
-// - Operation Information
-// - Driver Information (table)
-// - Vehicle Schedule (table, 6 rows)
-// - Insurance Carrier Information (3 years)
-// - Coverages & Limits
-// ═══════════════════════════════════════════════════════════════════════════════
-
-async function generateTiaQuickQuote(input: PdfGenerationInput): Promise<PdfGenerationResult> {
-  const { dataPacket, supplementalAnswers, maxDrivers = 5, maxVehicles = 6 } = input;
-  const warnings: string[] = [];
-  const biz = dataPacket.business;
-  const ops = dataPacket.operations;
-  const cov = dataPacket.coverages;
-  const prior = dataPacket.prior_insurance;
-
-  if (dataPacket.drivers.length > maxDrivers) {
-    warnings.push(
-      `TIA Quick Quote supports ${maxDrivers} driver rows but ${dataPacket.drivers.length} exist. ` +
-      `Only the first ${maxDrivers} will be included. Attach a continuation schedule.`,
-    );
-  }
-  if (dataPacket.vehicles.length > maxVehicles) {
-    warnings.push(
-      `TIA Quick Quote supports ${maxVehicles} vehicle rows but ${dataPacket.vehicles.length} exist. ` +
-      `Only the first ${maxVehicles} will be included. Attach a continuation schedule.`,
-    );
-  }
-
-  const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
-
-  // ── Title
-  doc.fontSize(18).font('Helvetica-Bold')
-    .text('QUICK QUOTE FORM', { align: 'right' });
-  doc.moveDown(0.3);
-  doc.fontSize(8).font('Helvetica')
-    .text('Truckers Insurance Associates', { align: 'right' });
-  doc.moveDown(0.5);
-
-  // ── Effective Dates
-  fieldLine(doc, 'Effective Dates', supplementalAnswers['Target effective date'] ?? '');
-  doc.moveDown(0.5);
-
-  // ── Insured Information / Producer Information
-  sectionBar(doc, 'INSURED INFORMATION', 'PRODUCER INFORMATION');
-  fieldLine(doc, 'Name', biz.legal_name);
-  fieldLine(doc, 'DBA', biz.dba);
-  fieldLine(doc, 'Garaging Address', formatAddr(biz.garaging_street, biz.garaging_city, biz.garaging_state, biz.garaging_zip) || formatAddr(biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip));
-  fieldLine(doc, 'Mailing Address', formatAddr(biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip));
-  doc.moveDown(0.3);
-  fieldLine(doc, 'Agency', 'New Hope Insurance');
-  fieldLine(doc, 'Producer', '');
-  fieldLine(doc, 'Phone', biz.phone);
-  fieldLine(doc, 'Email', biz.email);
-  doc.moveDown(0.5);
-
-  // ── Operation Information
-  sectionBar(doc, 'OPERATION INFORMATION');
-  fieldLine(doc, 'Destination Cities (Zone rated - 10% or more)', supplementalAnswers['Primary Destinations'] ?? ops.states);
-  fieldLine(doc, 'Cities Traveled Through (Zone rated - 10% or more)', ops.states);
-  twoCol(doc,
-    'Percentage of Loads Through Brokers', supplementalAnswers['Percentage of Loads Brokered'] ?? ops.brokerage_percentage?.toString() ?? '',
-    'Percentage of Loads to Regular Destinations', '',
-  );
-  twoCol(doc,
-    '# of Power Units Current Year', dataPacket.vehicles.length.toString(),
-    'Gross Revenue Past Year', supplementalAnswers['Annual Revenue'] ?? '',
-  );
-  twoCol(doc,
-    'Past Year Mileage', supplementalAnswers['Annual Mileage'] ?? ops.mileage?.toString() ?? '',
-    'DOT #', biz.dot_number ?? '',
-  );
-  twoCol(doc,
-    'FEIN', biz.fein ?? '',
-    'MC #', biz.mc_number ?? '',
-  );
-  fieldLine(doc, 'Years Insured Under this Name', biz.years_in_business?.toString());
-  doc.moveDown(0.5);
-
-  // ── Driver Information
-  sectionBar(doc, 'DRIVER INFORMATION');
-  // Table header
-  doc.fontSize(7).font('Helvetica-Bold');
-  doc.text('Name                    License           State    DOB         Hire Date    Yrs. Exp.');
-  doc.font('Helvetica').fontSize(8);
-  const driversToShow = dataPacket.drivers.slice(0, maxDrivers);
-  for (const driver of driversToShow) {
-    const name = [driver.first_name, driver.last_name].filter(Boolean).join(' ');
-    doc.text(
-      `${pad(name, 24)}${pad(driver.license_number ?? '', 18)}${pad(driver.license_state ?? '', 8)}${pad(driver.dob ?? '', 12)}${pad('', 12)}${driver.years_licensed ?? ''}`,
-    );
-  }
-  doc.moveDown(0.5);
-
-  // ── Vehicle Schedule
-  sectionBar(doc, 'VEHICLE SCHEDULE (Attach schedule if desired)');
-  doc.fontSize(7).font('Helvetica-Bold');
-  doc.text('#    Year    Make         VIN                  TRK/TRAC    TRL Type    Value       GVW      Radius');
-  doc.font('Helvetica').fontSize(8);
-  const vehiclesToShow = dataPacket.vehicles.slice(0, maxVehicles);
-  for (let i = 0; i < vehiclesToShow.length; i++) {
-    const v = vehiclesToShow[i];
-    doc.text(
-      `${pad((i + 1).toString(), 5)}${pad(v.year?.toString() ?? '', 8)}${pad(v.make ?? '', 13)}${pad(v.vin ?? '', 21)}${pad(v.type ?? '', 12)}${pad('', 12)}${pad(v.value ? `$${v.value}` : '', 12)}${pad(v.gvw?.toString() ?? '', 9)}${v.radius ?? ops.radius ?? ''}`,
-    );
-  }
-  doc.moveDown(0.5);
-
-  // ── Insurance Carrier Information (past 3 years)
-  sectionBar(doc, 'INSURANCE CARRIER INFORMATION (past three years)');
-  doc.fontSize(8);
-  fieldLine(doc, 'Current Carrier', prior.carrier);
-  fieldLine(doc, 'Policy Number', prior.policy_number);
-  fieldLine(doc, 'Premium', prior.premium ? `$${prior.premium.toLocaleString()}` : null);
-  fieldLine(doc, 'Expiration', prior.expiration);
-  doc.moveDown(0.5);
-
-  // ── Coverages & Limits
-  sectionBar(doc, 'COVERAGES & LIMITS');
-  twoCol(doc, 'Auto Liability Limit', cov.auto_liability_limit ?? '', 'Cargo Limit', cov.cargo_limit ?? '');
-  twoCol(doc, 'Comp. Deductible', cov.comprehensive_deductible ?? '', 'Coll. Deductible', cov.collision_deductible ?? '');
-  fieldLine(doc, 'Physical Damage', cov.physical_damage === null ? '' : cov.physical_damage ? 'Yes' : 'No');
-  fieldLine(doc, 'General Liability', cov.general_liability === null ? '' : cov.general_liability ? 'Yes' : 'No');
-  fieldLine(doc, 'Trailer Interchange', cov.trailer_interchange === null ? '' : cov.trailer_interchange ? 'Yes' : 'No');
-  doc.moveDown(0.5);
-
-  // ── Supplemental answers not already used
-  const usedKeys = new Set(['Target effective date', 'Primary Destinations', 'Percentage of Loads Brokered', 'Annual Revenue', 'Annual Mileage']);
-  const remaining = Object.entries(supplementalAnswers).filter(([k, v]) => v && !usedKeys.has(k));
-  if (remaining.length > 0) {
-    sectionBar(doc, 'ADDITIONAL INFORMATION');
-    for (const [q, a] of remaining) {
-      fieldLine(doc, q, a);
-    }
-  }
-
-  // ── Footer
-  doc.moveDown(1);
-  doc.fontSize(7).font('Helvetica')
-    .text('Completed forms can be submitted via email to newsubmissions@truckers-insurance.com or online at www.truckers-insurance.com/quote.', { align: 'center' });
-  doc.moveDown(0.5);
-  doc.fontSize(7).text(`Generated by New Hope Work Desk — ${new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}`, { align: 'center' });
-
-  const buffer = await finalizePdf(doc);
-  return { buffer, warnings };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// JSA TRUCK APPLICATION
-//
-// Mirrors the official Jackson Sumner & Associates Truck Application:
-// Page 1: General Information Section (applicant, owner, entity, DOT/MC,
-//         underwriting questions 1-12, radius of operations, agent info)
-// Page 2: Coverages and Limits, Power Unit Information (table),
-//         Trailer Information (table), Driver Information (table),
-//         Commodity Information (table)
-// Page 3: Prior Carrier Information (3 years), Additional Remarks,
-//         Fraud Warning, Signatures
-// ═══════════════════════════════════════════════════════════════════════════════
-
-async function generateJsaTruckApplication(input: PdfGenerationInput): Promise<PdfGenerationResult> {
-  const { dataPacket, supplementalAnswers, maxDrivers = 10, maxVehicles = 15 } = input;
-  const warnings: string[] = [];
-  const biz = dataPacket.business;
-  const ops = dataPacket.operations;
-  const cov = dataPacket.coverages;
-  const prior = dataPacket.prior_insurance;
-
-  if (dataPacket.drivers.length > maxDrivers) {
-    warnings.push(
-      `JSA application supports ${maxDrivers} driver rows but ${dataPacket.drivers.length} exist. ` +
-      `Only the first ${maxDrivers} will be included. Attach a continuation schedule.`,
-    );
-  }
-  if (dataPacket.vehicles.length > maxVehicles) {
-    warnings.push(
-      `JSA application supports ${maxVehicles} vehicle rows but ${dataPacket.vehicles.length} exist. ` +
-      `Only the first ${maxVehicles} will be included. Attach a continuation schedule.`,
-    );
-  }
-
-  const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // PAGE 1 — General Information Section
-  // ══════════════════════════════════════════════════════════════════════════
-
-  // Agent box (top-right)
-  doc.fontSize(9).font('Helvetica');
-  doc.text('Agent Name: Jason Toro', 350, 40);
-  doc.text('Agent Email: jtoro@newhopeins.com', 350, 52);
-  doc.text('Agency Name: New Hope Insurance', 350, 64);
-  doc.text('Agent #:', 350, 76);
-
-  // Title
-  doc.fontSize(8).font('Helvetica').text('Jackson Sumner & Associates', 40, 40);
-  doc.text('Excess & Surplus Lines Broker', 40, 50);
-  doc.text('www.jsausa.com', 40, 60);
-
-  doc.y = 95;
-  doc.fontSize(16).font('Helvetica-Bold').text('Truck Application', { align: 'center' });
-  doc.moveDown(0.8);
-
-  // General Information Section
-  doc.fontSize(11).font('Helvetica-Bold').text('General Information Section');
-  doc.moveDown(0.3);
-  doc.fontSize(9).font('Helvetica');
-  fieldLine(doc, 'Applicant Name', biz.legal_name);
-  twoCol(doc,
-    'Mailing Address', formatAddr(biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip) ?? '',
-    'Location Address', formatAddr(biz.garaging_street, biz.garaging_city, biz.garaging_state, biz.garaging_zip) ?? '',
-  );
-  doc.moveDown(0.3);
-
-  // Owner
-  const ownerName = dataPacket.owners.length > 0 ? dataPacket.owners[0].name : null;
-  const ownerDob = dataPacket.owners.length > 0 ? dataPacket.owners[0].dob : null;
-  fieldLine(doc, "Owner's Name", `${ownerName ?? ''}     DOB: ${ownerDob ?? ''}     CDL: Yes`);
-  fieldLine(doc, 'Applicant is', biz.entity_type ?? 'LLC');
-  twoCol(doc, 'DOT #', biz.dot_number ?? '', 'MC #', biz.mc_number ?? '');
-  const yrsInsured = biz.years_in_business?.toString() ?? '';
-  const yrsExp = biz.years_experience?.toString() ?? yrsInsured;
-  doc.text(`Years Insured Under This Name: ${yrsInsured}     Years Experience: ${yrsExp}     Renewal Date: ${supplementalAnswers['Desired effective date'] ?? ''}`);
-  fieldLine(doc, 'Description of Risk/Operations', ops.commodities);
-  doc.moveDown(0.3);
-  fieldLine(doc, 'Narrative (Target premium/How JSA can help)', supplementalAnswers['Target Premium'] ?? '');
-  doc.moveDown(0.5);
-
-  // Underwriting Questions 1-12
-  doc.font('Helvetica').fontSize(8);
-  const q = (num: number, text: string, answer: string) => {
-    doc.text(`${num}. ${text}  ${answer}`);
-  };
-  const cancelAnswer = supplementalAnswers['Has the applicant been cancelled or non-renewed in the last three years?'] ?? 'No';
-  q(1, 'Has the applicant been cancelled or non-renewed in the last three years?', cancelAnswer);
-  q(2, 'Any lapse in coverage in the past three years?', prior.lapse ? 'Yes' : 'No');
-  q(3, 'Any indictments or convictions of fraud, bribery or arson in the last five years?', 'No');
-  q(4, 'Any bankruptcies, tax or credit liens against the applicant in the past five years?', 'No');
-  q(5, 'Any auto liability losses over $250,000 in the past 5 years?', 'No');
-  q(6, 'Does the applicant transport hazardous materials?', supplementalAnswers['Hazmat hauling?'] ?? 'No');
-  q(7, 'Does the applicant cross state lines?', ops.interstate === null ? 'Yes' : ops.interstate ? 'Yes' : 'No');
-  q(8, 'Does the applicant haul for hire?', ops.for_hire === null ? 'Yes' : ops.for_hire ? 'Yes' : 'No');
-  q(9, 'Are all vehicles listed on this application?', 'Yes');
-  q(10, 'Does the applicant use owner/operators?', supplementalAnswers['Any Owner Operators?'] ?? 'No');
-  q(11, 'Does the insured rent any units on a short term basis?', 'No');
-  q(12, 'Does the applicant use team drivers or slip seating?', 'No');
-  doc.moveDown(0.3);
-
-  // Radius of Operations
-  fieldLine(doc, 'Radius of Operations', ops.states ?? `${ops.radius ?? ''} miles`);
-  doc.moveDown(0.3);
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // PAGE 2 — Coverages, Units, Drivers, Commodities
-  // ══════════════════════════════════════════════════════════════════════════
-  doc.addPage();
-  doc.fontSize(8).font('Helvetica')
-    .text('North Carolina · South Carolina · Virginia · Georgia · Tennessee · Maryland', { align: 'center' });
-  doc.text('PO Box 2540 Boone, NC 28607 | 800-342-5572 | jsausa.com', { align: 'center' });
-  doc.moveDown(0.5);
-
-  // Coverages and Limits
-  doc.fontSize(11).font('Helvetica-Bold').text('Coverages and Limits');
-  doc.moveDown(0.3);
-  doc.fontSize(9).font('Helvetica');
-  twoCol(doc, 'Auto Liability Limits', cov.auto_liability_limit ?? '', 'UM/UIM Limits', '');
-  fieldLine(doc, 'Physical Damage Deductible', `Comp: ${cov.comprehensive_deductible ?? ''}  Coll: ${cov.collision_deductible ?? ''}`);
-  twoCol(doc, 'Cargo Limits', cov.cargo_limit ?? '', 'Cargo Deductible', '');
-  twoCol(doc, 'Trailer Interchange Limits', cov.trailer_interchange ? 'Requested' : '', 'General Liability Limits', cov.general_liability ? 'Requested' : '');
-  doc.moveDown(0.5);
-
-  // Power Unit Information
-  doc.fontSize(10).font('Helvetica-Bold').text('Power Unit Information');
-  doc.moveDown(0.2);
-  doc.fontSize(7).font('Helvetica-Bold');
-  doc.text('Year    Make         Body Type              VIN                      Value       Owned/Leased');
-  doc.font('Helvetica').fontSize(8);
-  const vehToShow = dataPacket.vehicles.slice(0, maxVehicles);
-  for (const v of vehToShow) {
-    doc.text(
-      `${pad(v.year?.toString() ?? '', 8)}${pad(v.make ?? '', 13)}${pad(v.type ?? '', 23)}${pad(v.vin ?? '', 25)}${pad(v.value ? `$${v.value}` : '', 12)}Owned`,
-    );
-  }
-  doc.moveDown(0.5);
-
-  // Driver Information
-  doc.fontSize(10).font('Helvetica-Bold').text('Driver Information');
-  doc.moveDown(0.2);
-  doc.fontSize(7).font('Helvetica-Bold');
-  doc.text('Driver Name              DOB         State  License #            # Yrs CDL   Owner/Op');
-  doc.font('Helvetica').fontSize(8);
-  const drvToShow = dataPacket.drivers.slice(0, maxDrivers);
-  for (const d of drvToShow) {
-    const name = [d.first_name, d.last_name].filter(Boolean).join(' ');
-    doc.text(
-      `${pad(name, 25)}${pad(d.dob ?? '', 12)}${pad(d.license_state ?? '', 7)}${pad(d.license_number ?? '', 21)}${pad(d.years_licensed?.toString() ?? '', 10)}No`,
-    );
-  }
-  doc.moveDown(0.5);
-
-  // Commodity Information
-  doc.fontSize(10).font('Helvetica-Bold').text('Commodity Information');
-  doc.moveDown(0.2);
-  doc.fontSize(7).font('Helvetica-Bold');
-  doc.text('Commodities                              Percent Hauled    Average Value    Maximum Value');
-  doc.font('Helvetica').fontSize(8);
-  if (ops.commodities) {
-    doc.text(`${pad(ops.commodities, 41)}100%`);
-  }
-  doc.moveDown(0.5);
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // PAGE 3 — Prior Carrier, Additional Remarks, Signatures
-  // ══════════════════════════════════════════════════════════════════════════
-  doc.addPage();
-  doc.fontSize(8).font('Helvetica')
-    .text('North Carolina · South Carolina · Virginia · Georgia · Tennessee · Maryland', { align: 'center' });
-  doc.text('PO Box 2540 Boone, NC 28607 | 800-342-5572 | jsausa.com', { align: 'center' });
-  doc.moveDown(0.5);
-
-  // Prior Carrier Information
-  doc.fontSize(10).font('Helvetica-Bold').text('Prior Carrier Information (prior 3 years)');
-  doc.moveDown(0.2);
-  doc.fontSize(7).font('Helvetica-Bold');
-  doc.text('Policy Period     12mo term?    Insurance Company       Line of Business    Policy #         # Units    # Claims    Losses');
-  doc.font('Helvetica').fontSize(8);
-  if (prior.carrier) {
-    doc.text(`${pad(prior.expiration ?? '', 18)}Yes           ${pad(prior.carrier, 24)}AL, PD              ${pad(prior.policy_number ?? '', 17)}${dataPacket.vehicles.length}`);
-  }
-  doc.moveDown(0.8);
-
-  // Additional Remarks
-  doc.fontSize(10).font('Helvetica-Bold').text('Additional Remarks:');
-  doc.moveDown(0.2);
-  doc.fontSize(9).font('Helvetica');
-  // Include any supplemental answers not already used
-  const jsaUsedKeys = new Set(['Target Premium', 'Desired effective date', 'Any Owner Operators?', 'Hazmat hauling?', 'Has the applicant been cancelled or non-renewed in the last three years?']);
-  const jsaRemaining = Object.entries(supplementalAnswers).filter(([k, v]) => v && !jsaUsedKeys.has(k));
-  for (const [qText, a] of jsaRemaining) {
-    doc.text(`${qText}: ${a}`);
-  }
-  doc.moveDown(1);
-
-  // Fraud Warning
-  doc.fontSize(8).font('Helvetica-Bold').text('Fraud Warning:');
-  doc.font('Helvetica').fontSize(7);
-  doc.text('Any person who knowingly and with intent to defraud any insurance company or other person files an application for insurance or statement of claim containing any materially false information or conceals for the purpose of misleading, information concerning any fact material thereto commits a fraudulent insurance act, which is a crime and subjects such person to criminal and civil penalties.');
-  doc.moveDown(0.5);
-
-  // Signatures
-  doc.fontSize(9).font('Helvetica');
-  doc.text("Applicant's Name & Title (Please Print): ___________________________________");
-  doc.moveDown(0.5);
-  doc.text(`Applicant's Signature: ___________________________________     Date: ${new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}`);
-  doc.moveDown(0.5);
-  doc.text("Agent's Signature: ___________________________________     Date: ___________");
-  doc.moveDown(0.5);
-  doc.text('Agency Address: New Hope Insurance');
-  doc.text("Agent's Phone #: _______________     Agent's Fax #: _______________");
-
-  // Footer
-  doc.moveDown(1);
-  doc.fontSize(7).text(`Generated by New Hope Work Desk — ${new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}`, { align: 'center' });
-
-  const buffer = await finalizePdf(doc);
-  return { buffer, warnings };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// GENERIC APPLICATION (fallback)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-async function generateGenericApplication(input: PdfGenerationInput): Promise<PdfGenerationResult> {
+async function generateFallbackPdf(input: PdfGenerationInput): Promise<PdfGenerationResult> {
   const { template, dataPacket, supplementalAnswers, maxDrivers, maxVehicles } = input;
   const warnings: string[] = [];
   const biz = dataPacket.business;
   const ops = dataPacket.operations;
   const cov = dataPacket.coverages;
   const prior = dataPacket.prior_insurance;
+
+  warnings.push(
+    `No official template PDF uploaded for "${template.template_name}". ` +
+    'A structured summary was generated instead. Upload the official blank form to fill it directly.',
+  );
 
   if (maxDrivers && dataPacket.drivers.length > maxDrivers) {
     warnings.push(`Supports ${maxDrivers} drivers but ${dataPacket.drivers.length} exist. Attach a continuation schedule.`);
@@ -457,61 +363,69 @@ async function generateGenericApplication(input: PdfGenerationInput): Promise<Pd
     warnings.push(`Supports ${maxVehicles} vehicles but ${dataPacket.vehicles.length} exist. Attach a continuation schedule.`);
   }
 
-  const doc = new PDFDocument({ size: 'LETTER', margin: 50 });
+  const doc = new PDFDocumentKit({ size: 'LETTER', margin: 50 });
 
-  doc.fontSize(16).font('Helvetica-Bold').text(template.template_name, { align: 'center' });
-  doc.moveDown(0.5);
-  doc.fontSize(9).font('Helvetica').text(`Generated: ${new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} | Source: New Hope Work Desk`, { align: 'center' });
+  doc.fontSize(14).font('Helvetica-Bold').text(template.template_name, { align: 'center' });
+  doc.moveDown(0.3);
+  doc.fontSize(8).font('Helvetica').text(`Generated: ${new Date().toLocaleDateString()} | New Hope Work Desk`, { align: 'center' });
+  doc.fontSize(8).text('NOTE: Upload the official blank template to generate the actual carrier form.', { align: 'center' });
   doc.moveDown(1);
 
   // Business
-  sectionBar(doc, 'APPLICANT INFORMATION');
-  fieldLine(doc, 'Legal Name', biz.legal_name);
-  fieldLine(doc, 'DBA', biz.dba);
-  fieldLine(doc, 'DOT #', biz.dot_number);
-  fieldLine(doc, 'MC #', biz.mc_number);
-  fieldLine(doc, 'FEIN', biz.fein);
-  fieldLine(doc, 'Phone', biz.phone);
-  fieldLine(doc, 'Email', biz.email);
-  fieldLine(doc, 'Address', formatAddr(biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip));
+  doc.fontSize(10).font('Helvetica-Bold').text('APPLICANT INFORMATION');
+  doc.moveDown(0.2);
+  doc.fontSize(9).font('Helvetica');
+  doc.text(`Applicant Name: ${biz.legal_name ?? ''}`);
+  doc.text(`DBA: ${biz.dba ?? ''}`);
+  doc.text(`Address: ${[biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip].filter(Boolean).join(', ')}`);
+  doc.text(`DOT #: ${biz.dot_number ?? ''}     MC #: ${biz.mc_number ?? ''}`);
+  doc.text(`Phone: ${biz.phone ?? ''}     Email: ${biz.email ?? ''}`);
+  doc.text(`Owner: ${dataPacket.owners[0]?.name ?? ''}     DOB: ${dataPacket.owners[0]?.dob ?? ''}`);
+  doc.text(`Years in Business: ${biz.years_in_business ?? ''}     Entity: ${biz.entity_type ?? ''}`);
   doc.moveDown(0.5);
 
   // Operations
-  sectionBar(doc, 'OPERATIONS');
-  fieldLine(doc, 'Commodities', ops.commodities);
-  fieldLine(doc, 'Radius', ops.radius?.toString());
-  fieldLine(doc, 'States', ops.states);
+  doc.font('Helvetica-Bold').text('OPERATIONS');
+  doc.moveDown(0.2);
+  doc.font('Helvetica');
+  doc.text(`Commodities: ${ops.commodities ?? ''}`);
+  doc.text(`Radius: ${ops.radius ?? ''} miles     States: ${ops.states ?? ''}`);
   doc.moveDown(0.5);
 
   // Coverages
-  sectionBar(doc, 'COVERAGES');
-  fieldLine(doc, 'Auto Liability', cov.auto_liability_limit);
-  fieldLine(doc, 'Cargo', cov.cargo_limit);
-  fieldLine(doc, 'Comp Ded', cov.comprehensive_deductible);
-  fieldLine(doc, 'Coll Ded', cov.collision_deductible);
+  doc.font('Helvetica-Bold').text('COVERAGES');
+  doc.moveDown(0.2);
+  doc.font('Helvetica');
+  doc.text(`Auto Liability: ${cov.auto_liability_limit ?? ''}     Cargo: ${cov.cargo_limit ?? ''}`);
+  doc.text(`Comp Ded: ${cov.comprehensive_deductible ?? ''}     Coll Ded: ${cov.collision_deductible ?? ''}`);
   doc.moveDown(0.5);
 
   // Prior
-  sectionBar(doc, 'PRIOR INSURANCE');
-  fieldLine(doc, 'Carrier', prior.carrier);
-  fieldLine(doc, 'Premium', prior.premium ? `$${prior.premium}` : null);
-  fieldLine(doc, 'Expiration', prior.expiration);
+  doc.font('Helvetica-Bold').text('PRIOR INSURANCE');
+  doc.moveDown(0.2);
+  doc.font('Helvetica');
+  doc.text(`Carrier: ${prior.carrier ?? ''}     Premium: ${prior.premium ? `$${prior.premium}` : ''}`);
+  doc.text(`Policy #: ${prior.policy_number ?? ''}     Expires: ${prior.expiration ?? ''}`);
   doc.moveDown(0.5);
 
   // Drivers
   if (dataPacket.drivers.length > 0) {
-    sectionBar(doc, 'DRIVERS');
+    doc.font('Helvetica-Bold').text('DRIVERS');
+    doc.moveDown(0.2);
+    doc.font('Helvetica').fontSize(8);
     const drvs = maxDrivers ? dataPacket.drivers.slice(0, maxDrivers) : dataPacket.drivers;
     for (const d of drvs) {
       const name = [d.first_name, d.last_name].filter(Boolean).join(' ');
-      doc.text(`${name} | DOB: ${d.dob ?? ''} | Lic: ${d.license_number ?? ''} (${d.license_state ?? ''}) | Yrs: ${d.years_licensed ?? ''}`);
+      doc.text(`${name} | DOB: ${d.dob ?? ''} | CDL: ${d.license_number ?? ''} (${d.license_state ?? ''}) | Exp: ${d.years_licensed ?? ''} yrs`);
     }
     doc.moveDown(0.5);
   }
 
   // Vehicles
   if (dataPacket.vehicles.length > 0) {
-    sectionBar(doc, 'VEHICLES');
+    doc.fontSize(9).font('Helvetica-Bold').text('VEHICLES');
+    doc.moveDown(0.2);
+    doc.font('Helvetica').fontSize(8);
     const vehs = maxVehicles ? dataPacket.vehicles.slice(0, maxVehicles) : dataPacket.vehicles;
     for (const v of vehs) {
       doc.text(`${v.year ?? ''} ${v.make ?? ''} ${v.model ?? ''} | VIN: ${v.vin ?? ''} | Value: ${v.value ? `$${v.value}` : ''}`);
@@ -522,45 +436,14 @@ async function generateGenericApplication(input: PdfGenerationInput): Promise<Pd
   // Supplemental
   const answered = Object.entries(supplementalAnswers).filter(([, v]) => v);
   if (answered.length > 0) {
-    sectionBar(doc, 'SUPPLEMENTAL INFORMATION');
-    for (const [q2, a] of answered) {
-      fieldLine(doc, q2, a);
+    doc.fontSize(9).font('Helvetica-Bold').text('SUPPLEMENTAL INFORMATION');
+    doc.moveDown(0.2);
+    doc.font('Helvetica').fontSize(8);
+    for (const [q, a] of answered) {
+      doc.text(`${q}: ${a}`);
     }
   }
 
-  const buffer = await finalizePdf(doc);
+  const buffer = await finalizePdfKit(doc);
   return { buffer, warnings };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function sectionBar(doc: PDFKit.PDFDocument, title: string, rightTitle?: string) {
-  doc.fontSize(9).font('Helvetica-Bold');
-  if (rightTitle) {
-    doc.text(`${title}                                    ${rightTitle}`);
-  } else {
-    doc.text(title);
-  }
-  doc.moveTo(doc.x, doc.y).lineTo(doc.x + 520, doc.y).strokeColor('#333').lineWidth(0.5).stroke();
-  doc.moveDown(0.2);
-  doc.font('Helvetica').fontSize(9);
-}
-
-function fieldLine(doc: PDFKit.PDFDocument, label: string, value: string | null | undefined) {
-  doc.text(`${label}: ${value?.trim() || '_______________'}`);
-}
-
-function twoCol(doc: PDFKit.PDFDocument, l1: string, v1: string, l2: string, v2: string) {
-  doc.text(`${l1}: ${v1 || '________'}          ${l2}: ${v2 || '________'}`);
-}
-
-function formatAddr(street: string | null, city: string | null, state: string | null, zip: string | null): string | null {
-  const parts = [street, city, state, zip].filter(Boolean);
-  return parts.length > 0 ? parts.join(', ') : null;
-}
-
-function pad(str: string, len: number): string {
-  return str.padEnd(len).substring(0, len);
 }
