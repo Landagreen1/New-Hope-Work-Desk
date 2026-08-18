@@ -622,3 +622,21 @@ export async function markApplicationSubmitted(
 
   if (error) throw new Error(error.message);
 }
+
+/**
+ * Gets a signed download URL for a generated application PDF.
+ * URLs are valid for 1 hour.
+ */
+export async function getApplicationDownloadUrl(application: {
+  storage_bucket: string;
+  storage_path: string;
+}): Promise<string> {
+  const { data, error } = await getSupabase()
+    .storage.from(application.storage_bucket)
+    .createSignedUrl(application.storage_path, 3600);
+
+  if (error) throw new Error(error.message);
+  const url = (data as { signedUrl?: string } | null)?.signedUrl;
+  if (!url) throw new Error('Could not generate download link.');
+  return url;
+}

@@ -564,24 +564,34 @@ export function GenerateApplicationPanel({
       ) : (
         <div className="space-y-1.5">
           {applications.map((app) => (
-            <div key={app.id} className="flex items-center justify-between rounded bg-slate-50 px-2 py-1.5">
-              <div>
-                <span className="text-xs font-medium text-slate-700">{app.file_name}</span>
-                <span className="ml-1.5 text-xs text-slate-400">
-                  v{app.generation_version} · {new Date(app.generated_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
-                </span>
-                <span className={`ml-1.5 text-xs ${app.status === 'submitted' ? 'text-green-600' : app.status === 'review_required' ? 'text-amber-600' : 'text-slate-500'}`}>
-                  {app.status === 'review_required' ? 'Review Required' : app.status === 'submitted' ? 'Submitted' : app.status}
-                </span>
+            <div key={app.id} className="rounded bg-slate-50 px-2 py-1.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-medium text-slate-700">{app.file_name}</span>
+                  <span className="ml-1.5 text-xs text-slate-400">
+                    v{app.generation_version} · {new Date(app.generated_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                  </span>
+                  <span className={`ml-1.5 text-xs ${app.status === 'submitted' ? 'text-green-600' : app.status === 'review_required' ? 'text-amber-600' : 'text-slate-500'}`}>
+                    {app.status === 'review_required' ? 'Review Required' : app.status === 'submitted' ? 'Submitted' : app.status}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleDownload(app)}
+                    className="rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                  >
+                    Download
+                  </button>
+                  {app.status === 'review_required' && (
+                    <button
+                      onClick={() => handleMarkSubmitted(app.id)}
+                      className="rounded bg-green-50 px-2 py-0.5 text-xs text-green-700 hover:bg-green-100"
+                    >
+                      Mark Submitted
+                    </button>
+                  )}
+                </div>
               </div>
-              {app.status === 'review_required' && (
-                <button
-                  onClick={() => handleMarkSubmitted(app.id)}
-                  className="rounded bg-green-50 px-2 py-0.5 text-xs text-green-700 hover:bg-green-100"
-                >
-                  Mark Submitted
-                </button>
-              )}
             </div>
           ))}
         </div>
