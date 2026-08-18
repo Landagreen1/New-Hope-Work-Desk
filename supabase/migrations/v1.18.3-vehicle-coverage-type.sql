@@ -173,23 +173,24 @@ begin
   if jsonb_typeof(coalesce(p_drivers, '[]'::jsonb)) = 'array'
      and jsonb_array_length(coalesce(p_drivers, '[]'::jsonb)) > 0 then
     insert into public.cs_intake_drivers (
-      submission_id, position, first_name, middle_name, last_name,
-      dob, license_number, license_state, license_status, gender,
-      marital_status, relationship, cdl, cdl_date
+      submission_id, position, first_name, last_name, dob, relationship,
+      document_type, license_number, license_state, license_status,
+      years_licensed, sr22_required, incidents, cdl, cdl_date
     )
     select
       p_submission_id,
       item.ordinality::integer,
       coalesce(item.value ->> 'first_name', ''),
-      nullif(item.value ->> 'middle_name', ''),
       coalesce(item.value ->> 'last_name', ''),
       nullif(item.value ->> 'dob', '')::date,
+      nullif(item.value ->> 'relationship', ''),
+      coalesce(nullif(item.value ->> 'document_type', ''), 'driver_license'),
       nullif(item.value ->> 'license_number', ''),
       nullif(item.value ->> 'license_state', ''),
       nullif(item.value ->> 'license_status', ''),
-      nullif(item.value ->> 'gender', ''),
-      nullif(item.value ->> 'marital_status', ''),
-      nullif(item.value ->> 'relationship', ''),
+      nullif(item.value ->> 'years_licensed', '')::integer,
+      coalesce(nullif(item.value ->> 'sr22_required', '')::boolean, false),
+      coalesce(item.value -> 'incidents', '[]'::jsonb),
       coalesce(nullif(item.value ->> 'cdl', '')::boolean, false),
       nullif(item.value ->> 'cdl_date', '')::date
     from jsonb_array_elements(p_drivers) with ordinality as item(value, ordinality);
