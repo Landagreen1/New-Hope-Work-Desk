@@ -112,11 +112,11 @@ function extractVehicles(intake: LinkedIntake): TruckingVehicle[] {
     year: vehicle.year ?? null,
     make: vehicle.make ?? null,
     model: vehicle.model ?? null,
-    type: vehicle.usage ?? null, // usage maps to vehicle type/class
+    type: vehicle.usage ?? vehicle.truck_type ?? null,
     vin: vehicle.vin ?? null,
-    value: null, // Not in current intake vehicles
-    gvw: null, // Not in current intake vehicles
-    radius: null, // Per-vehicle radius not tracked in intake
+    value: vehicle.physical_damage_value ?? null,
+    gvw: null,
+    radius: null,
   }));
 }
 

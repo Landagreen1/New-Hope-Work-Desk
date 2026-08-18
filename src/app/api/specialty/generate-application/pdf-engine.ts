@@ -157,21 +157,25 @@ function fillFormFields(
 
   // Underwriting questions (radio groups)
   // The radio groups are named undefined_2q through undefined_2aas for Q1-Q12
+  // Defaults: Q1-6 = No, Q7-9 = Yes, Q10-12 = No
   const radioNames = ['undefined_2q', 'undefined_2w', 'undefined_2e', 'undefined_2r', 'undefined_2t',
     'undefined_2y', 'undefined_2u', 'undefined_2d', 'undefined_2f', 'undefined_2s', 'undefined_2a', 'undefined_2aas'];
   const qAnswers = [
+    // Q1-6: Default NO
     supplementalAnswers['Has the applicant been cancelled or non-renewed in the last three years?'] ?? 'No',
-    prior.lapse ? 'Yes' : 'No',
-    'No', // fraud
-    'No', // bankruptcies
-    'No', // losses over 250k
+    supplementalAnswers['Any lapse in coverage in the past three years?'] ?? 'No',
+    'No', // Q3: fraud
+    'No', // Q4: bankruptcies
+    'No', // Q5: losses over 250k
     supplementalAnswers['Hazmat hauling?'] ?? supplementalAnswers['Transport hazardous materials?'] ?? 'No',
-    ops.interstate === null ? 'Yes' : ops.interstate ? 'Yes' : 'No',
-    ops.for_hire === null ? 'Yes' : ops.for_hire ? 'Yes' : 'No',
-    'Yes', // all vehicles listed
+    // Q7-9: Default YES
+    'Yes', // Q7: cross state lines
+    'Yes', // Q8: haul for hire
+    'Yes', // Q9: all vehicles listed
+    // Q10-12: Default NO
     supplementalAnswers['Any Owner Operators?'] ?? 'No',
-    'No', // rent units
-    'No', // team drivers
+    'No', // Q11: rent units
+    'No', // Q12: team drivers
   ];
 
   for (let i = 0; i < radioNames.length && i < qAnswers.length; i++) {
@@ -196,13 +200,19 @@ function fillFormFields(
   trySet(form, 'Limits', cov.auto_liability_limit ?? '');
   trySet(form, 'UMUIM Limits', supplementalAnswers['UM/UIM Limit'] ?? '');
 
-  tryCheck(form, 'Physical Damage', !!cov.comprehensive_deductible || !!cov.collision_deductible);
-  trySet(form, 'Deductible', [
-    cov.comprehensive_deductible ? `Comp: ${cov.comprehensive_deductible}` : '',
-    cov.collision_deductible ? `Coll: ${cov.collision_deductible}` : '',
-  ].filter(Boolean).join(' / '));
-  tryCheck(form, 'Comprehensive', !!cov.comprehensive_deductible);
-  tryCheck(form, 'Collision', !!cov.collision_deductible);
+  // Physical Damage: checked if any vehicle has physical_damage_value (customer wants PD coverage)
+  const hasPhysicalDamage = dataPacket.vehicles.some(v => v.value !== null && v.value > 0);
+  tryCheck(form, 'Physical Damage', hasPhysicalDamage);
+  if (hasPhysicalDamage) {
+    trySet(form, 'Deductible', [
+      cov.comprehensive_deductible ? `Comp: ${cov.comprehensive_deductible}` : '',
+      cov.collision_deductible ? `Coll: ${cov.collision_deductible}` : '',
+    ].filter(Boolean).join(' / '));
+    tryCheck(form, 'Comprehensive', !!cov.comprehensive_deductible);
+    tryCheck(form, 'Collision', !!cov.collision_deductible);
+  } else {
+    trySet(form, 'Deductible', '');
+  }
 
   tryCheck(form, 'Cargo', !!cov.cargo_limit);
   trySet(form, 'Limits 1', cov.cargo_limit ?? '');
