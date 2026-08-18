@@ -26,9 +26,12 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { AppRole } from '@/lib/types';
+import { canManageCustomerService, canManageSales } from '@/lib/permissions';
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
+import { getSupabase, listAllActiveProfiles } from '../nhwd-shared/client';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
+import { subscribeToRotationChanges } from '../notifications/api';
 import { getIntake } from '../cs-intake/api';
 import IntakeForm from '../cs-intake/IntakeForm';
 import type { CsIntakeCommodity, CsIntakeDriver, CsIntakeOwner, CsIntakeSubmission, CsIntakeVehicle } from '../cs-intake/api';
@@ -238,6 +241,65 @@ export default function QuoteCenter({
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Intake turn indicator (managers/supervisors only) ─────────────────────
+  const showTurnIndicator = canManageSales(role) || canManageCustomerService(role);
+  const [rcTurnHolderId, setRcTurnHolderId] = useState<string | null>(null);
+  const [rcTurnHolderName, setRcTurnHolderName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showTurnIndicator) return;
+    let cancelled = false;
+
+    async function loadRotation() {
+      try {
+        const supabase = getSupabase();
+        const [{ data: rotationData }, profiles] = await Promise.all([
+          supabase
+            .from('rotation_state')
+            .select('current_profile_id')
+            .eq('kind', 'ringcentral')
+            .maybeSingle(),
+          listAllActiveProfiles(),
+        ]);
+        if (cancelled) return;
+        const holderId = rotationData?.current_profile_id ?? null;
+        setRcTurnHolderId(holderId);
+        if (holderId) {
+          const found = profiles.find((p) => p.id === holderId);
+          setRcTurnHolderName(found?.display_name ?? 'Unknown');
+        } else {
+          setRcTurnHolderName(null);
+        }
+      } catch {
+        // Non-blocking — rotation display is informational
+      }
+    }
+    void loadRotation();
+    return () => { cancelled = true; };
+  }, [showTurnIndicator]);
+
+  // Real-time rotation updates
+  useEffect(() => {
+    if (!showTurnIndicator) return;
+    const channel = subscribeToRotationChanges((newState) => {
+      if (newState.kind === 'ringcentral') {
+        const newId = newState.current_profile_id ?? null;
+        setRcTurnHolderId(newId);
+        // Name will be resolved below via a lightweight lookup
+        if (!newId) {
+          setRcTurnHolderName(null);
+        } else {
+          // Fetch updated name
+          void listAllActiveProfiles().then((profiles) => {
+            const found = profiles.find((p) => p.id === newId);
+            setRcTurnHolderName(found?.display_name ?? 'Unknown');
+          });
+        }
+      }
+    });
+    return () => { void getSupabase().removeChannel(channel); };
+  }, [showTurnIndicator]);
+
   const load = useCallback(
     async (searchQuery: string, searchStage: StageFilter, searchPage: number) => {
       setLoading(true);
@@ -351,6 +413,21 @@ export default function QuoteCenter({
       onRefresh={() => void load(rawQuery.trim(), stage, page)}
       embedded={embedded}
     >
+      {/* Intake turn indicator — managers & supervisors only */}
+      {showTurnIndicator ? (
+        <section className="mb-4 flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
+            <Users className="h-3.5 w-3.5" />
+          </span>
+          <div className="text-sm">
+            <span className="font-semibold text-indigo-900">Intake Turn:</span>{' '}
+            <span className="font-black text-indigo-700">
+              {rcTurnHolderName ?? 'No one assigned'}
+            </span>
+          </div>
+        </section>
+      ) : null}
+
       {error ? <div className={`${ui.error} mb-5`}>{error}</div> : null}
 
       {/* Search. First thing on the screen, because the customer is already waiting. */}
