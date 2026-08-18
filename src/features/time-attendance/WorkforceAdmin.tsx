@@ -1528,7 +1528,15 @@ function ClockEditSection() {
 
   const formatDT = (iso: string | null) => {
     if (!iso) return '—';
-    return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const d = new Date(iso);
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 || 12;
+    return `${month}/${day}/${year} ${hour12}:${minutes} ${ampm}`;
   };
 
   return (
@@ -1595,7 +1603,7 @@ function ClockEditSection() {
             <tbody>
               {entries.map((entry) => (
                 <tr key={entry.id} className="hover:bg-[#f8faff]">
-                  <td className={`${ui.td} text-xs font-bold text-slate-700`}>{new Date(entry.clock_in).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                  <td className={`${ui.td} text-xs font-bold text-slate-700`}>{new Date(entry.clock_in).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</td>
                   <td className={ui.td}>
                     {editId === entry.id ? (
                       <DateTimePicker value={editClockIn} onChange={setEditClockIn} />

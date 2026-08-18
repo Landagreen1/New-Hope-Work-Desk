@@ -36,7 +36,7 @@ function formatRelativeTime(isoString: string): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
 
-  return new Date(isoString).toLocaleDateString();
+  return new Date(isoString).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
 }
 
 export function NotificationPanel({ profile }: NotificationPanelProps) {

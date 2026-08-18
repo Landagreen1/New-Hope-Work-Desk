@@ -799,20 +799,25 @@ const quoteActivityLabels: Record<string, string> = {
 };
 
 function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '\u2014';
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 || 12;
+  return `${month}/${day}/${year} ${hour12}:${minutes} ${ampm}`;
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(value));
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value);
+  if (Number.isNaN(date.getTime())) return '\u2014';
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${month}/${day}/${year}`;
 }
 
 function daysSince(value: string) {
@@ -7892,12 +7897,7 @@ function ManagerView({
                           {alert.detail ? (
                             <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
                               {alert.detail} ·{" "}
-                              {new Date(alert.occurred_at).toLocaleString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })}
+                              {(() => { const d = new Date(alert.occurred_at); const m = String(d.getMonth()+1).padStart(2,'0'); const dy = String(d.getDate()).padStart(2,'0'); const h = d.getHours(); const mi = String(d.getMinutes()).padStart(2,'0'); const ap = h >= 12 ? 'PM' : 'AM'; const h12 = h % 12 || 12; return `${m}/${dy}/${d.getFullYear()} ${h12}:${mi} ${ap}`; })()}
                             </p>
                           ) : null}
                         </div>

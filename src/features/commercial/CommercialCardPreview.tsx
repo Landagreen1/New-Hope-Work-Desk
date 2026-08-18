@@ -92,7 +92,7 @@ export default function CommercialCardPreview({
   // Time since last update — visual staleness marker
   const daysSinceUpdate = Math.floor((Date.now() - new Date(quote.updated_at).getTime()) / 86400000);
   const lastUpdateLabel = getRelativeTime(quote.updated_at);
-  const lastUpdateDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(quote.updated_at));
+  const lastUpdateDate = (() => { const d = new Date(quote.updated_at); const m = String(d.getMonth()+1).padStart(2,'0'); const dy = String(d.getDate()).padStart(2,'0'); const h = d.getHours(); const mi = String(d.getMinutes()).padStart(2,'0'); const ap = h >= 12 ? 'PM' : 'AM'; const h12 = h % 12 || 12; return `${m}/${dy}/${d.getFullYear()} ${h12}:${mi} ${ap}`; })();
   const lastUpdateColor =
     daysSinceUpdate <= 2 ? 'bg-emerald-500' :
     daysSinceUpdate <= 7 ? 'bg-amber-400' :

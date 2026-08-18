@@ -49,12 +49,14 @@ export function formatDate(iso: string | null | undefined, timeZone = 'America/N
   if (iso === null || iso === undefined) return EM_DASH;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return EM_DASH;
-  return new Intl.DateTimeFormat('en-US', {
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
-    month: 'short',
-    day: 'numeric',
     year: 'numeric',
-  }).format(date);
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('month')}/${get('day')}/${get('year')}`;
 }
 
 export function formatDateTime(
@@ -64,14 +66,17 @@ export function formatDateTime(
   if (iso === null || iso === undefined) return EM_DASH;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return EM_DASH;
-  return new Intl.DateTimeFormat('en-US', {
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
-    month: 'short',
-    day: 'numeric',
     year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour: 'numeric',
     minute: '2-digit',
-  }).format(date);
+    hour12: true,
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('month')}/${get('day')}/${get('year')} ${get('hour')}:${get('minute')} ${get('dayPeriod')}`;
 }
 
 export interface Delta {

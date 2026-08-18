@@ -560,11 +560,7 @@ export function formatRelative(value: string | null | undefined): string {
   if (date.toDateString() === yesterday.toDateString()) {
     return `Yesterday ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
   }
-  return date.toLocaleDateString([], {
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() === now.getFullYear() ? undefined : 'numeric',
-  });
+  return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
 }
 
 /** A due date, said the way an employee would say it. */

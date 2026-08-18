@@ -21,6 +21,7 @@ import {
   addUnderwritingResult,
   calculateReadiness,
   getAnswersForCarrierMarket,
+  getApplicationDownloadUrl,
   getGeneratedApplications,
   getUnderwritingResults,
   listQuestions,
@@ -528,6 +529,18 @@ export function GenerateApplicationPanel({
     }
   };
 
+  const handleDownload = async (app: GeneratedApplication) => {
+    try {
+      const url = await getApplicationDownloadUrl({
+        storage_bucket: app.storage_bucket,
+        storage_path: app.storage_path,
+      });
+      window.open(url, '_blank');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Download failed');
+    }
+  };
+
   if (!marketDirectoryId) return null;
 
   return (
@@ -555,7 +568,7 @@ export function GenerateApplicationPanel({
               <div>
                 <span className="text-xs font-medium text-slate-700">{app.file_name}</span>
                 <span className="ml-1.5 text-xs text-slate-400">
-                  v{app.generation_version} · {new Date(app.generated_at).toLocaleDateString()}
+                  v{app.generation_version} · {new Date(app.generated_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                 </span>
                 <span className={`ml-1.5 text-xs ${app.status === 'submitted' ? 'text-green-600' : app.status === 'review_required' ? 'text-amber-600' : 'text-slate-500'}`}>
                   {app.status === 'review_required' ? 'Review Required' : app.status === 'submitted' ? 'Submitted' : app.status}

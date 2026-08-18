@@ -263,18 +263,18 @@ export function formatTimeZoneName(timeZone: string | null | undefined): string 
 }
 
 /**
- * A work date as `Mon 11 Aug`.
+ * A work date as `MM/DD/YYYY`.
  *
  * Requirements: 4.19
  */
 export function formatWorkDate(date: string): string {
   const fields = dateFields(date);
   if (fields === null) return date;
-  return `${weekdayOf(fields).slice(0, 3)} ${fields.day} ${MONTH_NAMES[fields.month]}`;
+  return `${String(fields.month).padStart(2, '0')}/${String(fields.day).padStart(2, '0')}/${fields.year}`;
 }
 
 /**
- * A work date in full: `Monday, 11 August 2026`.
+ * A work date in full: `Monday, MM/DD/YYYY`.
  *
  * Used where the date is a heading rather than a row label, so the reader is not
  * left working out which week an abbreviated date belongs to.
@@ -282,7 +282,7 @@ export function formatWorkDate(date: string): string {
 export function formatWorkDateLong(date: string): string {
   const fields = dateFields(date);
   if (fields === null) return date;
-  return `${weekdayOf(fields)}, ${fields.day} ${MONTH_NAMES_LONG[fields.month]} ${fields.year}`;
+  return `${weekdayOf(fields)}, ${String(fields.month).padStart(2, '0')}/${String(fields.day).padStart(2, '0')}/${fields.year}`;
 }
 
 /**

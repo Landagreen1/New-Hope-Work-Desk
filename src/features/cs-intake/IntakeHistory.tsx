@@ -84,18 +84,17 @@ function eventColor(eventType: string): { dot: string; text: string } {
   }
 }
 
-/** Format a timestamp string into human-readable form: "Jan 15, 2024 at 2:30 PM" */
+/** Format a timestamp string into human-readable form: "01/15/2024 2:30 PM" */
 function formatDatetime(iso: string): string {
   const date = new Date(iso);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }) + ' at ' + date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 || 12;
+  return `${month}/${day}/${year} ${hour12}:${minutes} ${ampm}`;
 }
 
 /** Converts a field name (snake_case) into a readable label. */

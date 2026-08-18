@@ -302,8 +302,8 @@ export default function CsIntakeLanding({
                 const customerName = row.business_name || `${row.insured_first_name ?? ''} ${row.insured_last_name ?? ''}`.trim() || 'Unnamed';
                 const source = row.line_of_business === 'commercial_auto' ? 'Commercial Auto' : 'Personal Auto';
                 const submissionDate = row.submitted_at
-                  ? new Date(row.submitted_at).toLocaleDateString()
-                  : row.status === 'draft' ? 'Not submitted' : new Date(row.created_at).toLocaleDateString();
+                  ? new Date(row.submitted_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                  : row.status === 'draft' ? 'Not submitted' : new Date(row.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
                 const isEditable = EDITABLE_STATUSES.has(row.status);
                 const isSubmittable = SUBMITTABLE_STATUSES.has(row.status);
                 const assignedAgent = row.claimed_by ? 'Assigned' : 'Unassigned';

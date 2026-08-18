@@ -54,7 +54,7 @@ import NonOwnersSection, { type NonOwnersData } from './NonOwnersSection';
 import TruckingSection, { type TruckingData } from './TruckingSection';
 import CargoSection, { type CargoData, type CargoCommodity } from './CargoSection';
 import CommercialGlSection, { type CommercialGlData, emptyOwner } from './CommercialGlSection';
-import HomeownersSection, { type HomeownersData } from './HomeownersSection';
+import HomeownersSection, { type HomeownersData, type HomeownersPerson } from './HomeownersSection';
 import OtherPersonalSection, { type OtherPersonalData } from './OtherPersonalSection';
 
 const US_STATES = [
@@ -193,6 +193,21 @@ export default function IntakeForm({
   const [commodities, setCommodities] = useState<CargoCommodity[]>(
     initial?.commodities?.length ? initial.commodities : [],
   );
+  const [hoPersons, setHoPersons] = useState<HomeownersPerson[]>(() => {
+    // For homeowners, the additional insured persons are stored in the owners array
+    if (submission.line_of_business === 'homeowners' && initial?.owners?.length) {
+      return initial.owners.map((o, i) => ({
+        position: i + 1,
+        first_name: o.first_name,
+        last_name: o.last_name,
+        dob: o.dob,
+        relationship: (o as unknown as Record<string, unknown>).relationship as string || 'other',
+        phone: o.phone,
+        email: o.email,
+      }));
+    }
+    return [];
+  });
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [salespeople, setSalespeople] = useState<DealerSalesperson[]>([]);
   const [loadingSalespeople, setLoadingSalespeople] = useState(false);
@@ -492,7 +507,18 @@ export default function IntakeForm({
         },
         drivers,
         vehicles,
-        owners,
+        currentLob === 'homeowners'
+          ? hoPersons.map((p) => ({
+              position: p.position,
+              first_name: p.first_name,
+              middle_name: null,
+              last_name: p.last_name,
+              dob: p.dob,
+              phone: p.phone,
+              email: p.email,
+              ownership_percentage: null,
+            } as CsIntakeOwner))
+          : owners,
         commodities,
         submission.version ?? null,
       );
@@ -595,15 +621,21 @@ export default function IntakeForm({
 
   const homeownersData: HomeownersData = {
     property_address_street: submission.property_address_street || '',
+    property_address_unit: (submission as Record<string, unknown>).property_address_unit as string || '',
     property_address_city: submission.property_address_city || '',
     property_address_state: submission.property_address_state || '',
     property_address_zip: submission.property_address_zip || '',
+    property_place_id: (submission as Record<string, unknown>).property_place_id as string | null ?? null,
+    property_formatted: (submission as Record<string, unknown>).property_formatted as string | null ?? null,
+    property_addr_verified: Boolean((submission as Record<string, unknown>).property_addr_verified),
     dwelling_type: submission.dwelling_type || '',
     year_built: submission.year_built ?? null,
     square_footage: submission.square_footage ?? null,
     roof_type: submission.roof_type || '',
     roof_age: submission.roof_age ?? null,
+    last_roof_update: (submission as Record<string, unknown>).last_roof_update as string || '',
     coverage_amount: submission.coverage_amount ?? null,
+    coverage_type: (submission as Record<string, unknown>).coverage_type as string || '',
     prior_claims: submission.prior_claims || false,
     prior_claims_detail: submission.prior_claims_detail || '',
   };
@@ -1084,19 +1116,27 @@ export default function IntakeForm({
           onChange={(hoPatch) => {
             const mapped: Record<string, unknown> = {};
             if ('property_address_street' in hoPatch) mapped.property_address_street = hoPatch.property_address_street || null;
+            if ('property_address_unit' in hoPatch) mapped.property_address_unit = hoPatch.property_address_unit || null;
             if ('property_address_city' in hoPatch) mapped.property_address_city = hoPatch.property_address_city || null;
             if ('property_address_state' in hoPatch) mapped.property_address_state = hoPatch.property_address_state || null;
             if ('property_address_zip' in hoPatch) mapped.property_address_zip = hoPatch.property_address_zip || null;
+            if ('property_place_id' in hoPatch) mapped.property_place_id = hoPatch.property_place_id;
+            if ('property_formatted' in hoPatch) mapped.property_formatted = hoPatch.property_formatted;
+            if ('property_addr_verified' in hoPatch) mapped.property_addr_verified = hoPatch.property_addr_verified;
             if ('dwelling_type' in hoPatch) mapped.dwelling_type = hoPatch.dwelling_type || null;
             if ('year_built' in hoPatch) mapped.year_built = hoPatch.year_built;
             if ('square_footage' in hoPatch) mapped.square_footage = hoPatch.square_footage;
             if ('roof_type' in hoPatch) mapped.roof_type = hoPatch.roof_type || null;
             if ('roof_age' in hoPatch) mapped.roof_age = hoPatch.roof_age;
+            if ('last_roof_update' in hoPatch) mapped.last_roof_update = hoPatch.last_roof_update || null;
             if ('coverage_amount' in hoPatch) mapped.coverage_amount = hoPatch.coverage_amount;
+            if ('coverage_type' in hoPatch) mapped.coverage_type = hoPatch.coverage_type || null;
             if ('prior_claims' in hoPatch) mapped.prior_claims = hoPatch.prior_claims;
             if ('prior_claims_detail' in hoPatch) mapped.prior_claims_detail = hoPatch.prior_claims_detail || null;
             patch(mapped as Partial<DraftSubmission>);
           }}
+          persons={hoPersons}
+          onPersonsChange={setHoPersons}
           disabled={disabled}
         />
       )}

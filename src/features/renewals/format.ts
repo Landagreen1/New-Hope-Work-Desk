@@ -126,18 +126,24 @@ export function calendarText(value: string | null | undefined, withTime = false)
   if (!stored) return EM_DASH;
   const parsed = new Date(CALENDAR_DATE.test(stored) ? `${stored}T00:00:00` : stored);
   if (Number.isNaN(parsed.getTime())) return EM_DASH;
-  const day = parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const dayNum = String(parsed.getDate()).padStart(2, '0');
+  const year = parsed.getFullYear();
+  const day = `${month}/${dayNum}/${year}`;
   if (!withTime || CALENDAR_DATE.test(stored)) return day;
-  return `${day} at ${parsed.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+  return `${day} ${parsed.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
 }
 
-/** `Mar 4, 2026 at 2:30 PM`, or `null` when the value is not a readable timestamp. */
+/** `01/15/2026 2:30 PM`, or `null` when the value is not a readable timestamp. */
 export function formatTimestamp(value: string | null | undefined): string | null {
   const at = timeValue(value);
   if (at === null) return null;
   const date = new Date(at);
-  const day = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  return `${day} at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const dayNum = String(date.getDate()).padStart(2, '0');
+  const year = date.getFullYear();
+  const day = `${month}/${dayNum}/${year}`;
+  return `${day} ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
 }
 
 /** ISO 8601 value for the `datetime` attribute of `<time>`. */

@@ -348,7 +348,7 @@ export default function PayrollProcessor({ initialProfile }: PayrollProcessorPro
                   <div key={p.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
                     <div>
                       <p className="text-sm font-black text-slate-800">{p.period_start} → {p.period_end}</p>
-                      <p className="mt-0.5 text-[10px] text-slate-400">Pay date: {p.pay_date} · Processed: {new Date(p.processed_at).toLocaleDateString()}</p>
+                      <p className="mt-0.5 text-[10px] text-slate-400">Pay date: {p.pay_date} · Processed: {new Date(p.processed_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -820,7 +820,7 @@ function PayrollEmployeeDetail({
                   const dayEntries = entriesByDay[day];
                   const dayHours = dayEntries.reduce((sum, e) => sum + (e.total_hours ?? 0), 0);
                   const dayBreaks = dayEntries.reduce((sum, e) => sum + (e.break_minutes ?? 0), 0);
-                  const dayLabel = new Date(day + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                  const dayLabel = new Date(day + 'T00:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
                   const hasIssue = dayHours > 10 || (dayHours >= 5 && dayBreaks === 0);
 
                   return (

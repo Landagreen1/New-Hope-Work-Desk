@@ -549,7 +549,7 @@ export default function IntakeQueue({
                     <td className={ui.td}>
                       <p className="text-xs font-bold text-slate-600">
                         {row.submitted_at
-                          ? new Date(row.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          ? (() => { const d = new Date(row.submitted_at); const m = String(d.getMonth()+1).padStart(2,'0'); const dy = String(d.getDate()).padStart(2,'0'); return `${m}/${dy}/${d.getFullYear()}`; })()
                           : 'Not submitted'}
                       </p>
                       {row.submitted_at && (

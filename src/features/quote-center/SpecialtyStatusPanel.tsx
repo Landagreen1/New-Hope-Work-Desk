@@ -29,7 +29,7 @@ function relative(value: string | null | undefined): string {
   if (date.toDateString() === now.toDateString()) {
     return `today ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
   }
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
 }
 
 function statusTone(status: string): string {

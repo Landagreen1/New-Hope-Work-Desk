@@ -43,13 +43,16 @@ function formatSourceType(source: string): string {
 
 function formatDate(iso: string): string {
   try {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(new Date(iso));
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return iso;
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 || 12;
+    return `${month}/${day}/${year} ${hour12}:${minutes} ${ampm}`;
   } catch {
     return iso;
   }

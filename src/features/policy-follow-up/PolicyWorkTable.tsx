@@ -29,9 +29,9 @@ function shortDate(value: string | null | undefined, businessDate: string): stri
 
   const sameYear = date.slice(0, 4) === businessDate.slice(0, 4);
   return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: sameYear ? undefined : 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(parsed));
 }
