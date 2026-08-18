@@ -120,7 +120,7 @@ export async function POST(request: Request) {
   let pdfBuffer: Buffer;
 
   try {
-    const result = generatePdfFromTemplate({
+    const result = await generatePdfFromTemplate({
       template,
       dataPacket,
       supplementalAnswers,
