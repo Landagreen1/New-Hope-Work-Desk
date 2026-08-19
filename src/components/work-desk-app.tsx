@@ -101,6 +101,7 @@ import type {
 } from "@/lib/types";
 
 import IntakeDataDisplay, { type IntakeDataDetails } from "@/features/cs-intake/IntakeDataDisplay";
+import AgentQueueStatusHistory from "@/components/AgentQueueStatusHistory";
 
 /**
  * The My status control governs sales-queue participation, not attendance, and
@@ -274,6 +275,7 @@ type ModalType =
   | "quote_log"
   | "customer_service_pass"
   | "change_outcome"
+  | "agent_queue_history"
   | null;
 /**
  * The agent's top-level screens.
@@ -3013,6 +3015,8 @@ export function WorkDeskApp({
     string | null
   >(null);
   const [quoteLogSourceId, setQuoteLogSourceId] = useState<string | null>(null);
+  const [queueHistoryAgentId, setQueueHistoryAgentId] = useState<string | null>(null);
+  const [queueHistoryAgentName, setQueueHistoryAgentName] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     () =>
@@ -3429,7 +3433,25 @@ export function WorkDeskApp({
         { event: "*", schema: "public", table: "cs_intake_submissions" },
         scheduleRefresh,
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "agent_queue_state" },
+        handleQueueStateChange,
+      )
       .subscribe();
+
+    /**
+     * Version-aware queue state handler.
+     * When agent_queue_state changes, we compare the incoming version against
+     * local state. Only updates with a HIGHER version are applied — this prevents
+     * stale/delayed realtime events from reverting the displayed status.
+     */
+    function handleQueueStateChange() {
+      // We still schedule a full refresh to pick up all related data (rotation
+      // state, turn events, etc.) but the queue-status rendering will be
+      // version-aware because agents carry queueVersion.
+      scheduleRefresh();
+    }
 
     function scheduleRefresh() {
       if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
@@ -3601,14 +3623,9 @@ export function WorkDeskApp({
   /**
    * The agent's own sales-queue status.
    *
-   * Goes through `set_my_queue_status` rather than `set_my_availability`, which it
-   * wraps: the profile write, the rotation handoff, the recovery and the
-   * `turn_events` rows are unchanged, and the addition is the one `manual_agent`
-   * availability event that makes the change attributable (Requirements 2.9, 2.12).
-   *
-   * The label names sales queues rather than saying `Available` on its own, because
-   * this control governs sales-queue participation and not attendance
-   * (Requirement 2.14).
+   * Uses `set_my_queue_status_v2` which supports optimistic concurrency via
+   * version checking. The version is passed so that stale browser tabs cannot
+   * overwrite a newer decision made elsewhere.
    */
   async function handleAvailability(status: AvailabilityStatus) {
     // If agent is going available, or is already not available, no confirmation needed
@@ -3629,11 +3646,36 @@ export function WorkDeskApp({
       }
     }
 
-    await runRpc(
-      "set_my_queue_status",
-      { p_status: status },
-      `${QUEUE_STATUS_LABELS[status]}.`,
-    );
+    // Use the v2 RPC with optimistic concurrency — pass the current version
+    // so that a stale browser tab cannot overwrite a newer decision.
+    const currentVersion = currentUser?.queueVersion ?? null;
+    const { data, error } = await supabase.rpc("set_my_queue_status_v2", {
+      p_status: status,
+      p_expected_version: currentVersion,
+    });
+
+    if (error) {
+      await refreshLiveData();
+      showToast(error.message);
+      return;
+    }
+
+    const result = data as unknown as { success: boolean; reason?: string; status?: string; version?: number; current_status?: string; current_version?: number };
+    if (result && !result.success) {
+      // Stale write — refresh to get the latest state
+      await refreshLiveData();
+      if (result.reason === "STALE_QUEUE_STATE") {
+        showToast(
+          `Status was already changed (now ${result.current_status}). Refreshed.`,
+        );
+      } else {
+        showToast(result.reason || "Queue status change failed.");
+      }
+      return;
+    }
+
+    await refreshLiveData();
+    showToast(`${QUEUE_STATUS_LABELS[status]}.`);
   }
 
   async function handlePass(rotation: RotationKind) {
@@ -5464,6 +5506,11 @@ export function WorkDeskApp({
             onReassignPending={managerReassignPending}
             onDeleteQuote={managerDeleteQuote}
             onOpenQuoteLog={openQuoteLog}
+            onOpenQueueHistory={(agentId, agentName) => {
+              setQueueHistoryAgentId(agentId);
+              setQueueHistoryAgentName(agentName);
+              setModal("agent_queue_history");
+            }}
             onAddQuoteNote={addQuoteNote}
             noteDrafts={noteDrafts}
             setNoteDrafts={setNoteDrafts}
@@ -5733,6 +5780,17 @@ export function WorkDeskApp({
           </form>
         ) : null}
       </Modal>
+
+      <AgentQueueStatusHistory
+        agentId={queueHistoryAgentId}
+        agentName={queueHistoryAgentName}
+        isOpen={modal === "agent_queue_history"}
+        onClose={() => {
+          setModal(null);
+          setQueueHistoryAgentId(null);
+          setQueueHistoryAgentName(null);
+        }}
+      />
 
       <Modal
         open={modal === "payment"}
@@ -6299,6 +6357,7 @@ function ManagerView({
   onReassignPending,
   onDeleteQuote,
   onOpenQuoteLog,
+  onOpenQueueHistory,
   onAddQuoteNote,
   noteDrafts,
   setNoteDrafts,
@@ -6340,6 +6399,7 @@ function ManagerView({
     customer: string,
   ) => Promise<void>;
   onOpenQuoteLog: (sourceWorkItemId: string) => void;
+  onOpenQueueHistory: (agentId: string, agentName: string) => void;
   onAddQuoteNote: (sourceWorkItemId: string) => Promise<void>;
   noteDrafts: Record<string, string>;
   setNoteDrafts: React.Dispatch<React.SetStateAction<Record<string, string>>>;
@@ -8976,6 +9036,7 @@ function ManagerView({
                     <th className="px-5 py-3">Active Tasks</th>
                     <th className="px-5 py-3">Pending Pricing</th>
                     <th className="px-5 py-3">Passes Today</th>
+                    <th className="px-5 py-3">Queue Log</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -9062,6 +9123,14 @@ function ManagerView({
                           >
                             {performanceRow?.passedTurns ?? 0}
                           </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <button
+                            onClick={() => onOpenQueueHistory(agent.id, agent.name)}
+                            className="rounded-full bg-[#eef3fb] px-3 py-1.5 text-xs font-black text-[#223f7a] hover:bg-[#dce6f5] transition"
+                          >
+                            History
+                          </button>
                         </td>
                       </tr>
                     );
@@ -9998,6 +10067,7 @@ function UserAdminPanel({ actorRole }: { actorRole: AppRole }) {
           </button>
         </form>
       </Modal>
+
       {credential ? (
         <section className="rounded-[28px] border border-[#b8c7e1] bg-[#eef3fb] p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

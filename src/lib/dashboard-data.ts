@@ -204,13 +204,12 @@ function asWorkStatus(status: string): WorkStatus {
 export async function loadDashboardData(
   supabase: SupabaseClient,
 ): Promise<DashboardData> {
-  const { error: dailyResetError } = await supabase.rpc(
-    "ensure_daily_availability_reset",
-  );
-  if (dailyResetError)
-    throw new Error(
-      `Daily availability reset check failed: ${dailyResetError.message}`,
-    );
+  // ═══════════════════════════════════════════════════════════════════════════
+  // IMPORTANT: ensure_daily_availability_reset is NO LONGER called here.
+  // A dashboard read must NOT mutate queue state. The daily reset is now a
+  // server-side concern triggered by the first queue-status transition of the
+  // new business day (or a scheduled job), not by every browser tab loading.
+  // ═══════════════════════════════════════════════════════════════════════════
 
   const [
     profilesResult,
@@ -228,6 +227,7 @@ export async function loadDashboardData(
     notificationsResult,
     performanceResult,
     passEventsResult,
+    queueStateResult,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -312,6 +312,9 @@ export async function loadDashboardData(
       .eq("action", "pass")
       .order("created_at", { ascending: false })
       .limit(10000),
+    supabase
+      .from("agent_queue_state")
+      .select("profile_id,status,version"),
   ]);
 
   const errors = [
@@ -330,6 +333,7 @@ export async function loadDashboardData(
     notificationsResult.error,
     performanceResult.error,
     passEventsResult.error,
+    queueStateResult.error,
   ].filter(Boolean);
   if (errors.length)
     throw new Error(errors[0]?.message || "Unable to load Work Desk data.");
@@ -365,20 +369,33 @@ export async function loadDashboardData(
     }
   }
 
-  const agents: Agent[] = agentProfiles.map((profile) => ({
-    id: profile.id,
-    name: profile.display_name,
-    initials: profile.initials,
-    rotationPosition: profile.rotation_position,
-    whatsappPosition: profile.whatsapp_position,
-    ringCentralPosition: profile.ringcentral_position,
-    workloadPosition: profile.workload_position,
-    availability: profile.availability,
-    whatsappActive: profile.whatsapp_active,
-    ringCentralActive: profile.ringcentral_active,
-    workloadActive: profile.workload_active,
-    activeCount: activeCountByAgent.get(profile.id) || 0,
-  }));
+  // Build authoritative queue state map from agent_queue_state table.
+  // This is the single source of truth for queue status and version.
+  const queueStateByProfile = new Map<string, { status: Agent["availability"]; version: number }>();
+  for (const row of (queueStateResult.data || []) as { profile_id: string; status: Agent["availability"]; version: number }[]) {
+    queueStateByProfile.set(row.profile_id, { status: row.status, version: row.version });
+  }
+
+  const agents: Agent[] = agentProfiles.map((profile) => {
+    const queueState = queueStateByProfile.get(profile.id);
+    return {
+      id: profile.id,
+      name: profile.display_name,
+      initials: profile.initials,
+      rotationPosition: profile.rotation_position,
+      whatsappPosition: profile.whatsapp_position,
+      ringCentralPosition: profile.ringcentral_position,
+      workloadPosition: profile.workload_position,
+      // Use authoritative agent_queue_state; fall back to profiles.availability for
+      // agents not yet migrated (should not happen after v1.19.0).
+      availability: queueState?.status ?? profile.availability,
+      queueVersion: queueState?.version ?? 0,
+      whatsappActive: profile.whatsapp_active,
+      ringCentralActive: profile.ringcentral_active,
+      workloadActive: profile.workload_active,
+      activeCount: activeCountByAgent.get(profile.id) || 0,
+    };
+  });
 
   const customerServiceUsers: CustomerServiceUser[] =
     customerServiceProfiles.map((profile) => ({

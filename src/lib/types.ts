@@ -89,10 +89,33 @@ export interface Agent {
   ringCentralPosition: number;
   workloadPosition: number;
   availability: AvailabilityStatus;
+  /** Monotonic version from agent_queue_state — used for optimistic concurrency. */
+  queueVersion: number;
   whatsappActive: boolean;
   ringCentralActive: boolean;
   workloadActive: boolean;
   activeCount: number;
+}
+
+/**
+ * Response from set_my_queue_status_v2 and manager_set_agent_queue_status RPCs.
+ * Used for optimistic concurrency and immediate UI feedback.
+ */
+export interface QueueTransitionResult {
+  success: boolean;
+  changed?: boolean;
+  profile_id: string;
+  previous_status?: AvailabilityStatus;
+  status: AvailabilityStatus;
+  previous_version?: number;
+  version: number;
+  source?: string;
+  changed_by?: string;
+  /** Present only when success=false */
+  reason?: string;
+  current_status?: AvailabilityStatus;
+  current_version?: number;
+  expected_version?: number;
 }
 
 export interface WorkItem {
