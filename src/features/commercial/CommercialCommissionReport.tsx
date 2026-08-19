@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Clock,
   DollarSign,
+  Download,
   PieChart,
   RefreshCw,
   Shield,
@@ -47,6 +48,7 @@ export default function CommercialCommissionReport({ initialProfile, embedded = 
   const [error, setError] = useState<string | null>(null);
   const [filterAgent, setFilterAgent] = useState('');
   const [filterStatus, setFilterStatus] = useState<'' | 'approved' | 'denied' | 'pending'>('');
+  const [exporting, setExporting] = useState(false);
 
   const isManager = canManageCommercial(initialProfile.role);
 
@@ -75,6 +77,38 @@ export default function CommercialCommissionReport({ initialProfile, embedded = 
       setLoading(false);
     }
   }, []);
+
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (filterAgent) params.set('agent', filterAgent);
+      if (filterStatus) params.set('status', filterStatus);
+      const url = `/api/commercial-quotes/reports/commissions/export${params.toString() ? `?${params.toString()}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: 'Export failed.' }));
+        throw new Error(body.error ?? 'Export failed.');
+      }
+      const csv = await res.text();
+      const disposition = res.headers.get('content-disposition');
+      const filenameMatch = disposition ? /filename="([^"]+)"/.exec(disposition) : null;
+      const filename = filenameMatch?.[1] ?? 'commission-report.csv';
+
+      const blobUrl = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      const anchor = document.createElement('a');
+      anchor.href = blobUrl;
+      anchor.download = filename;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed.');
+    } finally {
+      setExporting(false);
+    }
+  }, [filterAgent, filterStatus]);
 
   useEffect(() => { void fetchData(); }, [fetchData]);
 
@@ -180,6 +214,10 @@ export default function CommercialCommissionReport({ initialProfile, embedded = 
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={() => void handleExport()} disabled={exporting || loading} className={ui.btnSecondary}>
+            <Download className="h-4 w-4" />
+            {exporting ? 'Exporting...' : 'Download Report'}
+          </button>
           <button type="button" onClick={() => void fetchData()} className={ui.btnSecondary}>
             <RefreshCw className="h-4 w-4" />
             Refresh
