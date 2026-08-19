@@ -315,6 +315,7 @@ function getModulesForRole(
     const commercialSubs: SubNavItem[] = [
       { id: "commercial_board", label: "Commercial Board", icon: Building2 },
       { id: "commercial_database", label: "Database", icon: Table2 },
+      { id: "quote_center", label: "Quote Center", icon: Search },
     ];
     if (permissions.manageCommercial) {
       commercialSubs.push(

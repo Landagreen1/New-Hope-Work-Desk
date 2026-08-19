@@ -20,15 +20,17 @@ import {
 } from '@/lib/permissions';
 
 /**
- * The roles that work customer quotes.
+ * The roles that can access Quote Center.
  *
- * Commercial roles are deliberately absent. Commercial quotes live on their own
- * board with their own database and their own routing, and this consolidation is
- * explicitly not allowed to change that.
+ * Commercial roles were added so they can look up customer quote journeys when
+ * supporting customers, even though their primary workflow remains the
+ * Commercial Board.
  */
 const QUOTE_ROLES: readonly AppRole[] = [
   'agent',
   'customer_service',
+  'commercial',
+  'commercial_supervisor',
   'sales_supervisor',
   'customer_service_supervisor',
   'manager',

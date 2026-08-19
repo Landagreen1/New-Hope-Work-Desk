@@ -283,11 +283,11 @@ export function RoleWorkspace({
     const { module, subNav } = activeNavigation;
 
     // --- Quote Center ---
-    // One lookup destination shared by Customer Service, Sales, supervisors and
-    // managers. Its own screen rather than a WorkDeskApp tab, because WorkDeskApp is
-    // where work lives and mixing the two back together is what created the
-    // guess-which-database problem in the first place.
-    if (module === "sales" && subNav === "quote_center" && permissions.sales) {
+    // One lookup destination shared by Customer Service, Sales, Commercial,
+    // supervisors and managers. Its own screen rather than a WorkDeskApp tab,
+    // because WorkDeskApp is where work lives and mixing the two back together is
+    // what created the guess-which-database problem in the first place.
+    if ((module === "sales" || module === "commercial") && subNav === "quote_center") {
       return (
         <Suspense fallback={<LoadingWorkspace label="Quote Center" />}>
           <QuoteCenter
