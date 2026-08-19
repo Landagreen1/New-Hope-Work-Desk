@@ -168,6 +168,8 @@ function fillJsaForm(
     ? `Target Premium: ${supplementalAnswers['Target Premium']}`
     : '';
   trySet(form, 'Narrative Target premiumHow JSA can help you write the account 1', narrative);
+  // Generic form variant
+  trySet(form, 'Narrative Underwriting Notes 1', narrative);
 
   // Underwriting questions (radio groups)
   // The radio groups are named undefined_2q through undefined_2aas for Q1-Q12
