@@ -91,9 +91,27 @@ async function fillOfficialTemplate(input: PdfGenerationInput): Promise<PdfGener
 
 /**
  * Fills AcroForm fields by matching field names to our data.
- * Field names come from inspecting the actual official JSA PDF with pdf-lib.
+ * Detects JSA vs TIA form by checking for template-specific field names.
  */
 function fillFormFields(
+  form: ReturnType<typeof PDFDocument.prototype.getForm>,
+  dataPacket: TruckingDataPacket,
+  supplementalAnswers: Record<string, string | null>,
+  template: PdfGenerationInput['template'],
+  warnings: string[],
+) {
+  const fields = form.getFields();
+  const fieldNames = new Set(fields.map(f => f.getName()));
+
+  // Detect TIA form by checking for TIA-specific fields
+  if (fieldNames.has('Agency') && fieldNames.has('Producer') && fieldNames.has('Garaging Address')) {
+    fillTiaForm(form, dataPacket, supplementalAnswers, template, warnings);
+  } else {
+    fillJsaForm(form, dataPacket, supplementalAnswers, template, warnings);
+  }
+}
+
+function fillJsaForm(
   form: ReturnType<typeof PDFDocument.prototype.getForm>,
   dataPacket: TruckingDataPacket,
   supplementalAnswers: Record<string, string | null>,
@@ -287,6 +305,150 @@ function fillFormFields(
   }
   if (dataPacket.vehicles.length > (template.max_vehicles ?? 5)) {
     warnings.push(`${dataPacket.vehicles.length} vehicles exceed the form's 5 rows. Attach a continuation schedule.`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TIA QUICK QUOTE FORM FILLING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function fillTiaForm(
+  form: ReturnType<typeof PDFDocument.prototype.getForm>,
+  dataPacket: TruckingDataPacket,
+  supplementalAnswers: Record<string, string | null>,
+  template: PdfGenerationInput['template'],
+  warnings: string[],
+) {
+  const biz = dataPacket.business;
+  const ops = dataPacket.operations;
+  const cov = dataPacket.coverages;
+  const prior = dataPacket.prior_insurance;
+
+  // ── Producer / Insured Information ─────────────────────────────────────
+  trySet(form, 'Agency', 'New Hope Insurance');
+  trySet(form, 'Producer', 'Jason Toro');
+  trySet(form, 'Phone', '');
+  trySet(form, 'Fax', '');
+  trySet(form, 'Email', 'jtoro@newhopeins.com');
+
+  trySet(form, 'Name', biz.legal_name ?? '');
+  trySet(form, 'DBA', biz.dba ?? '');
+  trySet(form, 'Garaging Address', [biz.garaging_street ?? biz.mailing_street, biz.garaging_city ?? biz.mailing_city, biz.garaging_state ?? biz.mailing_state, biz.garaging_zip ?? biz.mailing_zip].filter(Boolean).join(', '));
+  trySet(form, 'Mailing Address', [biz.mailing_street, biz.mailing_city, biz.mailing_state, biz.mailing_zip].filter(Boolean).join(', '));
+
+  // Effective Dates
+  trySet(form, 'EffectiveDates', supplementalAnswers['Target effective date'] ?? '');
+
+  // ── Operation Information ──────────────────────────────────────────────
+  trySet(form, 'Destination Cities Zone rated  10 or more of operation', supplementalAnswers['Primary Destinations'] ?? ops.states ?? '');
+  trySet(form, 'Cities Traveled Through Zone rated  10 or more of operation', ops.states ?? '');
+  trySet(form, 'Percentage of Loads Through Brokers', supplementalAnswers['Percentage of Loads Brokered'] ?? ops.brokerage_percentage?.toString() ?? '');
+  trySet(form, 'Percentage of Loads to Regular Destinations', supplementalAnswers['Percentage of Loads to Regular Destinations'] ?? '');
+  trySet(form, 'CurrentYearUnits', dataPacket.vehicles.length.toString());
+  trySet(form, '1st Prior', supplementalAnswers['# of Power Units Prior Year'] ?? '');
+  trySet(form, 'Gross Revenue Past Year', supplementalAnswers['Annual Revenue'] ?? '');
+  trySet(form, 'Projected', supplementalAnswers['Projected Revenue'] ?? '');
+  trySet(form, 'Past Year Mileage', supplementalAnswers['Annual Mileage'] ?? ops.mileage?.toString() ?? '');
+  trySet(form, 'Projected_2', supplementalAnswers['Projected Mileage'] ?? '');
+  trySet(form, 'DOT', biz.dot_number ?? '');
+  trySet(form, 'MC', biz.mc_number ?? '');
+  trySet(form, 'FEIN', biz.fein ?? '');
+  trySet(form, 'ELD Manufacturer', supplementalAnswers['ELD Manufacturer'] ?? '');
+  trySet(form, 'Years Insured Under this Name', biz.years_in_business?.toString() ?? '');
+  trySet(form, 'Owner Social Security Number SSN', ''); // Never auto-fill SSN
+
+  // Cancelled/Non-renewed radio
+  try {
+    const cancelGroup = form.getRadioGroup('Canceled or NonRenewed in Past 3 Years');
+    const cancelOptions = cancelGroup.getOptions();
+    const cancelAnswer = supplementalAnswers['Cancelled or Non-Renewed in Past 3 Years?'] ?? 'No';
+    const matchOpt = cancelOptions.find(o => o.toLowerCase().includes(cancelAnswer.toLowerCase().includes('yes') ? 'yes' : 'no'));
+    if (matchOpt) cancelGroup.select(matchOpt);
+  } catch { /* */ }
+  trySet(form, 'If Yes Reason', supplementalAnswers['If cancelled/non-renewed, reason'] ?? '');
+
+  // ── Driver Information (6 rows) ────────────────────────────────────────
+  const maxDrv = Math.min(dataPacket.drivers.length, 6);
+  for (let i = 0; i < maxDrv; i++) {
+    const d = dataPacket.drivers[i];
+    const row = `Row${i + 1}`;
+    const name = [d.first_name, d.last_name].filter(Boolean).join(' ');
+    trySet(form, `Name${row}`, name);
+    trySet(form, `License${row}`, d.license_number ?? '');
+    trySet(form, `State${row}`, d.license_state ?? '');
+    trySet(form, `DOB${row}`, d.dob ?? '');
+    trySet(form, `Hire Date${row}`, '');
+    trySet(form, `Yrs Exp with Similar Equip${row}`, d.years_licensed?.toString() ?? '');
+  }
+
+  // ── Vehicle Schedule (6 rows) ──────────────────────────────────────────
+  const maxVeh = Math.min(dataPacket.vehicles.length, 6);
+  for (let i = 0; i < maxVeh; i++) {
+    const v = dataPacket.vehicles[i];
+    const n = (i + 1).toString();
+    trySet(form, `Year${n}`, v.year?.toString() ?? '');
+    trySet(form, `Make${n}`, v.make ?? '');
+    trySet(form, `VIN${n}`, v.vin ?? '');
+    trySet(form, `TRKTRAC${n}`, v.type ?? '');
+    trySet(form, `TRL Type${n}`, '');
+    trySet(form, `Value${n}`, v.value ? `$${v.value.toLocaleString()}` : '');
+    trySet(form, `GVW${n}`, v.gvw?.toString() ?? '');
+    trySet(form, `Radius${n}`, ops.radius?.toString() ?? '');
+  }
+
+  // ── Insurance Carrier Information (past 3 years) ───────────────────────
+  if (prior.carrier) {
+    trySet(form, 'YearEff1', '');
+    trySet(form, 'YearExp1', prior.expiration ?? '');
+    trySet(form, 'Companyto', prior.carrier);
+    trySet(form, ' Units Insuredto', dataPacket.vehicles.length.toString());
+    trySet(form, ' of Claimsto', '');
+    trySet(form, 'Amount Incurredto', '');
+    trySet(form, 'Drive Nameto', '');
+  }
+
+  // ── Coverages & Limits ─────────────────────────────────────────────────
+  // Liability type
+  tryCheck(form, 'Primary', true);
+
+  // Auto Liability
+  trySet(form, 'Auto Liability Limit', cov.auto_liability_limit ?? '');
+  trySet(form, 'UMUIM Limits', supplementalAnswers['UM/UIM Limit'] ?? '');
+  trySet(form, 'LiabPersonal Injury Protection', '');
+  trySet(form, 'LiabMedical Payments', supplementalAnswers['Medical Payments Limit'] ?? '');
+  trySet(form, 'LiabHiredAutoLiability', '');
+  trySet(form, 'LiabHiredCarPhysical', '');
+  trySet(form, 'HCP Limit', '');
+  trySet(form, 'HCPNumberofDays', '');
+
+  // Physical Damage
+  const hasPhysicalDamage = dataPacket.vehicles.some(v => v.value !== null && v.value > 0);
+  trySet(form, 'Coll Ded', hasPhysicalDamage ? (cov.collision_deductible ?? '') : '');
+  trySet(form, 'OTC Ded', hasPhysicalDamage ? (cov.comprehensive_deductible ?? '') : '');
+
+  // Cargo
+  trySet(form, 'Limit', cov.cargo_limit ?? '');
+  trySet(form, 'Ded', cov.cargo_deductible ?? '');
+
+  // Cargo commodities table
+  if (ops.commodities) {
+    trySet(form, 'Commodities1', ops.commodities);
+    trySet(form, 'PercentOfLoad1', '100%');
+    trySet(form, 'AverageTruckloadValue1', '');
+    trySet(form, 'MaximumTruckloadValue1', '');
+  }
+
+  // General Liability
+  trySet(form, 'GLLimit', supplementalAnswers['General Liability Limit'] ?? '');
+  trySet(form, ' of OwnersOfficers', '');
+  trySet(form, ' of Employees', '');
+
+  // Overflow warnings
+  if (dataPacket.drivers.length > 6) {
+    warnings.push(`${dataPacket.drivers.length} drivers exceed TIA's 6 rows. Attach a schedule.`);
+  }
+  if (dataPacket.vehicles.length > 6) {
+    warnings.push(`${dataPacket.vehicles.length} vehicles exceed TIA's 6 rows. Attach a schedule.`);
   }
 }
 

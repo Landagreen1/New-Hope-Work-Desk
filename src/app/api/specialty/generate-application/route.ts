@@ -46,10 +46,10 @@ export async function POST(request: Request) {
     );
   }
 
-  // 1. Load the template configuration
+  // 1. Load the template configuration with market name
   const { data: template, error: templateError } = await supabase
     .from('market_pdf_templates')
-    .select('*')
+    .select('*, market_directory(name)')
     .eq('id', template_id)
     .single();
 
@@ -158,8 +158,12 @@ export async function POST(request: Request) {
 
   const version = (count ?? 0) + 1;
 
-  // 9. Upload to storage
-  const fileName = `${template.template_name.replace(/\s+/g, '_')}_v${version}.pdf`;
+  // 9. Upload to storage — Named: "Carrier - Company Name_v1.pdf"
+  const marketName = (template.market_directory as { name: string } | null)?.name ?? template.template_name;
+  const companyName = dataPacket.business.legal_name ?? opportunity.display_name ?? 'Unknown';
+  const safeMarket = marketName.replace(/[/\\?%*:|"<>]/g, '').trim();
+  const safeCompany = companyName.replace(/[/\\?%*:|"<>]/g, '').trim();
+  const fileName = `${safeMarket} - ${safeCompany}_v${version}.pdf`;
   const storagePath = `${opportunity_id}/generated/${carrier_market_id}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
