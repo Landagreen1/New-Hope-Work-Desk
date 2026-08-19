@@ -12,6 +12,10 @@ export interface CargoCommodity {
   category: string;
   frequency: 'mostly' | 'sometimes' | 'occasionally';
   is_primary: boolean;
+  /** Share of hauling this commodity represents. Validated to total ≈100%. */
+  percent_hauled?: number | null;
+  average_value?: number | null;
+  maximum_value?: number | null;
 }
 
 export interface CargoData {
@@ -110,13 +114,8 @@ const EXCLUDED_CARGO_ITEMS = [
   'Chemicals',
 ] as const;
 
-const CARGO_LIMIT_OPTIONS = [
-  { value: 50000, label: '$50,000' },
-  { value: 100000, label: '$100,000' },
-  { value: 150000, label: '$150,000' },
-  { value: 200000, label: '$200,000' },
-  { value: 250000, label: '$250,000' },
-] as const;
+// Cargo limit choices now live in RequestedCoveragesSection (CARGO_LIMIT_CHOICES),
+// so the limit is asked exactly once.
 
 const LOAD_VALUE_RANGES = [
   { value: 'under_25000', label: 'Under $25,000' },
@@ -136,6 +135,44 @@ const HIGH_VALUE_CATEGORIES = new Set([
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Derives the aggregate load values from the per-commodity detail.
+ *
+ * `max_load_value` is the largest single-load maximum across all commodities.
+ * `typical_load_value` is the percent-weighted average where percentages are
+ * known, and a plain average otherwise. Returns nulls when nothing is entered,
+ * so a partially filled form does not invent figures.
+ */
+function rollupCargoValues(rows: CargoCommodity[]): {
+  typical_load_value: number | null;
+  max_load_value: number | null;
+} {
+  const maximums = rows
+    .map((row) => row.maximum_value)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  const maxLoad = maximums.length > 0 ? Math.max(...maximums) : null;
+
+  const withAverage = rows.filter(
+    (row) => typeof row.average_value === 'number' && Number.isFinite(row.average_value),
+  );
+  let typicalLoad: number | null = null;
+  if (withAverage.length > 0) {
+    const weightTotal = withAverage.reduce((sum, row) => sum + (row.percent_hauled ?? 0), 0);
+    if (weightTotal > 0) {
+      const weighted = withAverage.reduce(
+        (sum, row) => sum + (row.average_value as number) * (row.percent_hauled ?? 0),
+        0,
+      );
+      typicalLoad = Math.round(weighted / weightTotal);
+    } else {
+      const plain = withAverage.reduce((sum, row) => sum + (row.average_value as number), 0);
+      typicalLoad = Math.round(plain / withAverage.length);
+    }
+  }
+
+  return { typical_load_value: typicalLoad, max_load_value: maxLoad };
+}
 
 function Field({ label, required, children, hint }: { label: string; required?: boolean; children: React.ReactNode; hint?: string }) {
   return (
@@ -200,6 +237,19 @@ export default function CargoSection({ data, onChange, cargoRequested = false, d
     && data.requested_cargo_limit != null
     && data.max_load_value > data.requested_cargo_limit;
 
+  // Commodity percentages should describe the whole operation, so they are
+  // totalled and checked against ~100%. Only surfaced once at least one is
+  // entered, so a fresh form does not nag.
+  const percentTotal = data.commodities.reduce((sum, row) => sum + (row.percent_hauled ?? 0), 0);
+  const anyPercentEntered = data.commodities.some(
+    (row) => typeof row.percent_hauled === 'number' && row.percent_hauled > 0,
+  );
+  const percentTotalOk = percentTotal >= 98 && percentTotal <= 102;
+  /** True once any per-commodity load value exists, so the aggregate is derived. */
+  const hasPerCommodityValues = data.commodities.some(
+    (row) => row.average_value != null || row.maximum_value != null,
+  );
+
   // Update high-value flag when computed value changes
   if (highValueFlag !== data.high_value_cargo_flag) {
     onChange({ high_value_cargo_flag: highValueFlag });
@@ -210,27 +260,33 @@ export default function CargoSection({ data, onChange, cargoRequested = false, d
     if (disabled) return;
     const existing = data.commodities.find((c) => c.category === key);
     let updated: CargoCommodity[];
+    let nextPrimary = data.primary_commodity;
+
     if (existing) {
       updated = data.commodities.filter((c) => c.category !== key);
-      // If removed was primary, clear primary
-      if (existing.is_primary) {
-        onChange({ commodities: updated, primary_commodity: '' });
-        return;
-      }
+      // If the removed one was primary, the selection no longer has a primary.
+      if (existing.is_primary) nextPrimary = '';
     } else {
       const newCommodity: CargoCommodity = {
         category: key,
         frequency: 'mostly',
         is_primary: data.commodities.length === 0,
+        percent_hauled: null,
+        average_value: null,
+        maximum_value: null,
       };
       updated = [...data.commodities, newCommodity];
-      // If first selection, set as primary
-      if (data.commodities.length === 0) {
-        onChange({ commodities: updated, primary_commodity: key });
-        return;
-      }
+      // First selection becomes primary.
+      if (data.commodities.length === 0) nextPrimary = key;
     }
-    onChange({ commodities: updated });
+
+    // One change, so the rows, the primary and the derived load values can
+    // never disagree.
+    onChange({
+      commodities: updated,
+      primary_commodity: nextPrimary,
+      ...rollupCargoValues(updated),
+    });
   }
 
   function setFrequency(key: string, freq: 'mostly' | 'sometimes' | 'occasionally') {
@@ -248,6 +304,21 @@ export default function CargoSection({ data, onChange, cargoRequested = false, d
       is_primary: c.category === key,
     }));
     onChange({ commodities: updated, primary_commodity: key });
+  }
+
+  /**
+   * Updates one commodity's percent / average / maximum and re-derives the
+   * aggregate load values in the same change.
+   *
+   * Deriving them means Customer Service never types the overall figures twice,
+   * and the cargo-limit warning keeps working off real numbers.
+   */
+  function setCommodityDetail(key: string, detail: Partial<CargoCommodity>) {
+    if (disabled) return;
+    const updated = data.commodities.map((c) =>
+      c.category === key ? { ...c, ...detail } : c,
+    );
+    onChange({ commodities: updated, ...rollupCargoValues(updated) });
   }
 
   function setExcluded(item: string, value: string) {
@@ -327,60 +398,151 @@ export default function CargoSection({ data, onChange, cargoRequested = false, d
           {/* ─── Selected Commodities: Frequency & Primary ─────────────────── */}
           {data.commodities.length > 0 && (
             <div>
-              <span className={ui.label}>Commodity Mix</span>
-              <p className="mt-1 mb-3 text-xs font-semibold text-slate-400">
-                Set how often each is hauled and select the primary commodity.
-              </p>
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <div>
+                  <span className={ui.label}>Commodity Mix</span>
+                  <p className="mt-1 text-xs font-semibold text-slate-400">
+                    Set how often each is hauled, what a load is worth, and which is primary.
+                  </p>
+                </div>
+                {anyPercentEntered && (
+                  <span
+                    className={`${ui.badge} ${
+                      percentTotalOk ? ui.badgeTone.success : ui.badgeTone.progress
+                    }`}
+                  >
+                    Total {percentTotal}%
+                  </span>
+                )}
+              </div>
               <div className="space-y-2">
                 {data.commodities.map((comm) => {
                   const catDef = COMMODITY_CATEGORIES.find((c) => c.key === comm.category);
                   return (
                     <div
                       key={comm.category}
-                      className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${
+                      className={`rounded-xl border px-4 py-3 ${
                         comm.is_primary ? 'border-[#223f7a] bg-[#f8faff]' : 'border-slate-200 bg-white'
                       }`}
                     >
-                      <span className="min-w-[160px] text-sm font-bold text-slate-800">
-                        {catDef?.label || comm.category}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="min-w-[160px] text-sm font-bold text-slate-800">
+                          {catDef?.label || comm.category}
+                        </span>
 
-                      {/* Frequency selector */}
-                      <div className="flex gap-1">
-                        {(['mostly', 'sometimes', 'occasionally'] as const).map((freq) => (
-                          <button
-                            key={freq}
-                            type="button"
-                            onClick={() => setFrequency(comm.category, freq)}
-                            disabled={disabled}
-                            className={`rounded-lg px-2.5 py-1 text-[11px] font-bold capitalize transition ${
-                              comm.frequency === freq
-                                ? 'bg-[#223f7a] text-white'
-                                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                            } disabled:cursor-not-allowed disabled:opacity-40`}
-                          >
-                            {freq}
-                          </button>
-                        ))}
+                        {/* Frequency selector */}
+                        <div className="flex gap-1">
+                          {(['mostly', 'sometimes', 'occasionally'] as const).map((freq) => (
+                            <button
+                              key={freq}
+                              type="button"
+                              onClick={() => setFrequency(comm.category, freq)}
+                              disabled={disabled}
+                              className={`rounded-lg px-2.5 py-1 text-[11px] font-bold capitalize transition ${
+                                comm.frequency === freq
+                                  ? 'bg-[#223f7a] text-white'
+                                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                              } disabled:cursor-not-allowed disabled:opacity-40`}
+                            >
+                              {freq}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Primary button */}
+                        <button
+                          type="button"
+                          onClick={() => setPrimary(comm.category)}
+                          disabled={disabled}
+                          className={`ml-auto rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                            comm.is_primary
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+                          } disabled:cursor-not-allowed disabled:opacity-40`}
+                        >
+                          {comm.is_primary ? 'Primary' : 'Set Primary'}
+                        </button>
                       </div>
 
-                      {/* Primary button */}
-                      <button
-                        type="button"
-                        onClick={() => setPrimary(comm.category)}
-                        disabled={disabled}
-                        className={`ml-auto rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
-                          comm.is_primary
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600'
-                        } disabled:cursor-not-allowed disabled:opacity-40`}
-                      >
-                        {comm.is_primary ? 'Primary' : 'Set Primary'}
-                      </button>
+                      {/* Per-commodity detail: what share, and what a load is worth. */}
+                      <div className="mt-3 grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-3">
+                        <label className="block">
+                          <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                            Percent Hauled
+                          </span>
+                          <div className="relative mt-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              className={`${ui.input} mt-0 pr-8`}
+                              value={comm.percent_hauled ?? ''}
+                              onChange={(e) =>
+                                setCommodityDetail(comm.category, {
+                                  percent_hauled: e.target.value === '' ? null : Number(e.target.value),
+                                })
+                              }
+                              placeholder="e.g. 60"
+                              disabled={disabled}
+                            />
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
+                              %
+                            </span>
+                          </div>
+                        </label>
+
+                        <label className="block">
+                          <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                            Average Load Value
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            className={`${ui.input} mt-1`}
+                            value={comm.average_value ?? ''}
+                            onChange={(e) =>
+                              setCommodityDetail(comm.category, {
+                                average_value: e.target.value === '' ? null : Number(e.target.value),
+                              })
+                            }
+                            placeholder="e.g. 40000"
+                            disabled={disabled}
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                            Maximum Load Value
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            className={`${ui.input} mt-1`}
+                            value={comm.maximum_value ?? ''}
+                            onChange={(e) =>
+                              setCommodityDetail(comm.category, {
+                                maximum_value: e.target.value === '' ? null : Number(e.target.value),
+                              })
+                            }
+                            placeholder="e.g. 75000"
+                            disabled={disabled}
+                          />
+                        </label>
+                      </div>
                     </div>
                   );
                 })}
               </div>
+
+              {/* Percentages should describe the whole operation. */}
+              {anyPercentEntered && !percentTotalOk && (
+                <div className="mt-3">
+                  <WarningBanner>
+                    Commodity percentages total {percentTotal}%. They should add up to about 100% so
+                    underwriting can see the whole operation.
+                  </WarningBanner>
+                </div>
+              )}
             </div>
           )}
 
@@ -559,23 +721,15 @@ export default function CargoSection({ data, onChange, cargoRequested = false, d
             </div>
           )}
 
-          {/* ─── Chemicals → Hazmat ────────────────────────────────────────── */}
-          {(hasChemicals || selectedCategories.has('hazardous_materials')) && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Hazardous Materials?">
-                <select
-                  className={ui.select}
-                  value={data.hazmat}
-                  onChange={(e) => onChange({ hazmat: e.target.value })}
-                  disabled={disabled}
-                >
-                  <option value="">-- Select --</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                  <option value="unsure">Unsure</option>
-                </select>
-              </Field>
-            </div>
+          {/* ─── Chemicals selected, but hazmat not yet answered ─────────────
+              The hazmat question itself lives in the Underwriting / Eligibility
+              section so it is always asked, not only when a chemical commodity
+              happens to be selected. This just points there. */}
+          {(hasChemicals || selectedCategories.has('hazardous_materials')) && !data.hazmat && (
+            <WarningBanner>
+              A hazmat-adjacent commodity is selected. Answer <strong>Hauls hazardous
+              materials?</strong> in the Underwriting / Eligibility section below.
+            </WarningBanner>
           )}
 
           {/* ─── Hazmat Flag ───────────────────────────────────────────────── */}
@@ -618,96 +772,78 @@ export default function CargoSection({ data, onChange, cargoRequested = false, d
             </div>
           </div>
 
-          {/* ─── Cargo Coverage Desired (mandatory) ──────────────────────── */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Motor Truck Cargo Coverage Desired?" required>
-              <select
-                className={ui.select}
-                value={data.cargo_coverage_desired === null ? '' : data.cargo_coverage_desired ? 'yes' : 'no'}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  onChange({ cargo_coverage_desired: val === '' ? null : val === 'yes' });
-                }}
-                disabled={disabled}
-              >
-                <option value="">-- Select --</option>
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-              </select>
-            </Field>
-          </div>
-
-          {/* ─── Cargo Value (conditional on cargo coverage desired) ──────── */}
-          {(cargoRequested || data.cargo_coverage_desired === true) && (
+          {/* ─── Cargo Value ─────────────────────────────────────────────────
+              Desired Cargo Limit, Cargo Deductible and Refrigeration Breakdown
+              are asked once, in the Requested Coverages card. This block only
+              records what a load is actually worth. */}
+          {cargoRequested && (
             <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
-              <span className={`${ui.label} mb-3 block`}>Cargo Coverage Values</span>
+              <span className={`${ui.label} mb-3 block`}>Cargo Values</span>
 
               <AgentGuidance>
                 &quot;About how much is a normal load worth, and what would be the most expensive load you might carry?&quot;
               </AgentGuidance>
 
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Field label="Requested Cargo Limit">
-                  <select
-                    className={ui.select}
-                    value={data.requested_cargo_limit ?? ''}
-                    onChange={(e) => onChange({ requested_cargo_limit: e.target.value ? Number(e.target.value) : null })}
-                    disabled={disabled}
-                  >
-                    <option value="">-- Select --</option>
-                    {CARGO_LIMIT_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                    <option value="-1">Other (enter below)</option>
-                  </select>
-                  {data.requested_cargo_limit === -1 && (
+              {hasPerCommodityValues ? (
+                /* Derived from the per-commodity values above, so the overall
+                   figures are never entered twice. */
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                      Typical Value of One Load
+                    </p>
+                    <p className="mt-1 text-lg font-black text-slate-900">
+                      {data.typical_load_value != null
+                        ? `$${data.typical_load_value.toLocaleString()}`
+                        : '—'}
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-slate-400">
+                      Weighted by percent hauled
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                      Maximum Value of Any One Load
+                    </p>
+                    <p className="mt-1 text-lg font-black text-slate-900">
+                      {data.max_load_value != null
+                        ? `$${data.max_load_value.toLocaleString()}`
+                        : '—'}
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-slate-400">
+                      Highest commodity maximum
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* No per-commodity values yet, so the overall figures can still
+                   be captured directly. Keeps older intakes editable. */
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Typical Value of One Load">
                     <input
                       type="number"
-                      className={`${ui.input} mt-2`}
-                      placeholder="Enter custom limit"
-                      onChange={(e) => onChange({ requested_cargo_limit: e.target.value ? Number(e.target.value) : null })}
+                      className={ui.input}
+                      value={data.typical_load_value ?? ''}
+                      onChange={(e) => onChange({ typical_load_value: e.target.value ? Number(e.target.value) : null })}
+                      placeholder="e.g. 45000"
                       min={0}
                       disabled={disabled}
                     />
-                  )}
-                </Field>
+                  </Field>
 
-                <Field label="Cargo Deductible">
-                  <input
-                    type="number"
-                    className={ui.input}
-                    value={data.cargo_deductible ?? ''}
-                    onChange={(e) => onChange({ cargo_deductible: e.target.value ? Number(e.target.value) : null })}
-                    placeholder="e.g. 2500"
-                    min={0}
-                    disabled={disabled}
-                  />
-                </Field>
-
-                <Field label="Typical Value of One Load">
-                  <input
-                    type="number"
-                    className={ui.input}
-                    value={data.typical_load_value ?? ''}
-                    onChange={(e) => onChange({ typical_load_value: e.target.value ? Number(e.target.value) : null })}
-                    placeholder="e.g. 45000"
-                    min={0}
-                    disabled={disabled}
-                  />
-                </Field>
-
-                <Field label="Maximum Value of Any One Load">
-                  <input
-                    type="number"
-                    className={ui.input}
-                    value={data.max_load_value ?? ''}
-                    onChange={(e) => onChange({ max_load_value: e.target.value ? Number(e.target.value) : null })}
-                    placeholder="e.g. 85000"
-                    min={0}
-                    disabled={disabled}
-                  />
-                </Field>
-              </div>
+                  <Field label="Maximum Value of Any One Load">
+                    <input
+                      type="number"
+                      className={ui.input}
+                      value={data.max_load_value ?? ''}
+                      onChange={(e) => onChange({ max_load_value: e.target.value ? Number(e.target.value) : null })}
+                      placeholder="e.g. 85000"
+                      min={0}
+                      disabled={disabled}
+                    />
+                  </Field>
+                </div>
+              )}
 
               {/* Cargo value warning */}
               {cargoValueExceedsLimit && (

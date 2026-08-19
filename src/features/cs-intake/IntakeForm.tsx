@@ -33,6 +33,7 @@ import {
   type CsIntakeOwner,
   type CsIntakePriority,
   type CsIntakeSubmission,
+  type CsIntakeTrailer,
   type CsIntakeVehicle,
   type Dealer,
   type DealerSalesperson,
@@ -52,7 +53,14 @@ import DatePicker from '../nhwd-shared/DatePicker';
 import LobPicker, { type ExtendedLob, isCommercialRoute } from './LobPicker';
 import NonOwnersSection, { type NonOwnersData } from './NonOwnersSection';
 import TruckingSection, { type TruckingData } from './TruckingSection';
+import RequestedCoveragesSection, {
+  autoLiabilityLimitLabel,
+  type RequestedCoveragesData,
+} from './RequestedCoveragesSection';
 import CargoSection, { type CargoData, type CargoCommodity } from './CargoSection';
+import UnderwritingSection, { type UnderwritingData } from './UnderwritingSection';
+import TrailersSection from './TrailersSection';
+import { computeTruckingReadiness } from './trucking-readiness';
 import CommercialGlSection, { type CommercialGlData, emptyOwner } from './CommercialGlSection';
 import HomeownersSection, { type HomeownersData, type HomeownersPerson } from './HomeownersSection';
 import OtherPersonalSection, { type OtherPersonalData } from './OtherPersonalSection';
@@ -60,6 +68,24 @@ import OtherPersonalSection, { type OtherPersonalData } from './OtherPersonalSec
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DC','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
+
+/**
+ * Commercial use options for trucking units. Personal-auto choices such as
+ * Commute / Pleasure / Rideshare are meaningless on a motor carrier schedule,
+ * so trucking swaps this list in (v1.19.2).
+ */
+const TRUCK_USAGE_OPTIONS: { key: string; label: string }[] = [
+  { key: 'long_haul', label: 'Long Haul' },
+  { key: 'regional', label: 'Regional' },
+  { key: 'local', label: 'Local' },
+  { key: 'delivery', label: 'Delivery' },
+  { key: 'construction', label: 'Construction' },
+  { key: 'dump', label: 'Dump' },
+  { key: 'hotshot', label: 'Hotshot' },
+  { key: 'other', label: 'Other' },
+];
+
+const TRUCK_USAGE_KEYS = TRUCK_USAGE_OPTIONS.map((option) => option.key);
 
 const emptyDriver = (position = 1): CsIntakeDriver => ({
   position,
@@ -75,6 +101,12 @@ const emptyDriver = (position = 1): CsIntakeDriver => ({
   sr22_required: false,
   cdl: false,
   cdl_date: null,
+  cdl_years_experience: null,
+  owner_operator: false,
+  accidents_36mo: false,
+  accidents_detail: null,
+  violations_36mo: false,
+  violations_detail: null,
 });
 
 const emptyVehicle = (position = 1): CsIntakeVehicle => ({
@@ -93,6 +125,8 @@ const emptyVehicle = (position = 1): CsIntakeVehicle => ({
   physical_damage_value: null,
   physical_damage_deductible: null,
   coverage_type: null,
+  lessor_name: null,
+  lessor_address: null,
 });
 
 type DraftSubmission = Partial<CsIntakeSubmission> & {
@@ -121,6 +155,7 @@ interface Props {
     vehicles: CsIntakeVehicle[];
     owners?: CsIntakeOwner[];
     commodities?: CargoCommodity[];
+    trailers?: CsIntakeTrailer[];
   };
   readOnly?: boolean;
   onDone: () => void;
@@ -193,6 +228,11 @@ export default function IntakeForm({
   );
   const [commodities, setCommodities] = useState<CargoCommodity[]>(
     initial?.commodities?.length ? initial.commodities : [],
+  );
+  /** Whether the "Review Missing Items" readiness panel is expanded. */
+  const [showMissingItems, setShowMissingItems] = useState(false);
+  const [trailers, setTrailers] = useState<CsIntakeTrailer[]>(
+    initial?.trailers?.length ? initial.trailers : [],
   );
   const [hoPersons, setHoPersons] = useState<HomeownersPerson[]>(() => {
     // For homeowners, the additional insured persons are stored in the owners array
@@ -353,6 +393,19 @@ export default function IntakeForm({
     return Math.round((completed / Math.max(1, required.length)) * 100);
   }, [currentLob, drivers, isCommercial, showDrivers, showVehicles, submission, vehicles]);
 
+  /**
+   * Trucking replaces the flat field count with a weighted carrier-readiness
+   * score, because a high completion percentage was never proof a carrier could
+   * actually quote the risk. Null for every other line of business.
+   */
+  const truckingReadiness = useMemo(
+    () =>
+      currentLob === 'trucking'
+        ? computeTruckingReadiness({ submission, drivers, vehicles, trailers, commodities })
+        : null,
+    [commodities, currentLob, drivers, submission, trailers, vehicles],
+  );
+
   function patch(values: Partial<DraftSubmission>) {
     setSubmission((current) => ({ ...current, ...values }));
   }
@@ -381,8 +434,18 @@ export default function IntakeForm({
       if (!submission.business_name?.trim()) return 'Business name is required for Trucking.';
       if (!submission.dot_number?.trim()) return 'DOT number is required for Trucking.';
       if (!submission.insured_email?.trim()) return 'Email is required for Trucking intakes.';
-      if (!submission.operating_radius_miles) return 'Operating radius (miles) is required for Trucking.';
+      if (!submission.radius_band && !submission.operating_radius_miles) return 'Operating radius is required for Trucking.';
+      if (!submission.operation_types?.length) return 'Select at least one type of operation for Trucking.';
+      if (submission.radius_band === '500_plus' && !submission.farthest_states_cities?.trim()) {
+        return 'For a 500+ mile radius, list the farthest states or cities travelled.';
+      }
       if ((submission as Record<string, unknown>).cargo_coverage_desired === null || (submission as Record<string, unknown>).cargo_coverage_desired === undefined) return 'Cargo coverage desired (yes/no) is required for Trucking.';
+      // No carrier will quote without a requested Auto Liability limit, so this is
+      // the one coverage answer that does block submission.
+      if (!submission.auto_liability_limit) return 'Desired Auto Liability limit is required for Trucking.';
+      if (submission.auto_liability_limit === 'other' && !submission.auto_liability_limit_other?.trim()) {
+        return 'Enter the Auto Liability limit the customer is asking for.';
+      }
     }
 
     // Commercial GL validation
@@ -527,6 +590,8 @@ export default function IntakeForm({
             } as CsIntakeOwner))
           : owners,
         commodities,
+        // Trailers only exist for trucking; every other line sends an empty list.
+        currentLob === 'trucking' ? trailers : [],
         submission.version ?? null,
       );
       const id = saved.id;
@@ -577,6 +642,7 @@ export default function IntakeForm({
       setVehicles(fresh.vehicles);
       setOwners(fresh.owners ?? []);
       setCommodities(fresh.commodities ?? []);
+      setTrailers(fresh.trailers ?? []);
       setConflict(null);
       setNotice('Reloaded the latest saved information.');
     } catch (caught) {
@@ -606,7 +672,68 @@ export default function IntakeForm({
     cargo_type: submission.cargo_type || '',
     power_unit_count: submission.power_unit_count ?? null,
     operating_radius_miles: submission.operating_radius_miles ?? null,
+    operation_types: submission.operation_types ?? [],
+    operation_description: submission.operation_description || '',
+    desired_effective_date: submission.desired_effective_date || '',
+    interstate: submission.interstate ?? null,
+    for_hire: submission.for_hire ?? null,
+    radius_band: submission.radius_band || '',
+    farthest_states_cities: submission.farthest_states_cities || '',
+    states_of_operation: submission.states_of_operation || '',
   };
+
+  const requestedCoveragesData: RequestedCoveragesData = {
+    auto_liability_limit: submission.auto_liability_limit || '',
+    auto_liability_limit_other: submission.auto_liability_limit_other || '',
+    um_uim_limit: submission.um_uim_limit || '',
+    hired_auto: submission.hired_auto || '',
+    non_owned_auto: submission.non_owned_auto || '',
+    physical_damage_needed: submission.physical_damage_needed ?? null,
+    physical_damage_deductible_requested: submission.physical_damage_deductible_requested || '',
+    pd_comprehensive: submission.pd_comprehensive ?? null,
+    pd_collision: submission.pd_collision ?? null,
+    pd_specified_causes: submission.pd_specified_causes ?? null,
+    cargo_coverage_desired: submission.cargo_coverage_desired ?? null,
+    requested_cargo_limit: submission.requested_cargo_limit ?? null,
+    cargo_deductible: submission.cargo_deductible ?? null,
+    reefer_breakdown_requested: submission.reefer_breakdown_requested || '',
+    pulls_non_owned_trailers: submission.pulls_non_owned_trailers ?? null,
+    trailer_interchange_agreement: submission.trailer_interchange_agreement ?? null,
+    trailer_interchange_limit: submission.trailer_interchange_limit || '',
+    trailer_interchange_deductible: submission.trailer_interchange_deductible || '',
+    general_liability_requested: submission.general_liability_requested ?? null,
+    general_liability_limit: submission.general_liability_limit || '',
+    medical_payments_requested: submission.medical_payments_requested ?? null,
+    medical_payments_limit: submission.medical_payments_limit || '',
+    additional_coverages_other: submission.additional_coverages_other || '',
+  };
+
+  const underwritingData: UnderwritingData = {
+    uw_coverage_lapse: submission.uw_coverage_lapse ?? null,
+    uw_coverage_lapse_detail: submission.uw_coverage_lapse_detail || '',
+    uw_cancelled_nonrenewed: submission.uw_cancelled_nonrenewed ?? null,
+    uw_cancelled_nonrenewed_detail: submission.uw_cancelled_nonrenewed_detail || '',
+    uw_losses_3yr: submission.uw_losses_3yr ?? null,
+    uw_losses_3yr_detail: submission.uw_losses_3yr_detail || '',
+    uw_major_al_loss: submission.uw_major_al_loss ?? null,
+    uw_major_al_loss_detail: submission.uw_major_al_loss_detail || '',
+    hazmat: submission.hazmat || '',
+    hazmat_detail: submission.hazmat_detail || '',
+    uw_owner_operators: submission.uw_owner_operators ?? null,
+    uw_owner_operators_detail: submission.uw_owner_operators_detail || '',
+    owner_operator_count: submission.owner_operator_count ?? null,
+  };
+
+  /**
+   * Whether Refrigeration Breakdown is worth asking about.
+   *
+   * Driven by the refrigerated answer or a refrigerated commodity selection, so
+   * the question only appears when it actually applies.
+   */
+  const refrigerationApplies =
+    submission.refrigerated === true
+    || submission.temperature_controlled_equipment === true
+    || commodities.some((row) => row.category === 'refrigerated_frozen');
 
   const commercialGlData: CommercialGlData = {
     business_name: submission.business_name || '',
@@ -882,11 +1009,83 @@ export default function IntakeForm({
               </button>
             )}
           </div>
-          <div className="min-w-36 rounded-2xl bg-white p-4 text-center ring-1 ring-[#c9d5e9]">
-            <p className="text-3xl font-black text-[#223f7a]">{completeness}%</p>
-            <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Complete</p>
-          </div>
+          {truckingReadiness ? (
+            <div className="min-w-44 rounded-2xl bg-white p-4 text-center ring-1 ring-[#c9d5e9]">
+              <p
+                className={`text-3xl font-black ${
+                  truckingReadiness.score >= 90
+                    ? 'text-emerald-600'
+                    : truckingReadiness.score >= 70
+                      ? 'text-[#223f7a]'
+                      : 'text-amber-600'
+                }`}
+              >
+                {truckingReadiness.score}%
+              </p>
+              <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                Carrier Ready
+              </p>
+              {truckingReadiness.missingEssentials.length + truckingReadiness.attentionItems.length > 0 ? (
+                <button
+                  type="button"
+                  className="mt-2 text-xs font-black text-[#223f7a] hover:underline"
+                  onClick={() => setShowMissingItems((current) => !current)}
+                >
+                  {showMissingItems ? 'Hide' : 'Review'} Missing Items (
+                  {truckingReadiness.missingEssentials.length + truckingReadiness.attentionItems.length})
+                </button>
+              ) : (
+                <p className="mt-2 text-xs font-black text-emerald-600">Ready to submit</p>
+              )}
+            </div>
+          ) : (
+            <div className="min-w-36 rounded-2xl bg-white p-4 text-center ring-1 ring-[#c9d5e9]">
+              <p className="text-3xl font-black text-[#223f7a]">{completeness}%</p>
+              <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Complete</p>
+            </div>
+          )}
         </div>
+
+        {/* Readiness detail — never blocks a save, only tells the agent what is still missing */}
+        {truckingReadiness && showMissingItems && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {truckingReadiness.missingEssentials.length > 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-xs font-black uppercase tracking-wider text-amber-800">
+                  Needed for a carrier submission
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {truckingReadiness.missingEssentials.map((item) => (
+                    <li key={`${item.section}-${item.label}`} className="text-sm font-bold text-amber-900">
+                      {item.label}
+                      <span className="ml-1 font-semibold text-amber-700">— {item.section}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {truckingReadiness.attentionItems.length > 0 && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-500">
+                  Worth fixing before you send it
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {truckingReadiness.attentionItems.map((item) => (
+                    <li key={`${item.section}-${item.label}`} className="text-sm font-bold text-slate-700">
+                      {item.label}
+                      <span className="ml-1 font-semibold text-slate-500">— {item.section}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <p className="text-xs font-semibold text-slate-500 sm:col-span-2">
+              None of this stops you from saving a draft. Save whenever you need to and come back.
+            </p>
+          </div>
+        )}
       </section>
 
       {/* Walk-in office flag */}
@@ -1030,7 +1229,61 @@ export default function IntakeForm({
             if ('cargo_type' in truckPatch) (mapped as Record<string, unknown>).cargo_type = truckPatch.cargo_type || null;
             if ('power_unit_count' in truckPatch) (mapped as Record<string, unknown>).power_unit_count = truckPatch.power_unit_count;
             if ('operating_radius_miles' in truckPatch) mapped.operating_radius_miles = truckPatch.operating_radius_miles;
+            // ── Operations (v1.19.2) ──────────────────────────────────────
+            if ('operation_types' in truckPatch) mapped.operation_types = truckPatch.operation_types?.length ? truckPatch.operation_types : null;
+            if ('operation_description' in truckPatch) mapped.operation_description = truckPatch.operation_description || null;
+            if ('desired_effective_date' in truckPatch) mapped.desired_effective_date = truckPatch.desired_effective_date || null;
+            if ('interstate' in truckPatch) mapped.interstate = truckPatch.interstate;
+            if ('for_hire' in truckPatch) mapped.for_hire = truckPatch.for_hire;
+            if ('radius_band' in truckPatch) mapped.radius_band = truckPatch.radius_band || null;
+            if ('farthest_states_cities' in truckPatch) mapped.farthest_states_cities = truckPatch.farthest_states_cities || null;
+            if ('states_of_operation' in truckPatch) mapped.states_of_operation = truckPatch.states_of_operation || null;
             patch(mapped);
+          }}
+          disabled={disabled}
+        />
+      )}
+
+      {/* Requested Coverages — immediately after Motor Carrier Details (Trucking only) */}
+      {currentLob === 'trucking' && (
+        <RequestedCoveragesSection
+          data={requestedCoveragesData}
+          showRefrigerationBreakdown={refrigerationApplies}
+          maxLoadValue={submission.max_load_value ?? null}
+          onChange={(covPatch) => {
+            const mapped: Record<string, unknown> = {};
+            if ('auto_liability_limit' in covPatch) mapped.auto_liability_limit = covPatch.auto_liability_limit || null;
+            if ('auto_liability_limit_other' in covPatch) mapped.auto_liability_limit_other = covPatch.auto_liability_limit_other || null;
+            if ('um_uim_limit' in covPatch) mapped.um_uim_limit = covPatch.um_uim_limit || null;
+            if ('hired_auto' in covPatch) mapped.hired_auto = covPatch.hired_auto || null;
+            if ('non_owned_auto' in covPatch) mapped.non_owned_auto = covPatch.non_owned_auto || null;
+            if ('physical_damage_needed' in covPatch) mapped.physical_damage_needed = covPatch.physical_damage_needed;
+            if ('physical_damage_deductible_requested' in covPatch) mapped.physical_damage_deductible_requested = covPatch.physical_damage_deductible_requested || null;
+            if ('pd_comprehensive' in covPatch) mapped.pd_comprehensive = covPatch.pd_comprehensive;
+            if ('pd_collision' in covPatch) mapped.pd_collision = covPatch.pd_collision;
+            if ('pd_specified_causes' in covPatch) mapped.pd_specified_causes = covPatch.pd_specified_causes;
+            if ('cargo_coverage_desired' in covPatch) mapped.cargo_coverage_desired = covPatch.cargo_coverage_desired;
+            if ('requested_cargo_limit' in covPatch) mapped.requested_cargo_limit = covPatch.requested_cargo_limit;
+            if ('cargo_deductible' in covPatch) mapped.cargo_deductible = covPatch.cargo_deductible;
+            if ('reefer_breakdown_requested' in covPatch) mapped.reefer_breakdown_requested = covPatch.reefer_breakdown_requested || null;
+            if ('pulls_non_owned_trailers' in covPatch) mapped.pulls_non_owned_trailers = covPatch.pulls_non_owned_trailers;
+            if ('trailer_interchange_agreement' in covPatch) mapped.trailer_interchange_agreement = covPatch.trailer_interchange_agreement;
+            if ('trailer_interchange_limit' in covPatch) mapped.trailer_interchange_limit = covPatch.trailer_interchange_limit || null;
+            if ('trailer_interchange_deductible' in covPatch) mapped.trailer_interchange_deductible = covPatch.trailer_interchange_deductible || null;
+            if ('general_liability_requested' in covPatch) mapped.general_liability_requested = covPatch.general_liability_requested;
+            if ('general_liability_limit' in covPatch) mapped.general_liability_limit = covPatch.general_liability_limit || null;
+            if ('medical_payments_requested' in covPatch) mapped.medical_payments_requested = covPatch.medical_payments_requested;
+            if ('medical_payments_limit' in covPatch) mapped.medical_payments_limit = covPatch.medical_payments_limit || null;
+            if ('additional_coverages_other' in covPatch) mapped.additional_coverages_other = covPatch.additional_coverages_other || null;
+            // Mirror the Auto Liability limit into the legacy `liability_limit`
+            // text column so the requested_coverage rollup and existing
+            // reporting keep seeing a value.
+            if ('auto_liability_limit' in covPatch || 'auto_liability_limit_other' in covPatch) {
+              const nextLimit = ('auto_liability_limit' in covPatch ? covPatch.auto_liability_limit : submission.auto_liability_limit) || '';
+              const nextOther = ('auto_liability_limit_other' in covPatch ? covPatch.auto_liability_limit_other : submission.auto_liability_limit_other) || '';
+              mapped.liability_limit = autoLiabilityLimitLabel(nextLimit, nextOther) || null;
+            }
+            patch(mapped as Partial<DraftSubmission>);
           }}
           disabled={disabled}
         />
@@ -1067,7 +1320,40 @@ export default function IntakeForm({
               patch(mapped as Partial<DraftSubmission>);
             }
           }}
-          cargoRequested={false}
+          cargoRequested={submission.cargo_coverage_desired === true}
+          disabled={disabled}
+        />
+      )}
+
+      {/* Underwriting / Eligibility (Trucking only) */}
+      {currentLob === 'trucking' && (
+        <UnderwritingSection
+          data={underwritingData}
+          onChange={(uwPatch) => {
+            const mapped: Record<string, unknown> = {};
+            if ('uw_coverage_lapse' in uwPatch) {
+              mapped.uw_coverage_lapse = uwPatch.uw_coverage_lapse;
+              // Mirror into the legacy prior_lapse boolean so existing
+              // reporting and the quote-center view keep seeing the answer.
+              mapped.prior_lapse = uwPatch.uw_coverage_lapse;
+            }
+            if ('uw_coverage_lapse_detail' in uwPatch) {
+              mapped.uw_coverage_lapse_detail = uwPatch.uw_coverage_lapse_detail || null;
+              mapped.prior_lapse_explanation = uwPatch.uw_coverage_lapse_detail || null;
+            }
+            if ('uw_cancelled_nonrenewed' in uwPatch) mapped.uw_cancelled_nonrenewed = uwPatch.uw_cancelled_nonrenewed;
+            if ('uw_cancelled_nonrenewed_detail' in uwPatch) mapped.uw_cancelled_nonrenewed_detail = uwPatch.uw_cancelled_nonrenewed_detail || null;
+            if ('uw_losses_3yr' in uwPatch) mapped.uw_losses_3yr = uwPatch.uw_losses_3yr;
+            if ('uw_losses_3yr_detail' in uwPatch) mapped.uw_losses_3yr_detail = uwPatch.uw_losses_3yr_detail || null;
+            if ('uw_major_al_loss' in uwPatch) mapped.uw_major_al_loss = uwPatch.uw_major_al_loss;
+            if ('uw_major_al_loss_detail' in uwPatch) mapped.uw_major_al_loss_detail = uwPatch.uw_major_al_loss_detail || null;
+            if ('hazmat' in uwPatch) mapped.hazmat = uwPatch.hazmat || null;
+            if ('hazmat_detail' in uwPatch) mapped.hazmat_detail = uwPatch.hazmat_detail || null;
+            if ('uw_owner_operators' in uwPatch) mapped.uw_owner_operators = uwPatch.uw_owner_operators;
+            if ('uw_owner_operators_detail' in uwPatch) mapped.uw_owner_operators_detail = uwPatch.uw_owner_operators_detail || null;
+            if ('owner_operator_count' in uwPatch) mapped.owner_operator_count = uwPatch.owner_operator_count;
+            patch(mapped as Partial<DraftSubmission>);
+          }}
           disabled={disabled}
         />
       )}
@@ -1242,14 +1528,49 @@ export default function IntakeForm({
                 <Field label="Years licensed"><input type="number" min="0" className={ui.input} disabled={disabled} value={driver.years_licensed ?? ''} onChange={(event) => patchDriver(index, { years_licensed: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
                 {currentLob === 'trucking' && (
                   <>
-                    <Field label="CDL"><select className={ui.select} disabled={disabled} value={driver.cdl ? 'yes' : 'no'} onChange={(event) => patchDriver(index, { cdl: event.target.value === 'yes', cdl_date: event.target.value === 'no' ? null : driver.cdl_date })}><option value="no">No</option><option value="yes">Yes</option></select></Field>
+                    <Field label="CDL"><select className={ui.select} disabled={disabled} value={driver.cdl ? 'yes' : 'no'} onChange={(event) => patchDriver(index, { cdl: event.target.value === 'yes', cdl_date: event.target.value === 'no' ? null : driver.cdl_date, cdl_years_experience: event.target.value === 'no' ? null : driver.cdl_years_experience })}><option value="no">No</option><option value="yes">Yes</option></select></Field>
                     {driver.cdl && (
-                      <Field label="CDL Date"><DatePicker value={driver.cdl_date || ''} onChange={(value) => patchDriver(index, { cdl_date: value || null })} disabled={disabled} placeholder="CDL issue date" /></Field>
+                      <>
+                        <Field label="CDL Date"><DatePicker value={driver.cdl_date || ''} onChange={(value) => patchDriver(index, { cdl_date: value || null })} disabled={disabled} placeholder="CDL issue date" /></Field>
+                        <Field label="Years CDL experience" required hint="Counts from the full CDL, not the permit. Carriers price on this.">
+                          <input type="number" min="0" max="70" className={ui.input} disabled={disabled} value={driver.cdl_years_experience ?? ''} onChange={(event) => patchDriver(index, { cdl_years_experience: event.target.value === '' ? null : Number(event.target.value) })} placeholder="e.g. 5" />
+                        </Field>
+                      </>
+                    )}
+                    <Field label="Owner / operator" hint="Drives their own truck under the motor carrier's authority.">
+                      <select className={ui.select} disabled={disabled} value={driver.owner_operator ? 'yes' : 'no'} onChange={(event) => patchDriver(index, { owner_operator: event.target.value === 'yes' })}><option value="no">No</option><option value="yes">Yes</option></select>
+                    </Field>
+                    <Field label="Accidents in past 36 months">
+                      <select className={ui.select} disabled={disabled} value={driver.accidents_36mo ? 'yes' : 'no'} onChange={(event) => { const yes = event.target.value === 'yes'; patchDriver(index, { accidents_36mo: yes, accidents_detail: yes ? driver.accidents_detail : null }); }}><option value="no">No</option><option value="yes">Yes</option></select>
+                    </Field>
+                    {driver.accidents_36mo && (
+                      <div className="sm:col-span-2 lg:col-span-3">
+                        <Field label="Accident details" required hint="Date, at fault or not, and what happened — one per line.">
+                          <textarea rows={2} className={ui.textarea} disabled={disabled} value={driver.accidents_detail || ''} onChange={(event) => patchDriver(index, { accidents_detail: event.target.value || null })} placeholder="03/2024 — rear-ended at a light, not at fault, no injuries" />
+                        </Field>
+                      </div>
+                    )}
+                    <Field label="Violations in past 36 months">
+                      <select className={ui.select} disabled={disabled} value={driver.violations_36mo ? 'yes' : 'no'} onChange={(event) => { const yes = event.target.value === 'yes'; patchDriver(index, { violations_36mo: yes, violations_detail: yes ? driver.violations_detail : null }); }}><option value="no">No</option><option value="yes">Yes</option></select>
+                    </Field>
+                    {driver.violations_36mo && (
+                      <div className="sm:col-span-2 lg:col-span-3">
+                        <Field label="Violation details" required hint="Date and violation type — one per line.">
+                          <textarea rows={2} className={ui.textarea} disabled={disabled} value={driver.violations_detail || ''} onChange={(event) => patchDriver(index, { violations_detail: event.target.value || null })} placeholder="07/2023 — speeding 12 over" />
+                        </Field>
+                      </div>
                     )}
                   </>
                 )}
               </div>
-              <label className={`${ui.checkboxRow} mt-4`}><input type="checkbox" disabled={disabled} checked={driver.sr22_required} onChange={(event) => patchDriver(index, { sr22_required: event.target.checked })} /> SR-22 required</label>
+              {currentLob === 'trucking' ? (
+                <details className="mt-4" open={driver.sr22_required}>
+                  <summary className="cursor-pointer text-xs font-black uppercase tracking-wider text-slate-500">Filings (rarely needed)</summary>
+                  <label className={`${ui.checkboxRow} mt-2`}><input type="checkbox" disabled={disabled} checked={driver.sr22_required} onChange={(event) => patchDriver(index, { sr22_required: event.target.checked })} /> SR-22 required</label>
+                </details>
+              ) : (
+                <label className={`${ui.checkboxRow} mt-4`}><input type="checkbox" disabled={disabled} checked={driver.sr22_required} onChange={(event) => patchDriver(index, { sr22_required: event.target.checked })} /> SR-22 required</label>
+              )}
             </div>
           ))}
         </div>
@@ -1283,7 +1604,26 @@ export default function IntakeForm({
                 <Field label="Model" required><input className={ui.input} disabled={disabled} value={vehicle.model || ''} onChange={(event) => patchVehicle(index, { model: event.target.value || null })} /></Field>
                 <Field label="Ownership"><select className={ui.select} disabled={disabled} value={vehicle.ownership || 'owned'} onChange={(event) => patchVehicle(index, { ownership: event.target.value })}><option value="owned">Owned</option><option value="financed">Financed</option><option value="leased">Leased</option></select></Field>
                 <Field label="Lienholder"><input className={ui.input} disabled={disabled} value={vehicle.lienholder || ''} onChange={(event) => patchVehicle(index, { lienholder: event.target.value || null })} /></Field>
-                <Field label="Use"><select className={ui.select} disabled={disabled} value={vehicle.usage || 'commute'} onChange={(event) => patchVehicle(index, { usage: event.target.value })}><option value="commute">Commute</option><option value="pleasure">Pleasure</option><option value="business">Business</option><option value="delivery">Delivery</option><option value="rideshare">Rideshare</option></select></Field>
+                {currentLob === 'trucking' ? (
+                  <Field label="Use" hint="How this unit is actually operated.">
+                    <select className={ui.select} disabled={disabled} value={TRUCK_USAGE_KEYS.includes(vehicle.usage || '') ? (vehicle.usage as string) : ''} onChange={(event) => patchVehicle(index, { usage: event.target.value })}>
+                      <option value="">Select</option>
+                      {TRUCK_USAGE_OPTIONS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+                    </select>
+                  </Field>
+                ) : (
+                  <Field label="Use"><select className={ui.select} disabled={disabled} value={vehicle.usage || 'commute'} onChange={(event) => patchVehicle(index, { usage: event.target.value })}><option value="commute">Commute</option><option value="pleasure">Pleasure</option><option value="business">Business</option><option value="delivery">Delivery</option><option value="rideshare">Rideshare</option></select></Field>
+                )}
+                {vehicle.ownership === 'leased' && (
+                  <>
+                    <Field label="Lessor name" hint="Usually needs to be listed as an additional insured or loss payee.">
+                      <input className={ui.input} disabled={disabled} value={vehicle.lessor_name || ''} onChange={(event) => patchVehicle(index, { lessor_name: event.target.value || null })} />
+                    </Field>
+                    <Field label="Lessor address">
+                      <input className={ui.input} disabled={disabled} value={vehicle.lessor_address || ''} onChange={(event) => patchVehicle(index, { lessor_address: event.target.value || null })} />
+                    </Field>
+                  </>
+                )}
                 <Field label="Annual mileage"><input type="number" min="0" className={ui.input} disabled={disabled} value={vehicle.annual_mileage ?? ''} onChange={(event) => patchVehicle(index, { annual_mileage: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
                 <Field label="Garaging ZIP"><input className={ui.input} disabled={disabled} value={vehicle.garaging_zip || submission.addr_zip || ''} onChange={(event) => patchVehicle(index, { garaging_zip: event.target.value || null })} /></Field>
                 {(currentLob === 'personal_auto' || currentLob === 'commercial_auto') && (
@@ -1292,8 +1632,12 @@ export default function IntakeForm({
                 {currentLob === 'trucking' && (
                   <>
                     <Field label="Truck Type"><select className={ui.select} disabled={disabled} value={vehicle.truck_type || ''} onChange={(event) => patchVehicle(index, { truck_type: event.target.value || null })}><option value="">Select</option><option value="box_truck">Box Truck</option><option value="truck_tractor">Truck Tractor</option><option value="sprinter_van">Sprinter Van</option><option value="flatbed">Flatbed</option><option value="reefer">Reefer</option><option value="tanker">Tanker</option><option value="dump_truck">Dump Truck</option><option value="car_hauler">Car Hauler</option><option value="step_van">Step Van</option><option value="other">Other</option></select></Field>
-                    <Field label="Physical Damage Value" hint="Desired coverage amount for this truck"><input type="number" min="0" className={ui.input} disabled={disabled} value={vehicle.physical_damage_value ?? ''} onChange={(event) => patchVehicle(index, { physical_damage_value: event.target.value === '' ? null : Number(event.target.value) })} placeholder="e.g. 75000" /></Field>
-                    <Field label="Physical Damage Deductible"><input type="number" min="0" className={ui.input} disabled={disabled} value={vehicle.physical_damage_deductible ?? ''} onChange={(event) => patchVehicle(index, { physical_damage_deductible: event.target.value === '' ? null : Number(event.target.value) })} placeholder="e.g. 2500" /></Field>
+                    {submission.physical_damage_needed !== false && (
+                      <>
+                        <Field label="Physical Damage Value" hint="Actual cash value of this truck. Carriers rate Physical Damage on this."><input type="number" min="0" className={ui.input} disabled={disabled} value={vehicle.physical_damage_value ?? ''} onChange={(event) => patchVehicle(index, { physical_damage_value: event.target.value === '' ? null : Number(event.target.value) })} placeholder="e.g. 75000" /></Field>
+                        <Field label="Physical Damage Deductible"><input type="number" min="0" className={ui.input} disabled={disabled} value={vehicle.physical_damage_deductible ?? ''} onChange={(event) => patchVehicle(index, { physical_damage_deductible: event.target.value === '' ? null : Number(event.target.value) })} placeholder="e.g. 2500" /></Field>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -1302,6 +1646,19 @@ export default function IntakeForm({
         </div>
         {!readOnly ? <button type="button" className={`${ui.btnSecondary} mt-4`} onClick={() => setVehicles((current) => [...current, emptyVehicle(current.length + 1)])}><Plus className="h-4 w-4" /> Add another vehicle</button> : null}
       </Section>
+      )}
+
+      {/* Trailer schedule (Trucking only) — trailers rate separately from power units */}
+      {currentLob === 'trucking' && (
+        <TrailersSection
+          ownsOrLeasesTrailers={submission.owns_or_leases_trailers ?? null}
+          onOwnsChange={(value) => patch({ owns_or_leases_trailers: value } as Partial<DraftSubmission>)}
+          trailers={trailers}
+          onTrailersChange={setTrailers}
+          pullsNonOwnedTrailers={submission.pulls_non_owned_trailers ?? null}
+          readOnly={readOnly}
+          disabled={disabled}
+        />
       )}
 
       {currentLob !== 'non_owners' && (
@@ -1313,9 +1670,18 @@ export default function IntakeForm({
           <Field label="Expiration date"><DatePicker value={submission.current_expiration || ''} onChange={(value) => patch({ current_expiration: value || null })} disabled={disabled} placeholder="Expiration date" /></Field>
           <Field label="Continuous coverage (months)"><input type="number" min="0" className={ui.input} disabled={disabled} value={submission.months_continuous_coverage ?? ''} onChange={(event) => patch({ months_continuous_coverage: event.target.value === '' ? null : Number(event.target.value) })} /></Field>
         </div>
-        <div className="mt-4 flex flex-wrap gap-5">
+        <div className="mt-4 flex flex-wrap items-center gap-5">
           <label className={ui.checkboxRow}><input type="checkbox" disabled={disabled} checked={submission.prior_insurance === true} onChange={(event) => patch({ prior_insurance: event.target.checked })} /> Has prior insurance</label>
-          <label className={ui.checkboxRow}><input type="checkbox" disabled={disabled} checked={submission.prior_lapse === true} onChange={(event) => patch({ prior_lapse: event.target.checked })} /> Has a lapse in coverage</label>
+          {/* Trucking asks about lapses once, in Underwriting / Eligibility, where
+              the explanation is captured too. Every other line keeps the simple flag. */}
+          {currentLob === 'trucking' ? (
+            <span className="text-xs font-semibold text-slate-400">
+              Coverage lapse is recorded in Underwriting / Eligibility
+              {submission.uw_coverage_lapse === true ? ' — answered Yes' : submission.uw_coverage_lapse === false ? ' — answered No' : ''}.
+            </span>
+          ) : (
+            <label className={ui.checkboxRow}><input type="checkbox" disabled={disabled} checked={submission.prior_lapse === true} onChange={(event) => patch({ prior_lapse: event.target.checked })} /> Has a lapse in coverage</label>
+          )}
         </div>
         <div className="mt-4"><Field label="Notes for Sales"><textarea rows={4} className={ui.textarea} disabled={disabled} value={submission.csr_notes || ''} onChange={(event) => patch({ csr_notes: event.target.value || null })} placeholder="Anything important that is not already captured above." /></Field></div>
       </Section>

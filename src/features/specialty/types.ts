@@ -287,8 +287,11 @@ export interface LinkedIntake {
   current_expiration: string | null;
   prior_insurance: boolean | null;
   prior_lapse: boolean | null;
+  months_continuous_coverage: number | null;
   csr_notes: string | null;
   business_name: string | null;
+  /** Federal EIN. Printed as FEIN on carrier applications. */
+  ein: string | null;
   business_type: string | null;
   years_in_business: number | null;
   dot_number: string | null;
@@ -332,9 +335,53 @@ export interface LinkedIntake {
   high_value_cargo_flag: boolean | null;
   cargo_coverage_desired: boolean | null;
   excluded_cargo: Record<string, string> | null;
+  // ── Operations (v1.19.2) ──────────────────────────────────────────────────
+  operation_types: string[] | null;
+  operation_description: string | null;
+  desired_effective_date: string | null;
+  interstate: boolean | null;
+  for_hire: boolean | null;
+  radius_band: string | null;
+  farthest_states_cities: string | null;
+  // ── Requested Coverages (v1.19.2) ─────────────────────────────────────────
+  auto_liability_limit: string | null;
+  auto_liability_limit_other: string | null;
+  um_uim_limit: string | null;
+  hired_auto: string | null;
+  non_owned_auto: string | null;
+  physical_damage_needed: boolean | null;
+  physical_damage_deductible_requested: string | null;
+  pd_comprehensive: boolean | null;
+  pd_collision: boolean | null;
+  pd_specified_causes: boolean | null;
+  pulls_non_owned_trailers: boolean | null;
+  trailer_interchange_agreement: boolean | null;
+  trailer_interchange_limit: string | null;
+  trailer_interchange_deductible: string | null;
+  general_liability_requested: boolean | null;
+  general_liability_limit: string | null;
+  medical_payments_requested: boolean | null;
+  medical_payments_limit: string | null;
+  additional_coverages_other: string | null;
+  // ── Underwriting / Eligibility (v1.19.2) ──────────────────────────────────
+  uw_coverage_lapse: boolean | null;
+  uw_coverage_lapse_detail: string | null;
+  uw_cancelled_nonrenewed: boolean | null;
+  uw_cancelled_nonrenewed_detail: string | null;
+  uw_losses_3yr: boolean | null;
+  uw_losses_3yr_detail: string | null;
+  uw_major_al_loss: boolean | null;
+  uw_major_al_loss_detail: string | null;
+  hazmat_detail: string | null;
+  uw_owner_operators: boolean | null;
+  uw_owner_operators_detail: string | null;
+  owner_operator_count: number | null;
+  owns_or_leases_trailers: boolean | null;
+  prior_lapse_explanation: string | null;
   commodities: IntakeCommodityRow[];
   drivers: IntakeDriverRow[];
   vehicles: IntakeVehicleRow[];
+  trailers: IntakeTrailerRow[];
   owners: Record<string, unknown>[];
 }
 
@@ -342,6 +389,23 @@ export interface IntakeCommodityRow {
   category: string;
   frequency: string;
   is_primary: boolean;
+  percent_hauled: number | null;
+  average_value: number | null;
+  maximum_value: number | null;
+}
+
+/** A trailer the insured owns or leases. Feeds the carrier Trailer Information table. */
+export interface IntakeTrailerRow {
+  id?: string;
+  position: number;
+  year: number | null;
+  make: string | null;
+  trailer_type: string | null;
+  vin: string | null;
+  actual_cash_value: number | null;
+  ownership: string | null;
+  lessor_name: string | null;
+  lessor_address: string | null;
 }
 
 export interface IntakeVehicleRow {
@@ -360,6 +424,9 @@ export interface IntakeVehicleRow {
   truck_type: string | null;
   physical_damage_value: number | null;
   physical_damage_deductible: number | null;
+  coverage_type: string | null;
+  lessor_name: string | null;
+  lessor_address: string | null;
 }
 
 export interface IntakeDriverRow {
@@ -377,6 +444,12 @@ export interface IntakeDriverRow {
   sr22_required: boolean;
   cdl: boolean;
   cdl_date: string | null;
+  cdl_years_experience: number | null;
+  owner_operator: boolean | null;
+  accidents_36mo: boolean | null;
+  accidents_detail: string | null;
+  violations_36mo: boolean | null;
+  violations_detail: string | null;
 }
 
 export interface WorkflowStage {

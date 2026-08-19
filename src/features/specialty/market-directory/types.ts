@@ -222,8 +222,14 @@ export interface TruckingDataPacket {
   owners: TruckingOwner[];
   drivers: TruckingDriver[];
   vehicles: TruckingVehicle[];
+  /** Scheduled trailers (v1.19.2). Rated separately from power units. */
+  trailers: TruckingTrailer[];
+  /** Per-commodity detail (v1.19.2). `operations.commodities` stays the summary string. */
+  commodities: TruckingCommodity[];
   operations: TruckingOperations;
   coverages: TruckingCoverages;
+  /** The standard carrier eligibility answers (v1.19.2). */
+  underwriting: TruckingUnderwriting;
   prior_insurance: TruckingPriorInsurance;
 }
 
@@ -261,13 +267,30 @@ export interface TruckingDriver {
   position: number;
   first_name: string | null;
   last_name: string | null;
+  /** Convenience: "First Last", already joined for form rows. */
+  full_name: string | null;
   dob: string | null;
   license_number: string | null;
   license_state: string | null;
   license_status: string | null;
   years_licensed: number | null;
+  /** CDL years where known, falling back to years licensed. */
   experience: number | null;
   sr22_required: boolean;
+  // ── v1.19.2 ───────────────────────────────────────────────────────────────
+  cdl: boolean | null;
+  cdl_date: string | null;
+  cdl_years_experience: number | null;
+  owner_operator: boolean | null;
+  accidents_36mo: boolean | null;
+  accidents_detail: string | null;
+  violations_36mo: boolean | null;
+  violations_detail: string | null;
+  /**
+   * Accident and violation history combined into one line, because the carrier
+   * forms give a single narrow column for it.
+   */
+  violation_accident_summary: string | null;
 }
 
 export interface TruckingVehicle {
@@ -275,14 +298,71 @@ export interface TruckingVehicle {
   year: number | null;
   make: string | null;
   model: string | null;
+  /** Body type as printed on carrier forms (Tractor, Box Truck, Flatbed...). */
   type: string | null;
   vin: string | null;
+  /** Actual cash value. Drives Physical Damage rating. */
   value: number | null;
   gvw: number | null;
   radius: number | null;
+  // ── v1.19.2 ───────────────────────────────────────────────────────────────
+  /** How the unit is operated (Long Haul, Regional, Local...). */
+  usage: string | null;
+  /** Owned / Financed / Leased, already title-cased for the form. */
+  ownership: string | null;
+  lessor_name: string | null;
+  lessor_address: string | null;
+  physical_damage_deductible: number | null;
+  annual_mileage: number | null;
+  garaging_zip: string | null;
+}
+
+export interface TruckingTrailer {
+  position: number;
+  year: number | null;
+  make: string | null;
+  /** Body type label (Dry Van, Flatbed, Reefer...). */
+  type: string | null;
+  vin: string | null;
+  value: number | null;
+  ownership: string | null;
+  lessor_name: string | null;
+  lessor_address: string | null;
+}
+
+export interface TruckingCommodity {
+  /** Human label, not the stored key. */
+  description: string | null;
+  frequency: string | null;
+  is_primary: boolean;
+  percent_hauled: number | null;
+  average_value: number | null;
+  maximum_value: number | null;
+}
+
+/**
+ * The eligibility answers every trucking carrier asks. `*_detail` is only
+ * meaningful when its answer is Yes.
+ */
+export interface TruckingUnderwriting {
+  coverage_lapse: boolean | null;
+  coverage_lapse_detail: string | null;
+  cancelled_nonrenewed: boolean | null;
+  cancelled_nonrenewed_detail: string | null;
+  losses_3yr: boolean | null;
+  losses_3yr_detail: string | null;
+  major_al_loss: boolean | null;
+  major_al_loss_detail: string | null;
+  /** Yes / No / Not Sure, as stored. */
+  hazmat: string | null;
+  hazmat_detail: string | null;
+  owner_operators: boolean | null;
+  owner_operators_detail: string | null;
+  owner_operator_count: number | null;
 }
 
 export interface TruckingOperations {
+  /** Summary string of what is hauled. See `commodities` for the breakdown. */
   commodities: string | null;
   radius: number | null;
   states: string | null;
@@ -292,6 +372,17 @@ export interface TruckingOperations {
   interstate: boolean | null;
   for_hire: boolean | null;
   owner_operators: number | null;
+  // ── v1.19.2 ───────────────────────────────────────────────────────────────
+  /** Joined operation-type labels (Long Haul, Dump, Auto Hauling...). */
+  operation_types: string | null;
+  operation_description: string | null;
+  /** The radius band label, e.g. "201-300 miles". */
+  radius_band: string | null;
+  farthest_states_cities: string | null;
+  desired_effective_date: string | null;
+  power_unit_count: number | null;
+  /** True when the customer pulls trailers they do not own. */
+  pulls_non_owned_trailers: boolean | null;
 }
 
 export interface TruckingCoverages {
@@ -304,6 +395,28 @@ export interface TruckingCoverages {
   comprehensive_deductible: string | null;
   collision_deductible: string | null;
   medical_payments: string | null;
+  // ── v1.19.2 ───────────────────────────────────────────────────────────────
+  um_uim_limit: string | null;
+  /** Yes / No / Not Sure. */
+  hired_auto: string | null;
+  non_owned_auto: string | null;
+  /** The explicit answer, rather than inferring PD from vehicle values. */
+  physical_damage_requested: boolean | null;
+  physical_damage_deductible: string | null;
+  pd_comprehensive: boolean | null;
+  pd_collision: boolean | null;
+  pd_specified_causes: boolean | null;
+  trailer_interchange_limit: string | null;
+  trailer_interchange_deductible: string | null;
+  /** Whether a written interchange agreement is in place. */
+  trailer_interchange_agreement: boolean | null;
+  general_liability_limit: string | null;
+  medical_payments_requested: boolean | null;
+  additional_coverages_other: string | null;
+  /** Highest single-load value, used to sanity-check the cargo limit. */
+  max_load_value: number | null;
+  typical_load_value: number | null;
+  reefer_breakdown_requested: string | null;
 }
 
 export interface TruckingPriorInsurance {
@@ -312,4 +425,7 @@ export interface TruckingPriorInsurance {
   premium: number | null;
   expiration: string | null;
   lapse: boolean | null;
+  /** Why the coverage lapsed. Carriers always ask when lapse is Yes. */
+  lapse_explanation: string | null;
+  months_continuous_coverage: number | null;
 }

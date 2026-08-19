@@ -111,6 +111,56 @@ export interface CsIntakeSubmission {
   machinery_max_value: number | null;
   excluded_cargo: Record<string, string> | null;
   cargo_coverage_desired: boolean | null;
+  // ── Trucking — Operations (v1.19.2) ───────────────────────────────────────
+  /** Selected operation types. `business_type` is kept in sync with the joined labels. */
+  operation_types: string[] | null;
+  operation_description: string | null;
+  desired_effective_date: string | null;
+  interstate: boolean | null;
+  for_hire: boolean | null;
+  /** Banded radius. `operating_radius_miles` holds a representative number derived from this. */
+  radius_band: string | null;
+  farthest_states_cities: string | null;
+  // ── Trucking — Requested Coverages: Auto Liability (v1.19.2) ──────────────
+  auto_liability_limit: string | null;
+  auto_liability_limit_other: string | null;
+  um_uim_limit: string | null;
+  hired_auto: string | null;
+  non_owned_auto: string | null;
+  // ── Trucking — Requested Coverages: Physical Damage (v1.19.2) ─────────────
+  physical_damage_needed: boolean | null;
+  physical_damage_deductible_requested: string | null;
+  pd_comprehensive: boolean | null;
+  pd_collision: boolean | null;
+  pd_specified_causes: boolean | null;
+  // ── Trucking — Requested Coverages: Trailer Interchange (v1.19.2) ─────────
+  pulls_non_owned_trailers: boolean | null;
+  trailer_interchange_agreement: boolean | null;
+  trailer_interchange_limit: string | null;
+  trailer_interchange_deductible: string | null;
+  // ── Trucking — Additional coverages (v1.19.2) ─────────────────────────────
+  general_liability_requested: boolean | null;
+  general_liability_limit: string | null;
+  medical_payments_requested: boolean | null;
+  medical_payments_limit: string | null;
+  additional_coverages_other: string | null;
+  // ── Trucking — Underwriting / Eligibility (v1.19.2) ───────────────────────
+  uw_coverage_lapse: boolean | null;
+  uw_coverage_lapse_detail: string | null;
+  uw_cancelled_nonrenewed: boolean | null;
+  uw_cancelled_nonrenewed_detail: string | null;
+  uw_losses_3yr: boolean | null;
+  uw_losses_3yr_detail: string | null;
+  uw_major_al_loss: boolean | null;
+  uw_major_al_loss_detail: string | null;
+  /** Explanation for the hazmat question. The answer itself lives on `hazmat`. */
+  hazmat_detail: string | null;
+  uw_owner_operators: boolean | null;
+  uw_owner_operators_detail: string | null;
+  owner_operator_count: number | null;
+  // ── Trucking — trailer gate + prior lapse (v1.19.2) ───────────────────────
+  owns_or_leases_trailers: boolean | null;
+  prior_lapse_explanation: string | null;
   // Commercial GL fields
   ein: string | null;
   states_of_operation: string | null;
@@ -156,6 +206,14 @@ export interface CsIntakeDriver {
   sr22_required: boolean;
   cdl: boolean;
   cdl_date: string | null;
+  // ── Trucking driver detail (v1.19.2) ──────────────────────────────────────
+  /** Years of CDL experience. Collected only when `cdl` is true. */
+  cdl_years_experience: number | null;
+  owner_operator: boolean;
+  accidents_36mo: boolean;
+  accidents_detail: string | null;
+  violations_36mo: boolean;
+  violations_detail: string | null;
 }
 
 export interface CsIntakeVehicle {
@@ -176,6 +234,9 @@ export interface CsIntakeVehicle {
   physical_damage_value: number | null;
   physical_damage_deductible: number | null;
   coverage_type: string | null;
+  /** Lessor / additional insured. Collected only when `ownership` is `leased`. */
+  lessor_name: string | null;
+  lessor_address: string | null;
 }
 
 export interface CsIntakeOwner {
@@ -197,6 +258,32 @@ export interface CsIntakeCommodity {
   category: string;
   frequency: 'mostly' | 'sometimes' | 'occasionally';
   is_primary: boolean;
+  // ── Commodity detail (v1.19.2) ────────────────────────────────────────────
+  /** Share of hauling this commodity represents. The form validates ≈100% total. */
+  percent_hauled?: number | null;
+  average_value?: number | null;
+  maximum_value?: number | null;
+}
+
+/**
+ * A trailer the insured owns or leases (trucking only).
+ *
+ * Gated in the form by `cs_intake_submissions.owns_or_leases_trailers`. Distinct
+ * from the personal Trailer / Mobile-Home line of business, which stores single
+ * `trailer_*` scalars on the submission itself.
+ */
+export interface CsIntakeTrailer {
+  id?: string;
+  submission_id?: string;
+  position: number;
+  year: number | null;
+  make: string | null;
+  trailer_type: string | null;
+  vin: string | null;
+  actual_cash_value: number | null;
+  ownership: string | null;
+  lessor_name: string | null;
+  lessor_address: string | null;
 }
 
 export interface Dealer {
@@ -348,6 +435,7 @@ export async function getIntake(id: string): Promise<{
   vehicles: CsIntakeVehicle[];
   owners: CsIntakeOwner[];
   commodities: CsIntakeCommodity[];
+  trailers: CsIntakeTrailer[];
   events: IntakeEvent[];
 } | null> {
   const supabase = getSupabase();
@@ -358,17 +446,19 @@ export async function getIntake(id: string): Promise<{
     .single();
   if (error || !submission) return null;
 
-  const [driversResult, vehiclesResult, ownersResult, commoditiesResult, eventsResult] = await Promise.all([
+  const [driversResult, vehiclesResult, ownersResult, commoditiesResult, trailersResult, eventsResult] = await Promise.all([
     supabase.from('cs_intake_drivers').select('*').eq('submission_id', id).order('position'),
     supabase.from('cs_intake_vehicles').select('*').eq('submission_id', id).order('position'),
     supabase.from('cs_intake_owners').select('*').eq('submission_id', id).order('position'),
     supabase.from('cs_intake_commodities').select('*').eq('submission_id', id).order('created_at'),
+    supabase.from('cs_intake_trailers').select('*').eq('submission_id', id).order('position'),
     supabase.from('cs_intake_events').select('*').eq('submission_id', id).order('created_at', { ascending: false }),
   ]);
   throwIfError(driversResult.error);
   throwIfError(vehiclesResult.error);
   throwIfError(ownersResult.error);
   throwIfError(commoditiesResult.error);
+  throwIfError(trailersResult.error);
   throwIfError(eventsResult.error);
 
   return {
@@ -377,6 +467,7 @@ export async function getIntake(id: string): Promise<{
     vehicles: (vehiclesResult.data as CsIntakeVehicle[]) ?? [],
     owners: (ownersResult.data as CsIntakeOwner[]) ?? [],
     commodities: (commoditiesResult.data as CsIntakeCommodity[]) ?? [],
+    trailers: (trailersResult.data as CsIntakeTrailer[]) ?? [],
     events: (eventsResult.data as IntakeEvent[]) ?? [],
   };
 }
@@ -459,6 +550,7 @@ export async function saveDraft(
   vehicles: CsIntakeVehicle[],
   owners: CsIntakeOwner[] = [],
   commodities: CsIntakeCommodity[] = [],
+  trailers: CsIntakeTrailer[] = [],
   expectedVersion?: number | null,
 ): Promise<SaveDraftResult> {
   const supabase = getSupabase();
@@ -490,7 +582,7 @@ export async function saveDraft(
 
       // Children are attached through the same atomic path the next save uses, so
       // there is only one code path that writes them.
-      return saveDraft(profileId, { ...submission, id: created.id }, drivers, vehicles, owners, commodities, created.version);
+      return saveDraft(profileId, { ...submission, id: created.id }, drivers, vehicles, owners, commodities, trailers, created.version);
     };
 
     createInFlight = doCreate().finally(() => { createInFlight = null; });
@@ -504,6 +596,7 @@ export async function saveDraft(
     p_vehicles: stripChildIds(vehicles),
     p_owners: stripChildIds(owners),
     p_commodities: stripChildIds(commodities),
+    p_trailers: stripChildIds(trailers),
     p_expected_version: expectedVersion ?? null,
   });
 

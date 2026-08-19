@@ -17,6 +17,7 @@ import {
   type CsIntakeDriver,
   type CsIntakeOwner,
   type CsIntakeSubmission,
+  type CsIntakeTrailer,
   type CsIntakeVehicle,
   type IntakeInvolvement,
 } from './api';
@@ -27,6 +28,7 @@ type LoadedIntake = {
   vehicles: CsIntakeVehicle[];
   owners?: CsIntakeOwner[];
   commodities?: CsIntakeCommodity[];
+  trailers?: CsIntakeTrailer[];
 };
 
 /** Statuses that allow editing by the creating CS_User */
@@ -114,7 +116,7 @@ export default function CsIntakeLanding({
     setAutoOpened(true);
     getIntake(editId)
       .then((data) => {
-        if (data) setSelected({ submission: data.submission, drivers: data.drivers, vehicles: data.vehicles, owners: data.owners, commodities: data.commodities });
+        if (data) setSelected({ submission: data.submission, drivers: data.drivers, vehicles: data.vehicles, owners: data.owners, commodities: data.commodities, trailers: data.trailers });
         else setError('The linked intake could not be found.');
       })
       .catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to open the linked intake.'));
@@ -148,7 +150,7 @@ export default function CsIntakeLanding({
     try {
       setError(null);
       const data = await getIntake(row.id);
-      if (data) setSelected({ submission: data.submission, drivers: data.drivers, vehicles: data.vehicles, owners: data.owners, commodities: data.commodities });
+      if (data) setSelected({ submission: data.submission, drivers: data.drivers, vehicles: data.vehicles, owners: data.owners, commodities: data.commodities, trailers: data.trailers });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to open the intake.');
     }

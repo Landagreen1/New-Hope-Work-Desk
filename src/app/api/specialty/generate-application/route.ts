@@ -78,7 +78,7 @@ export async function POST(request: Request) {
 
   const { data: intake, error: intakeError } = await supabase
     .from('cs_intake_submissions')
-    .select('*, cs_intake_drivers(*), cs_intake_vehicles(*), cs_intake_owners(*)')
+    .select('*, cs_intake_drivers(*), cs_intake_vehicles(*), cs_intake_owners(*), cs_intake_commodities(*), cs_intake_trailers(*)')
     .eq('id', opportunity.source_intake_id)
     .single();
 
@@ -97,11 +97,19 @@ export async function POST(request: Request) {
 
   // 5. Build the trucking data packet from the intake
   // Map the raw query result to the LinkedIntake shape the adapter expects
+  const byPosition = (a: { position: number }, b: { position: number }) => a.position - b.position;
   const intakeForAdapter = {
     ...intake,
-    drivers: (intake.cs_intake_drivers ?? []).sort((a: { position: number }, b: { position: number }) => a.position - b.position),
-    vehicles: (intake.cs_intake_vehicles ?? []).sort((a: { position: number }, b: { position: number }) => a.position - b.position),
-    owners: intake.cs_intake_owners ?? [],
+    drivers: (intake.cs_intake_drivers ?? []).sort(byPosition),
+    vehicles: (intake.cs_intake_vehicles ?? []).sort(byPosition),
+    owners: (intake.cs_intake_owners ?? []).slice().sort(byPosition),
+    trailers: (intake.cs_intake_trailers ?? []).sort(byPosition),
+    // Commodities have no position column; the primary one leads, as it does in
+    // the intake UI and in specialty_opportunity_detail.
+    commodities: (intake.cs_intake_commodities ?? []).slice().sort(
+      (a: { is_primary: boolean; category: string }, b: { is_primary: boolean; category: string }) =>
+        Number(b.is_primary) - Number(a.is_primary) || a.category.localeCompare(b.category),
+    ),
   };
   const dataPacket = buildTruckingDataPacket(intakeForAdapter as unknown as LinkedIntake);
   const sourceHash = computeDataHash(dataPacket);
