@@ -82,12 +82,8 @@ async function fillOfficialTemplate(input: PdfGenerationInput): Promise<PdfGener
     overlayTextOnTemplate(pdfDoc, font, fontSize, dataPacket, supplementalAnswers, template, warnings);
   }
 
-  // Flatten form so fields appear as static text (not editable in Acrobat)
-  try {
-    form.flatten();
-  } catch {
-    // Some forms may not support flattening — that's OK
-  }
+  // Keep form fields editable so agents can modify after download
+  // (Do NOT flatten — the filled PDF should remain an interactive form)
 
   const filledBytes = await pdfDoc.save();
   return { buffer: Buffer.from(filledBytes), warnings };
