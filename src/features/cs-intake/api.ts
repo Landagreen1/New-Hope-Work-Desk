@@ -168,15 +168,24 @@ export interface CsIntakeSubmission {
   annual_payroll: number | null;
   coverage_types_needed: string[] | null;
   // Homeowners fields
+  /** Policy form requested: Homeowners, Landlord or Mobile Home. */
+  coverage_type: string | null;
   property_address_street: string | null;
+  property_address_unit: string | null;
   property_address_city: string | null;
   property_address_state: string | null;
   property_address_zip: string | null;
+  property_place_id: string | null;
+  property_formatted: string | null;
+  /** True when the property address came from address lookup, not typed by hand. */
+  property_addr_verified: boolean;
   dwelling_type: string | null;
   year_built: number | null;
   square_footage: number | null;
   roof_type: string | null;
   roof_age: number | null;
+  /** Free text — a year, an approximation, or a note. Not a date. */
+  last_roof_update: string | null;
   coverage_amount: number | null;
   prior_claims: boolean;
   prior_claims_detail: string | null;
@@ -564,9 +573,22 @@ export async function saveDraft(
     }
 
     const doCreate = async (): Promise<SaveDraftResult> => {
+      // Seed row only. The answers are deliberately NOT sent here: every column
+      // in the payload is written a moment later by cs_intake_save_draft, which
+      // filters the payload against the real column list. Sending the full
+      // payload through PostgREST as well meant one field the form collects but
+      // the database does not have turned a brand-new intake into a hard
+      // "Could not find the '<field>' column ... in the schema cache" failure,
+      // while the identical save on an existing intake succeeded. Whatever the
+      // form knows about, the RPC decides what is storable — one gate, not two.
+      const seed: Record<string, unknown> = { created_by: profileId };
+      // line_of_business is carried so the row is never briefly the 'auto'
+      // default; the 'created' event below and any listener read it immediately.
+      if (row.line_of_business) seed.line_of_business = row.line_of_business;
+
       const { data, error } = await supabase
         .from('cs_intake_submissions')
-        .insert({ ...row, created_by: profileId, last_edited_by: profileId, last_edited_at: new Date().toISOString() })
+        .insert(seed)
         .select('id,version')
         .single();
       throwIfError(error);

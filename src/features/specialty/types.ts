@@ -302,14 +302,23 @@ export interface LinkedIntake {
   operating_radius_miles: number | null;
   states_of_operation: string | null;
   property_address_street: string | null;
+  property_address_unit: string | null;
   property_address_city: string | null;
   property_address_state: string | null;
   property_address_zip: string | null;
+  property_place_id: string | null;
+  property_formatted: string | null;
+  /** True when the property address came from address lookup, not typed by hand. */
+  property_addr_verified: boolean | null;
+  /** Homeowners policy form requested: Homeowners, Landlord or Mobile Home. */
+  coverage_type: string | null;
   dwelling_type: string | null;
   year_built: number | null;
   square_footage: number | null;
   roof_type: string | null;
   roof_age: number | null;
+  /** Free text — a year, an approximation, or a note. Not a date. */
+  last_roof_update: string | null;
   coverage_amount: number | null;
   prior_claims: boolean | null;
   prior_claims_detail: string | null;
