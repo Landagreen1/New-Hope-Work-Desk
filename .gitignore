@@ -27,3 +27,18 @@ payroll-*.csv
 
 # Throwaway SQL used for one-off schema checks
 .kiro/tmp-*.sql
+scripts/_tmp-*.sql
+
+# Generated one-off data imports. These are produced by scripts/generate-andrea-sql.mjs
+# from a Trello export and carry customer SSNs, dates of birth, addresses and personal
+# email addresses, so they must never enter git history. Regenerate locally if needed.
+scripts/andrea-import.sql
+scripts/*-import.sql
+
+# One-off v1.13 migration appliers. These hardcode a Supabase service-role secret
+# rather than reading .env.local, so GitHub secret scanning rejects any push that
+# contains them. The v1.13 migrations they applied are already live. Use
+# scripts/run-sql.mjs, which reads its credentials from .env.local, for anything new.
+scripts/apply-specialty-migrations.mjs
+scripts/apply-v1.13-direct.mjs
+scripts/apply-v1.13-migrations.mjs

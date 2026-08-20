@@ -13,6 +13,10 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+
+import { formatRecipientList, parseRecipientList } from '@/features/carrier-submissions/recipients';
+import { SUBMISSION_PLACEHOLDERS } from '@/features/carrier-submissions/templates';
+
 import {
   addAlias,
   addContact,
@@ -360,7 +364,7 @@ function MarketDetailDrawer({
   onClose: () => void;
   onUpdated: () => void;
 }) {
-  const [tab, setTab] = useState<'info' | 'aliases' | 'contacts' | 'requirements' | 'questions'>('info');
+  const [tab, setTab] = useState<'info' | 'submission' | 'aliases' | 'contacts' | 'requirements' | 'questions'>('info');
 
   return (
     <div className="fixed inset-y-0 right-0 z-40 w-full max-w-2xl overflow-y-auto bg-zinc-900 shadow-2xl">
@@ -376,7 +380,7 @@ function MarketDetailDrawer({
 
       {/* Tabs */}
       <div className="flex border-b border-zinc-800 px-6">
-        {(['info', 'aliases', 'contacts', 'requirements', 'questions'] as const).map((t) => (
+        {(['info', 'submission', 'aliases', 'contacts', 'requirements', 'questions'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -394,6 +398,9 @@ function MarketDetailDrawer({
       <div className="p-6">
         {tab === 'info' && (
           <MarketInfoTab market={market} onUpdated={onUpdated} />
+        )}
+        {tab === 'submission' && (
+          <SubmissionTab market={market} onUpdated={onUpdated} />
         )}
         {tab === 'aliases' && (
           <AliasesTab market={market} onUpdated={onUpdated} />
@@ -519,6 +526,141 @@ function MarketInfoTab({ market, onUpdated }: { market: MarketDirectoryEntry; on
         <button
           onClick={handleSave}
           disabled={saving}
+          className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Submission Tab ───────────────────────────────────────────────────────────
+//
+// Spec: .kiro/specs/carrier-email-submission, Requirement 2.
+//
+// Its own tab rather than four more rows on the Info tab, which already carries
+// thirteen fields. `submission_email` lives on both: it is read-only context here and
+// editable there, because it predates this feature (v1.17.0) and managers already know
+// where to find it.
+//
+// Errors surface in the UI rather than going to console.error as the Info tab does. A
+// manager who mistypes a template and sees nothing happen has no way to tell a failed
+// save from a successful one.
+
+function SubmissionTab({ market, onUpdated }: { market: MarketDirectoryEntry; onUpdated: () => void }) {
+  const [enabled, setEnabled] = useState(market.email_submission_enabled);
+  const [ccText, setCcText] = useState(formatRecipientList(market.submission_cc));
+  const [subject, setSubject] = useState(market.submission_subject_template ?? '');
+  const [body, setBody] = useState(market.submission_body_template ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const cc = parseRecipientList(ccText);
+  const hasAddress = (market.submission_email ?? '').trim().length > 0;
+
+  // Requirement 2.7: enabling a market with nowhere to send is a configuration error
+  // that would only surface as a failed send, in front of a customer.
+  const blocking =
+    enabled && !hasAddress
+      ? 'Set a Submission Email on the Info tab before enabling email submission.'
+      : cc.invalid.length > 0
+        ? `Not a valid address: ${cc.invalid.join(', ')}`
+        : null;
+
+  const handleSave = async () => {
+    if (blocking) return;
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await updateMarket(market.id, {
+        email_submission_enabled: enabled,
+        submission_cc: cc.valid,
+        submission_subject_template: subject.trim() || null,
+        submission_body_template: body.trim() || null,
+      });
+      onUpdated();
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save the submission settings.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <label className="flex items-start gap-2 text-sm text-zinc-300">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => { setEnabled(e.target.checked); setSaved(false); }}
+          className="mt-0.5 rounded"
+        />
+        <span>
+          Submit to this market by email
+          <span className="mt-0.5 block text-xs text-zinc-500">
+            When off, Prepare Submission is unavailable for this carrier.
+          </span>
+        </span>
+      </label>
+
+      <InfoRow label="Submission Email" value={market.submission_email} />
+      {!hasAddress && (
+        <p className="text-xs text-amber-400">
+          No submission address is set. Add one on the Info tab.
+        </p>
+      )}
+
+      <label className="block">
+        <span className="text-sm text-zinc-400">CC</span>
+        <input
+          value={ccText}
+          onChange={(e) => { setCcText(e.target.value); setSaved(false); }}
+          placeholder="underwriting@carrier.com, submissions@carrier.com"
+          className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100"
+        />
+        <span className="mt-1 block text-xs text-zinc-500">
+          Separate with commas, semicolons or spaces. Copied on every submission to this market.
+        </span>
+      </label>
+
+      <EditTextArea
+        label="Subject template"
+        value={subject}
+        onChange={(v) => { setSubject(v); setSaved(false); }}
+      />
+      <EditTextArea
+        label="Body template"
+        value={body}
+        onChange={(v) => { setBody(v); setSaved(false); }}
+      />
+      <p className="text-xs text-zinc-500">
+        Leave either blank to use the standard message.
+      </p>
+
+      <div className="rounded border border-zinc-800 bg-zinc-950 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Placeholders</p>
+        <dl className="mt-2 space-y-1">
+          {SUBMISSION_PLACEHOLDERS.map((placeholder) => (
+            <div key={placeholder.token} className="flex gap-2 text-xs">
+              <dt className="shrink-0 font-mono text-blue-400">{placeholder.token}</dt>
+              <dd className="text-zinc-500">{placeholder.description}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      {blocking && <p className="text-sm text-amber-400">{blocking}</p>}
+      {error && <p className="text-sm text-rose-400">{error}</p>}
+      {saved && !error && <p className="text-sm text-emerald-400">Saved.</p>}
+
+      <div className="flex justify-end pt-1">
+        <button
+          onClick={handleSave}
+          disabled={saving || blocking !== null}
           className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save'}

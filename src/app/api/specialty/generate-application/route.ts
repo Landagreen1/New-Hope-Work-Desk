@@ -188,7 +188,47 @@ export async function POST(request: Request) {
     );
   }
 
-  // 10. Record the generated application
+  // 10. Register it as a Quote Document FIRST.
+  //
+  //     Spec: .kiro/specs/carrier-email-submission, Requirement 3.3 (Task A.2).
+  //
+  //     This insert used to sit after step 11 and its error was discarded. When it
+  //     failed, the PDF existed in storage and in `market_generated_applications` but
+  //     never appeared in the Documents panel — invisible to the user, and once carrier
+  //     email submission ships, impossible to attach to a submission.
+  //
+  //     The order matters as much as the check. `market_generated_applications` has no
+  //     delete policy, so a row written there cannot be withdrawn by this session
+  //     client. `specialty_documents` does have one (`uploaded_by = auth.uid()`), and so
+  //     does the storage object. Writing the undoable rows first means every failure
+  //     below can be fully rolled back rather than leaving the three stores disagreeing.
+  const { data: documentRow, error: documentError } = await supabase
+    .from('specialty_documents')
+    .insert({
+      opportunity_id,
+      carrier_market_id,
+      uploaded_by: user.id,
+      file_name: fileName,
+      file_size: pdfBuffer.length,
+      mime_type: 'application/pdf',
+      storage_bucket: 'specialty-quote-documents',
+      storage_path: storagePath,
+      category: 'generated_application',
+    })
+    .select('id')
+    .single();
+
+  if (documentError || !documentRow) {
+    // Undo the upload so a retry is not blocked by `upsert: false` colliding with an
+    // orphaned object at the same path.
+    await supabase.storage.from('specialty-quote-documents').remove([storagePath]);
+    return NextResponse.json(
+      { error: `Failed to record the application as a document: ${documentError?.message ?? 'unknown error'}` },
+      { status: 500 },
+    );
+  }
+
+  // 11. Record the generated application in its own versioned ledger.
   const { data: application, error: insertError } = await supabase
     .from('market_generated_applications')
     .insert({
@@ -207,27 +247,17 @@ export async function POST(request: Request) {
     .select('id')
     .single();
 
-  if (insertError) {
+  if (insertError || !application) {
+    // Both of these are within this session's rights to undo, which is why step 10 runs
+    // first. Leaving either behind would surface a document the ledger does not know
+    // about, or an object with no metadata at all.
+    await supabase.from('specialty_documents').delete().eq('id', documentRow.id);
+    await supabase.storage.from('specialty-quote-documents').remove([storagePath]);
     return NextResponse.json(
-      { error: `Failed to record application: ${insertError.message}` },
+      { error: `Failed to record application: ${insertError?.message ?? 'unknown error'}` },
       { status: 500 },
     );
   }
-
-  // 11. Also record in specialty_documents for unified document view
-  await supabase
-    .from('specialty_documents')
-    .insert({
-      opportunity_id,
-      carrier_market_id,
-      uploaded_by: user.id,
-      file_name: fileName,
-      file_size: pdfBuffer.length,
-      mime_type: 'application/pdf',
-      storage_bucket: 'specialty-quote-documents',
-      storage_path: storagePath,
-      category: 'generated_application',
-    });
 
   // 12. Record activity
   await supabase

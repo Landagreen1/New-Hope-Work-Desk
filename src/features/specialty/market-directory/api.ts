@@ -96,6 +96,14 @@ export interface MarketDirectoryPatch {
   new_venture_notes?: string | null;
   coverage_appetite?: string | null;
   underwriting_notes?: string | null;
+  // ── v1.21.0 ───────────────────────────────────────────────────────────────
+  // `updateMarket` passes this patch straight through to the table, so adding a
+  // key here is the whole client-side change. The manager-only write policy on
+  // `market_directory` is the gate; there is no server-side column whitelist.
+  submission_cc?: string[];
+  submission_subject_template?: string | null;
+  submission_body_template?: string | null;
+  email_submission_enabled?: boolean;
 }
 
 /** Create a new Market Directory entry. */
