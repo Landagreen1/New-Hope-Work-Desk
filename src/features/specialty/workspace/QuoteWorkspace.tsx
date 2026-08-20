@@ -57,6 +57,7 @@ import ApplicationPanel from './ApplicationPanel';
 import CarriersPanel from './CarriersPanel';
 import DocumentsPanel from './DocumentsPanel';
 import OverviewPanel from './OverviewPanel';
+import SubmissionsPanel from './SubmissionsPanel';
 import QuoteHeader from './QuoteHeader';
 import WorkflowProgress from './WorkflowProgress';
 
@@ -311,6 +312,19 @@ export default function QuoteWorkspace({
     [onNavigate],
   );
 
+  /**
+   * profile id → display name, so the Submissions tab can name whoever sent each email
+   * without a second query. Assignable members already cover every quoting-team member,
+   * which is exactly the set that can send.
+   */
+  const profileNames = useMemo(
+    () =>
+      Object.fromEntries(
+        (detail?.assignable_members ?? []).map((member) => [member.profile_id, member.display_name]),
+      ) as Record<string, string>,
+    [detail],
+  );
+
   const selectCarrier = useCallback(
     (id: string | null) => onNavigate({ carrier: id }),
     [onNavigate],
@@ -464,6 +478,10 @@ export default function QuoteWorkspace({
           busy={busy}
           setError={setError}
         />
+      ) : null}
+
+      {tab === 'submissions' ? (
+        <SubmissionsPanel detail={detail} profileNames={profileNames} />
       ) : null}
 
       {tab === 'activity' ? (

@@ -1,3 +1,21 @@
+# v1.21.0 — Carrier Email Submission
+
+- Added **Carrier Submissions** to the Specialty Quote workspace. A sender opens a carrier, reviews a pre-filled message with the right application already attached, adjusts anything they want, and sends it from their own mailbox.
+- Submissions are sent through the sender's real Microsoft 365 mailbox, authorised once by OAuth. The message lands in their Sent Items and carrier replies thread back to them, rather than arriving at a shared relay address nobody watches.
+- **Phase 1 has one sender.** Eligibility is a flag on the profile, not a name in the code, so enabling a second sender is a database update rather than a deployment.
+- The Work Desk asks only for permission to send mail and to read the signed-in user's name. **It cannot read anyone's inbox**, and a test fails the build if a mail-read scope is ever added.
+- OAuth tokens are encrypted with AES-256-GCM before they reach the database, using a key held only in the server environment. A stolen database backup yields ciphertext and nothing else. The ciphertext column is additionally hidden from browser sessions by column grant, not merely by row-level policy.
+- **Submission state is history, not a tick.** A carrier can receive an initial submission, additional documents, and a revised application as three separate records, each preserving the recipients, subject, body, and attachment list exactly as sent.
+- The attachment record is a snapshot, not a join. Renaming or deleting a quote document later cannot rewrite what a submission says was sent.
+- A send is reserved in the database *before* the provider is contacted, so a double-click, a client retry, or a duplicated request produces one email and returns the original record rather than sending twice.
+- **A failed send is never recorded as a success.** Three database constraints refuse to store a submission as sent without a provider message identifier and a timestamp, so the guarantee does not depend on application code being correct.
+- Carrier submission addresses, CC lists, and the subject and body templates are maintained from User Administration → Market Directory → Submission. Changing where a submission goes no longer requires a deployment.
+- Email submission is off for every carrier until a manager deliberately turns it on.
+- Requested coverages are derived from the linked intake, so the message lists Auto Liability, UM/UIM, Physical Damage, Motor Truck Cargo, Trailer Interchange and General Liability only when they were actually asked for.
+- Carrier status reuses the existing vocabulary — no new values. A first successful submission advances a carrier from Not Submitted or Ready to Submitted through the existing RPC, and never drags a carrier that has already quoted back to Submitted.
+- Generated carrier applications now fail loudly if they cannot be recorded as a quote document. Previously that write discarded its error, so a PDF could exist in storage and never appear on the Documents tab.
+- Added Supabase migration v1.21.0 with its own post-conditions, a tested rollback, and a verification probe.
+
 # v1.20.0 — Specialty Quote Workspace
 
 - Opening a Specialty Quote is now a **navigation to its own full-screen page** at `/specialty-quotes/[quoteId]`, not a side panel. Browser Back returns to the list, refreshing keeps the quote open, and a manager can send a teammate a link straight to a quote — or to one carrier's request.
