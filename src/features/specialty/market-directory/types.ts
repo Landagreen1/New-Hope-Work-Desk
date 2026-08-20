@@ -58,6 +58,17 @@ export interface MarketDirectoryEntry {
   new_venture_notes: string | null;
   coverage_appetite: string | null;
   underwriting_notes: string | null;
+  // ── v1.21.0 carrier email submission ──────────────────────────────────────
+  // `submission_email` above is reused as the primary recipient; these complete
+  // the configuration. Spec: .kiro/specs/carrier-email-submission, Requirement 2.
+  /** Additional recipients copied on every submission to this market. */
+  submission_cc: string[];
+  /** Overrides the built-in default. Supports the {{...}} placeholders. */
+  submission_subject_template: string | null;
+  /** Overrides the built-in default. Supports the {{...}} placeholders. */
+  submission_body_template: string | null;
+  /** False means this market is not submitted to by email. Defaults false. */
+  email_submission_enabled: boolean;
   created_at: string;
   updated_at: string;
   // Joined data
