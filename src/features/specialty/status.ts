@@ -153,13 +153,27 @@ export const CARRIER_STATUS_ORDER: readonly CarrierMarketStatus[] = [
   'withdrawn',
 ] as const;
 
+/**
+ * The nine stored statuses, said the way an employee reads them.
+ *
+ * Labels only — the `status` CHECK constraint on `specialty_carrier_markets` is
+ * untouched and no alias was invented. "Not Started" became "Not Submitted" and
+ * "Waiting" became "Under Review" because both described the record rather than the
+ * carrier; the question an agent is answering is where each submission stands.
+ *
+ * `declined`, `not_competitive` and `withdrawn` stay separately named on purpose.
+ * Folding them into one "Closed" would read tidier and would throw away the
+ * difference between an underwriter refusing the risk, a price that lost, and a
+ * market the team stopped working — which is precisely what the carrier performance
+ * report measures.
+ */
 const CARRIER_STATUS_LABELS: Record<CarrierMarketStatus, string> = {
-  not_started: 'Not Started',
-  preparing: 'Preparing',
+  not_started: 'Not Submitted',
+  preparing: 'Ready',
   submitted: 'Submitted',
-  waiting: 'Waiting',
-  more_info_needed: 'More Information Needed',
-  quote_received: 'Quote Received',
+  waiting: 'Under Review',
+  more_info_needed: 'Needs Information',
+  quote_received: 'Quoted',
   declined: 'Declined',
   not_competitive: 'Not Competitive',
   withdrawn: 'Withdrawn',
@@ -584,8 +598,8 @@ export function formatDue(value: string | null | undefined): string {
 /**
  * The carrier progress line a summary card shows.
  *
- * Deliberately a summary rather than five rows: the card answers "how far along is
- * the marketing", and the detail drawer answers "what did each carrier say".
+ * Deliberately a summary rather than five rows: the row answers "how far along is the
+ * marketing", and the workspace's Carriers tab answers "what did each carrier say".
  */
 export function carrierSummary(row: {
   markets_total: number;

@@ -14,6 +14,10 @@
  * That merge is the point. "What has happened on this quote and who did it" has to
  * include the Customer Service half of the story, otherwise the timeline starts in
  * the middle.
+ *
+ * The humanising of an entry's JSON detail lives in `timeline.ts`, shared with the
+ * workspace's Activity tab. It used to be a copy in this file, which is two accounts of
+ * the same event waiting to disagree.
  */
 
 import { AlertCircle, RefreshCw, X } from 'lucide-react';
@@ -22,78 +26,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ui } from '../nhwd-shared/ui';
 import { getTimeline } from './api';
 import { eventLabel, eventTone, formatRelative } from './status';
+import { describeTimelineDetail, originLabel } from './timeline';
 import type { TimelineEntry } from './types';
-
-const ORIGIN_LABELS: Record<TimelineEntry['origin'], string> = {
-  specialty: 'Specialty',
-  intake: 'Intake',
-  note: 'Note',
-};
-
-/** Renders whichever detail keys are worth reading, without dumping raw JSON. */
-function describeDetail(entry: TimelineEntry): string | null {
-  const detail = entry.detail;
-  if (!detail) return null;
-
-  const pick = (key: string): string | null => {
-    const value = detail[key];
-    if (value === null || value === undefined || value === '') return null;
-    return String(value);
-  };
-
-  const parts: string[] = [];
-  const note = pick('note');
-  if (note) parts.push(note);
-
-  const carrier = pick('carrier_name');
-  const from = pick('from_status') ?? pick('from_stage');
-  const to = pick('to_status') ?? pick('to_stage');
-  if (carrier && to) parts.push(`${carrier}: ${eventStatusWords(from)}${to.replace(/_/g, ' ')}`);
-  else if (carrier) parts.push(carrier);
-  else if (to) parts.push(`${eventStatusWords(from)}${to.replace(/_/g, ' ')}`);
-
-  const label = pick('label');
-  if (label) parts.push(label);
-
-  const premium = pick('premium') ?? pick('sold_premium');
-  if (premium) parts.push(`$${Number(premium).toLocaleString()}`);
-
-  const lostReason = pick('lost_reason');
-  if (lostReason) parts.push(lostReason.replace(/_/g, ' '));
-
-  const optionCount = pick('option_count');
-  if (optionCount) parts.push(`${optionCount} option(s)`);
-
-  const fields = detail.fields;
-  if (Array.isArray(fields) && fields.length > 0) {
-    parts.push(`${fields.length} field(s): ${fields.slice(0, 6).join(', ')}`);
-  }
-
-  const changes = detail.changes;
-  if (Array.isArray(changes) && changes.length > 0) {
-    parts.push(
-      changes
-        .map((change) => {
-          const record = change as Record<string, unknown>;
-          return `${String(record.field ?? '')} → ${String(record.new_value ?? '')}`;
-        })
-        .join('; '),
-    );
-  }
-
-  const reason = pick('reason');
-  if (reason) parts.push(reason);
-
-  if (detail.automatic === true) parts.push('automatic');
-  if (detail.via === 'customer_service') parts.push('via Customer Service');
-  if (detail.legacy === true) parts.push('from the Commercial Board');
-
-  return parts.length > 0 ? parts.join(' · ') : null;
-}
-
-function eventStatusWords(from: string | null): string {
-  return from ? `${from.replace(/_/g, ' ')} → ` : '';
-}
 
 export interface SpecialtyLogModalProps {
   opportunityId: string | null;
@@ -206,7 +140,7 @@ export default function SpecialtyLogModal({
             <ol className="relative space-y-4 border-l border-slate-200 pl-6">
               {entries.map((entry, index) => {
                 const tone = eventTone(entry.event_type);
-                const detail = describeDetail(entry);
+                const detail = describeTimelineDetail(entry);
                 return (
                   <li key={`${entry.occurred_at}-${entry.event_type}-${index}`} className="relative">
                     <span
@@ -230,7 +164,7 @@ export default function SpecialtyLogModal({
                         {eventLabel(entry.event_type)}
                       </p>
                       <span className={`${ui.badge} ${ui.badgeTone.neutral}`}>
-                        {ORIGIN_LABELS[entry.origin]}
+                        {originLabel(entry.origin)}
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs font-bold text-slate-500">

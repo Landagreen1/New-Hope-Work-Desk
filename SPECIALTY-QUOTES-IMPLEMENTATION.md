@@ -355,9 +355,15 @@ equivalent surface: same purpose, same visual language, reading
 intake's event log and the shared notes.
 
 Files: `src/features/specialty/` — `types.ts`, `status.ts`, `permissions.ts`, `api.ts`,
-`SpecialtyWorkspace.tsx`, `SpecialtyList.tsx`, `OpportunityDrawer.tsx`,
-`SpecialtyReports.tsx`, `QuotingTeamsAdmin.tsx`, `SpecialtyLogModal.tsx`. Registered in
-`app-sidebar.tsx`, `sidebar-layout.tsx` and `role-workspace.tsx`.
+`workflow.ts`, `application.ts`, `timeline.ts`, `list-state.ts`, `SpecialtyWorkspace.tsx`,
+`SpecialtyList.tsx`, `SpecialtyReports.tsx`, `QuotingTeamsAdmin.tsx`,
+`SpecialtyLogModal.tsx`, and `workspace/` for the routed quote page. Registered in
+`app-sidebar.tsx`, `sidebar-layout.tsx` and `role-workspace.tsx`, and routed at
+`src/app/specialty-quotes/`.
+
+The quote detail was a side drawer (`OpportunityDrawer.tsx`) until v1.20.0. It is now a
+routed full-screen workspace at `/specialty-quotes/[quoteId]` — see the Workspace section
+below for why, and `workspace/QuoteWorkspace.tsx` for the component that replaced it.
 
 One shell change worth flagging: Specialty Quotes is the first module whose visibility a
 role cannot answer, so `getModulesForRole`, `resolveNavigationForRole` and `AppSidebar`

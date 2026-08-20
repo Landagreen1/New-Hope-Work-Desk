@@ -18,13 +18,14 @@
  */
 
 import { AlertCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ModuleShell } from '../nhwd-shared/ModuleShell';
 import type { ProfileLite } from '../nhwd-shared/types';
 import { ui } from '../nhwd-shared/ui';
 import { getWorkspaceContext } from './api';
-import OpportunityDrawer from './OpportunityDrawer';
+import { specialtyQuoteHref } from './list-state';
 import { getSpecialtyPermissions } from './permissions';
 import SpecialtyList from './SpecialtyList';
 import SpecialtyReports from './SpecialtyReports';
@@ -64,14 +65,39 @@ export default function SpecialtyWorkspace({
 }: SpecialtyWorkspaceProps) {
   const role = initialProfile.role as AppRole;
 
+  const router = useRouter();
+
   const [section, setSection] = useState<SpecialtySection>(activeSection);
   const [context, setContext] = useState<WorkspaceContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
-  /** Bumped whenever a drawer action changes something, so the list refetches. */
+  /** Bumped by Refresh, so the list refetches without remounting. */
   const [refreshToken, setRefreshToken] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  /**
+   * Opening a quote is a navigation, not a drawer.
+   *
+   * `back` names this screen so the workspace's back link returns here — to the same
+   * module and destination — rather than to whichever screen this role defaults to. The
+   * shell reads `?module=&sub=` on arrival, which is what makes that work.
+   */
+  const openQuote = useCallback(
+    (opportunityId: string) => {
+      const sub =
+        section === 'quotes'
+          ? 'specialty_database'
+          : section === 'reports'
+            ? 'specialty_reports'
+            : 'specialty_work';
+      router.push(
+        specialtyQuoteHref(opportunityId, {
+          backTo: `/?module=specialty_quotes&sub=${sub}`,
+        }),
+      );
+    },
+    [router, section],
+  );
 
   useEffect(() => {
     setSection(activeSection);
@@ -176,7 +202,7 @@ export default function SpecialtyWorkspace({
       ) : null}
 
       {section === 'reports' && permissions.canViewReports ? (
-        <SpecialtyReports context={context} onOpen={setOpenId} />
+        <SpecialtyReports context={context} onOpen={openQuote} />
       ) : null}
 
       {section !== 'reports' ? (
@@ -185,18 +211,8 @@ export default function SpecialtyWorkspace({
           profileId={initialProfile.id}
           context={context}
           mode={section === 'work' ? 'work' : 'quotes'}
-          onOpen={setOpenId}
+          onOpen={openQuote}
           refreshToken={refreshToken}
-        />
-      ) : null}
-
-      {openId ? (
-        <OpportunityDrawer
-          opportunityId={openId}
-          profileId={initialProfile.id}
-          context={context}
-          onClose={() => setOpenId(null)}
-          onChanged={() => setRefreshToken((current) => current + 1)}
         />
       ) : null}
     </ModuleShell>

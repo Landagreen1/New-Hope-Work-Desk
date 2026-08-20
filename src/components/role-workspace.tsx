@@ -143,6 +143,7 @@ export function RoleWorkspace({
   sessionProfile,
   initialData,
   initialDeskSection,
+  initialNavigation,
 }: {
   sessionProfile: SessionProfile;
   initialData: DashboardData;
@@ -154,16 +155,39 @@ export function RoleWorkspace({
    * whichever screen happens to be the role default.
    */
   initialDeskSection?: DeskSection;
+  /**
+   * Opens a named module and screen on first render, from `?module=&sub=`.
+   *
+   * Added for Specialty Quotes, whose workspace is a route of its own: a link back from
+   * `/specialty-quotes/<id>` has to land on the screen the reader left, and navigation
+   * here is React state rather than a URL. Resolved through
+   * `resolveNavigationForRole`, so a screen this role is not offered lands somewhere
+   * sensible instead of nowhere.
+   */
+  initialNavigation?: { module: NavigationState["module"]; subNav: SubNavId };
 }) {
   const router = useRouter();
-  const [navigation, setNavigation] = useState<NavigationState>(() =>
-    resolveNavigationForRole(
+  const [navigation, setNavigation] = useState<NavigationState>(() => {
+    /*
+     * A requested screen is stored unresolved.
+     *
+     * `resolveNavigationForRole` needs `moduleAccess` to know whether Specialty Quotes
+     * exists for this account, and that answer arrives from the database a moment later.
+     * Resolving here would therefore reject a valid specialty link as an unknown module
+     * and replace it with the role default — permanently, because the resolved value is
+     * what state would then hold. `activeNavigation` below resolves it on every render
+     * with the access flag in hand, which is the right moment.
+     */
+    if (initialNavigation) {
+      return { module: initialNavigation.module, subNav: initialNavigation.subNav };
+    }
+    return resolveNavigationForRole(
       sessionProfile.role,
       initialDeskSection
         ? { module: "sales", subNav: "sales_desk", deskSection: initialDeskSection }
         : getDefaultNavigation(sessionProfile.role),
-    ),
-  );
+    );
+  });
 
   /**
    * Whether this account is a member of any quoting team.

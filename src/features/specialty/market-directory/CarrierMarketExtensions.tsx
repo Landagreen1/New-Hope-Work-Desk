@@ -3,9 +3,8 @@
 /**
  * Carrier Market Extensions
  *
- * Additional UI sections that extend the existing CarrierMarketRow in the
- * OpportunityDrawer. These render inside the expanded carrier market area
- * and add:
+ * Additional UI sections for one carrier market. They render inside that carrier's
+ * workstream on the Specialty Quote workspace's Carriers tab, and add:
  *   - Market Directory link & info
  *   - Readiness indicator
  *   - Supplemental questions

@@ -100,7 +100,14 @@ export const COMMODITY_CATEGORIES = [
   { key: 'other', label: 'Other', examples: '' },
 ] as const;
 
-const EXCLUDED_CARGO_ITEMS = [
+/**
+ * The prohibited-cargo questions, asked by label.
+ *
+ * Exported because the Specialty Quote workspace reads and corrects the same
+ * `excluded_cargo` map: its keys are these strings, so a second list would produce
+ * answers this form could not display back.
+ */
+export const EXCLUDED_CARGO_ITEMS = [
   'Hazardous Materials',
   'Refrigerated/Frozen Goods',
   'Alcohol',

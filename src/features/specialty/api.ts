@@ -69,6 +69,28 @@ export class AlreadyClaimedError extends Error {
   }
 }
 
+/**
+ * Raised when the account may not see this quote.
+ *
+ * Distinguished from a generic failure because a screen answers it differently: a
+ * refusal is explained ("access comes from quoting-team membership, not your role"),
+ * whereas a transport failure is retried. The RPCs raise SQLSTATE 42501 for it.
+ */
+export class SpecialtyAccessError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SpecialtyAccessError';
+  }
+}
+
+/** Raised when the id is valid-looking but names nothing — a stale link. */
+export class SpecialtyNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SpecialtyNotFoundError';
+  }
+}
+
 function throwIfError(error: { message?: string; code?: string } | null): void {
   if (!error) return;
   const message = error.message || 'The request could not be completed.';
@@ -77,6 +99,12 @@ function throwIfError(error: { message?: string; code?: string } | null): void {
   }
   if (/already been claimed/i.test(message)) {
     throw new AlreadyClaimedError(message);
+  }
+  if (error.code === '42501' || /not available for your account/i.test(message)) {
+    throw new SpecialtyAccessError(message);
+  }
+  if (/could not be found/i.test(message)) {
+    throw new SpecialtyNotFoundError(message);
   }
   throw new Error(message);
 }
@@ -270,8 +298,7 @@ export async function changeStage(
  * The customer, business, property, vehicle and driver record lives on the original
  * CS intake and is never copied into the opportunity, so this is how a specialty
  * member fixes a VIN or a roof age. Concurrency is checked against the intake's own
- * version, which is why the drawer passes `intake.version` and not the
- * opportunity's.
+ * version, which is why the caller passes `intake.version` and not the opportunity's.
  */
 export async function updateLinkedIntake(
   opportunityId: string,

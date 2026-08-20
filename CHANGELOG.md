@@ -1,3 +1,25 @@
+# v1.20.0 — Specialty Quote Workspace
+
+- Opening a Specialty Quote is now a **navigation to its own full-screen page** at `/specialty-quotes/[quoteId]`, not a side panel. Browser Back returns to the list, refreshing keeps the quote open, and a manager can send a teammate a link straight to a quote — or to one carrier's request.
+- Added `/specialty-quotes`, the routed list. Its search, view, filters and page live in the query string, so coming back from a quote lands on the list you left rather than on a default one.
+- Removed the quote-detail side drawer. It was the only place the whole case could be read, and a five-carrier trucking quote does not fit in a 640-pixel panel.
+- The workspace has five tabs — Overview, Carriers, Application, Documents, Activity — each addressable as `?tab=`.
+- Added a **workflow progress rail**: Intake → Submissions → Quoting → Customer → Complete, derived from the existing nine stages and the live carrier markets. No new status column, no second status system.
+- Added a **Next Action** reading, computed in one place from the quote's own state and ordered so that a carrier's request for information outranks a document the team is still chasing. What a teammate recorded by hand is shown beside it, never replaced by it.
+- Added a **quote health** panel that names what is missing — outstanding information, carrier requests, an unanswered section — instead of inventing a completion percentage.
+- Rebuilt the Carriers tab as a case with one workstream per carrier: a marketing summary, a comparison of the viable quotes, and a full-width workspace per carrier holding its status, dates, pricing, documents, notes and status history.
+- Renamed the carrier statuses for readability without touching the nine stored values: Not Started → **Not Submitted**, Waiting → **Under Review**, More Information Needed → **Needs Information**, Quote Received → **Quoted**. Declined, Not Competitive and Withdrawn stay separately named, because the carrier performance report measures the difference.
+- Rebuilt the Application tab as the master intake in collapsible sections — Customer, Business, Operations, Drivers, Vehicles, Cargo, Coverage, Prior Insurance, Loss History — each showing its state, its summary and the answers an underwriter would send it back for.
+- Gave **Cargo** the room it needs. The structured category, the commodity mix with per-load values, the prohibited-cargo answers and the maximum value per load are all shown by name, a one-word answer such as "Dry Freight" is called out as too general to rate, and a requested cargo limit below the biggest recorded load is flagged before the quote is marketed.
+- Made **requested coverage** prominent and editable where it lives: Auto Liability, Cargo, Physical Damage and Trailer Interchange for trucking, dwelling and liability for homeowners.
+- Replaced the single global edit form with contextual editing: Coverage, Cargo, a driver, a unit, a carrier's pricing and a carrier's requested information are each edited from where they are read.
+- Grouped Documents into Customer Documents, Carrier Applications, Carrier Quotes, Underwriting and Other. A reading of the existing categories — no new column, no second storage system, and adopted Commercial Board documents still open from their original bucket.
+- Kept the notes list and the workflow checklist, both on the Overview. The checklist is still seeded from the line of business's workflow template and still counted on the list rows; ticked items can be hidden so a long checklist does not sit between the reader and what is left.
+- A document's Remove button now appears only where the database would allow the deletion — the uploader, or a manager. It was previously offered to any editor and refused on click.
+- Added Supabase migration v1.20.0, which widens `specialty_update_intake` to accept the coverage, cargo, operations and underwriting fields the workspace shows, and fixes a latent data-loss bug: its driver and vehicle replace-all predated the trucking columns, so editing a driver would have erased every CDL, stated value and truck type on the intake.
+- In the same migration, an unanswered driver question stays unanswered. `cdl`, `owner_operator`, `accidents_36mo` and `violations_36mo` were being defaulted to false, which turns a question nobody asked into an answer the insured never gave.
+- No data migration, no new tables and no changed statuses. Every existing Specialty Quote, carrier submission, document and price opens in the new workspace unchanged.
+
 # v1.16.0 — Specialty Quotes Engine
 
 - Added **Specialty Quotes**, one collaborative quoting module for Trucking and Homeowners, replacing the practice of routing those intakes onto the Commercial Board.

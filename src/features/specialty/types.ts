@@ -475,7 +475,7 @@ export interface AssignableMember {
   initials: string;
 }
 
-/** Everything the detail drawer needs, in one round trip. */
+/** Everything the quote workspace needs, in one round trip. */
 export interface OpportunityDetail {
   opportunity: Omit<SpecialtyRow, 'total_count'> & {
     workflow_template_id: string;

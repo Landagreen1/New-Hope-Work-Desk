@@ -56,6 +56,13 @@ import {
   viewDescription,
   viewLabel,
 } from './status';
+import {
+  defaultListState,
+  type SpecialtyListMode,
+  type SpecialtyListState,
+  type SpecialtyResultFilter,
+} from './list-state';
+import { listNextAction } from './workflow';
 import type {
   SpecialtyCount,
   SpecialtyLine,
@@ -83,10 +90,33 @@ export interface SpecialtyListProps {
   profileId: string;
   context: WorkspaceContext;
   /** Work opens on the team's active work; Quotes opens on search across everything. */
-  mode: 'work' | 'quotes';
+  mode: SpecialtyListMode;
+  /**
+   * Opens one quote.
+   *
+   * A navigation now, not a drawer: the parent decides where to. Kept as a callback
+   * rather than a hard-coded `<Link>` because the two hosts pass different return
+   * paths, and the row still needs the click target to be the whole row.
+   */
   onOpen: (opportunityId: string) => void;
-  /** Bumped by the parent after a drawer action, so the list reflects it. */
+  /** Bumped by the parent after an action elsewhere, so the list reflects it. */
   refreshToken: number;
+  /**
+   * Where to start, when the host restores the reader's last list from the URL.
+   *
+   * Read once. The list owns its state from then on; a host that wants the URL to keep
+   * up subscribes with `onStateChange` instead of pushing new values in.
+   */
+  initialState?: SpecialtyListState;
+  /**
+   * Called whenever the filters settle, so a host can mirror them into the URL.
+   *
+   * Optional on purpose. The routed `/specialty-quotes` page uses it so Back returns to
+   * the same list; the copy mounted inside the Work Desk shell does not, because
+   * rewriting that page's query string would re-run its server component on every
+   * keystroke.
+   */
+  onStateChange?: (state: SpecialtyListState) => void;
 }
 
 export default function SpecialtyList({
@@ -95,18 +125,29 @@ export default function SpecialtyList({
   mode,
   onOpen,
   refreshToken,
+  initialState,
+  onStateChange,
 }: SpecialtyListProps) {
-  const [rawQuery, setRawQuery] = useState('');
-  const [view, setView] = useState<SpecialtyView>(mode === 'work' ? 'team' : 'team');
-  const [line, setLine] = useState<SpecialtyLine | 'all'>('all');
-  const [stage, setStage] = useState<SpecialtyStage | 'all'>('all');
-  const [assignee, setAssignee] = useState<string>('all');
-  const [carrierId, setCarrierId] = useState<string>('all');
-  const [result, setResult] = useState<'all' | 'open' | 'sold' | 'not_sold'>(
-    mode === 'work' ? 'open' : 'all',
-  );
+  /**
+   * Where this mount starts.
+   *
+   * A ref, read once on the first render. The host may re-render with a newer
+   * `initialState` — the routed page recomputes it from the query string every render —
+   * and adopting it would fight the reader: they type into the search box, the host
+   * mirrors it to the URL, and a new "initial" value would arrive and reset the box.
+   * A host that genuinely wants to restore a different list remounts with a new `key`.
+   */
+  const [start] = useState<SpecialtyListState>(() => initialState ?? defaultListState(mode));
+
+  const [rawQuery, setRawQuery] = useState(start.query);
+  const [view, setView] = useState<SpecialtyView>(start.view);
+  const [line, setLine] = useState<SpecialtyLine | 'all'>(start.line);
+  const [stage, setStage] = useState<SpecialtyStage | 'all'>(start.stage);
+  const [assignee, setAssignee] = useState<string>(start.assignee);
+  const [carrierId, setCarrierId] = useState<string>(start.carrierId);
+  const [result, setResult] = useState<SpecialtyResultFilter>(start.result);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(start.page);
 
   const [rows, setRows] = useState<SpecialtyRow[]>([]);
   const [counts, setCounts] = useState<SpecialtyCount[]>([]);
@@ -167,6 +208,32 @@ export default function SpecialtyList({
     const timer = setTimeout(() => void load(), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [load]);
+
+  /**
+   * Tells the host what the reader is looking at, on the same settle as the fetch.
+   *
+   * Debounced with the search for the same reason: a host that writes this into the URL
+   * would otherwise add a history entry per keystroke, and Back would walk the reader
+   * letter by letter through their own search term.
+   */
+  useEffect(() => {
+    if (!onStateChange) return;
+    const timer = setTimeout(
+      () =>
+        onStateChange({
+          query: rawQuery,
+          view,
+          line,
+          stage,
+          assignee,
+          carrierId,
+          result,
+          page,
+        }),
+      SEARCH_DEBOUNCE_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [assignee, carrierId, line, onStateChange, page, rawQuery, result, stage, view]);
 
   useEffect(() => {
     if (refreshToken === 0) return;
@@ -243,27 +310,29 @@ export default function SpecialtyList({
     [busyId, load],
   );
 
+  const defaults = useMemo(() => defaultListState(mode), [mode]);
+
   const resetFilters = useCallback(() => {
-    setRawQuery('');
-    setView('team');
-    setLine('all');
-    setStage('all');
-    setAssignee('all');
-    setCarrierId('all');
-    setResult(mode === 'work' ? 'open' : 'all');
+    setRawQuery(defaults.query);
+    setView(defaults.view);
+    setLine(defaults.line);
+    setStage(defaults.stage);
+    setAssignee(defaults.assignee);
+    setCarrierId(defaults.carrierId);
+    setResult(defaults.result);
     setPage(0);
-  }, [mode]);
+  }, [defaults]);
 
   const pageStart = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
   const pageEnd = Math.min((page + 1) * PAGE_SIZE, totalCount);
   const filtersActive =
     rawQuery.trim() !== '' ||
-    view !== 'team' ||
-    line !== 'all' ||
-    stage !== 'all' ||
-    assignee !== 'all' ||
-    carrierId !== 'all' ||
-    result !== (mode === 'work' ? 'open' : 'all');
+    view !== defaults.view ||
+    line !== defaults.line ||
+    stage !== defaults.stage ||
+    assignee !== defaults.assignee ||
+    carrierId !== defaults.carrierId ||
+    result !== defaults.result;
 
   return (
     <div className="space-y-5">
@@ -387,7 +456,7 @@ export default function SpecialtyList({
                 title={viewDescription(option)}
                 onClick={() => {
                   setView(option);
-                  setResult(option === 'closed' ? 'all' : mode === 'work' ? 'open' : result);
+                  setResult(option === 'closed' ? 'all' : defaults.result);
                   setPage(0);
                 }}
                 className={
@@ -490,7 +559,7 @@ export default function SpecialtyList({
                 className={ui.select}
                 value={result}
                 onChange={(event) => {
-                  setResult(event.target.value as 'all' | 'open' | 'sold' | 'not_sold');
+                  setResult(event.target.value as SpecialtyResultFilter);
                   setPage(0);
                 }}
               >
@@ -625,28 +694,33 @@ export default function SpecialtyList({
                       )}
                     </td>
 
+                    {/*
+                      Never blank. What a teammate recorded wins; otherwise the row shows
+                      the same reading the workspace derives, so scanning the list answers
+                      "what needs doing" without opening anything.
+                    */}
                     <td className={ui.td}>
+                      <p
+                        className={`font-bold ${
+                          row.next_action ? 'text-slate-700' : 'text-slate-500'
+                        }`}
+                      >
+                        {listNextAction(row)}
+                      </p>
                       {row.next_action ? (
-                        <>
-                          <p className="font-bold text-slate-700">{row.next_action}</p>
-                          <p
-                            className={`mt-1 flex items-center gap-1 text-xs font-black ${
-                              row.is_overdue
-                                ? 'text-rose-600'
-                                : row.is_due_today
-                                  ? 'text-amber-600'
-                                  : 'text-slate-400'
-                            }`}
-                          >
-                            <Clock className="h-3.5 w-3.5" />
-                            {formatDue(row.next_action_due)}
-                          </p>
-                        </>
-                      ) : (
-                        <span className="text-xs font-bold text-slate-400">
-                          {row.result ? '—' : 'No next action set'}
-                        </span>
-                      )}
+                        <p
+                          className={`mt-1 flex items-center gap-1 text-xs font-black ${
+                            row.is_overdue
+                              ? 'text-rose-600'
+                              : row.is_due_today
+                                ? 'text-amber-600'
+                                : 'text-slate-400'
+                          }`}
+                        >
+                          <Clock className="h-3.5 w-3.5" />
+                          {formatDue(row.next_action_due)}
+                        </p>
+                      ) : null}
                     </td>
 
                     <td className={ui.td}>

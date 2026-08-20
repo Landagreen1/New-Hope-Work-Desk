@@ -50,6 +50,16 @@ const READS = sql('v1.16.3-specialty-reads.sql');
 const REPORTS = sql('v1.16.4-specialty-reports.sql');
 const ROUTING = sql('v1.16.5-specialty-intake-routing.sql');
 const LEGACY = sql('v1.16.6-specialty-legacy-adoption.sql');
+/**
+ * The Market Directory migration, which is where `specialty_documents.category` was
+ * last redefined.
+ *
+ * v1.17.0 drops the v1.16.1 constraint and adds it back with `generated_application`,
+ * so v1.16.1 is no longer the authoritative list for that one column. Reading only
+ * v1.16.1 was making this suite report a mismatch that does not exist in the database —
+ * the live constraint carries all ten values.
+ */
+const MARKET_DIRECTORY = sql('v1.17.0-market-directory.sql');
 
 const ALL = [TEAMS, CORE, MUTATIONS, READS, REPORTS, ROUTING, LEGACY].join('\n');
 
@@ -126,7 +136,11 @@ describe('other vocabularies match their CHECK constraints', () => {
   });
 
   it('document categories', () => {
-    expect([...DOCUMENT_CATEGORIES].sort()).toEqual([...checkValues(CORE, 'category')].sort());
+    // Read from v1.17.0, not v1.16.1: that migration drops and re-adds this constraint
+    // to admit `generated_application`, so it is the latest authoritative definition.
+    expect([...DOCUMENT_CATEGORIES].sort()).toEqual(
+      [...checkValues(MARKET_DIRECTORY, 'category')].sort(),
+    );
   });
 
   it('price delivery methods', () => {
