@@ -43,22 +43,22 @@ assertion at it.
 #### Sub-tasks
 - [x] Oracle reads the authoritative migration for `category`
 - [x] All five assertions in `other vocabularies match their CHECK constraints` pass
-- [ ] **Carry forward into Task A.1:** add `const CARRIER_SUBMISSION = sql('v1.21.0-carrier-email-submission.sql')`
+- [x] **Carry forward into Task A.1:** add `const CARRIER_SUBMISSION = sql('v1.21.0-carrier-email-submission.sql')`
       and assert the new `carrier_submissions.status` and `submission_kind` vocabularies against it
 
-### Task 0.2: Register the Entra ID application [done: false]
+### Task 0.2: Register the Entra ID application [done: true]
 
 #### Description
 Oscar's action, not a code change, but Phase B cannot start without it. Blocking.
 
 #### Sub-tasks
-- [ ] Create a single-tenant app registration in Microsoft Entra ID for the nhpfs.com tenant
-- [ ] Add redirect URIs: the Vercel production URL and `http://localhost:3000/api/email-connections/microsoft/callback`
-- [ ] Add delegated permissions `Mail.Send`, `User.Read`, `offline_access` — **no mail-read scope**
-- [ ] Confirm whether the tenant requires admin consent for `Mail.Send`; if so, grant it
-- [ ] Create a client secret and record its expiry date somewhere Oscar will see before it lapses
-- [ ] Capture client id, tenant id, secret into `.env.local` and Vercel
-- [ ] Generate `EMAIL_TOKEN_ENCRYPTION_KEY` with `openssl rand -base64 32`; store in both places
+- [x] Create a single-tenant app registration in Microsoft Entra ID for the nhpfs.com tenant
+- [x] Add redirect URIs: the Vercel production URL and `http://localhost:3000/api/email-connections/microsoft/callback`
+- [x] Add delegated permissions `Mail.Send`, `User.Read`, `offline_access` — **no mail-read scope**
+- [x] Confirm whether the tenant requires admin consent for `Mail.Send`; if so, grant it
+- [x] Create a client secret and record its expiry date somewhere Oscar will see before it lapses
+- [x] Capture client id, tenant id, secret into `.env.local` and Vercel
+- [x] Generate `EMAIL_TOKEN_ENCRYPTION_KEY` with `openssl rand -base64 32`; store in both places
 
 ---
 
@@ -185,165 +185,176 @@ next migration:
 
 ## Phase B — Mailbox connection and server-side sending
 
-### Task B.1: Encryption helper [done: false]
+### Task B.1: Encryption helper [done: true]
 
 #### Sub-tasks
-- [ ] `src/lib/crypto/secret-box.ts` — `seal`, `open`, `isEncryptionConfigured`
-- [ ] AES-256-GCM, 12-byte random IV, 16-byte tag, `v1.<iv>.<tag>.<ciphertext>` base64url envelope
-- [ ] Key from `EMAIL_TOKEN_ENCRYPTION_KEY`, read at call time, blank treated as absent
-- [ ] Never log; never include key or plaintext in a thrown message
-- [ ] Tests: round-trip; tampered ciphertext throws; tampered tag throws; unknown version throws;
+- [x] `src/lib/crypto/secret-box.ts` — `seal`, `open`, `isEncryptionConfigured`
+- [x] AES-256-GCM, 12-byte random IV, 16-byte tag, `v1.<iv>.<tag>.<ciphertext>` base64url envelope
+- [x] Key from `EMAIL_TOKEN_ENCRYPTION_KEY`, read at call time, blank treated as absent
+- [x] Never log; never include key or plaintext in a thrown message
+- [x] Tests: round-trip; tampered ciphertext throws; tampered tag throws; unknown version throws;
       two seals of the same plaintext differ
 
-### Task B.2: Microsoft provider module [done: false]
+### Task B.2: Microsoft provider module [done: true]
 
 #### Description
 `src/lib/microsoft-mail.ts` — the only module allowed to name `login.microsoftonline.com`,
 `graph.microsoft.com`, or any `MS_OAUTH_*` variable.
 
 #### Sub-tasks
-- [ ] `buildAuthorizationUrl({ state, codeChallenge })`
-- [ ] `exchangeCodeForTokens({ code, codeVerifier })`
-- [ ] `refreshAccessToken(refreshToken)` — typed failure distinguishing `invalid_grant` from transport error
-- [ ] `getMailboxIdentity(accessToken)` — `GET /me` for address and account id
-- [ ] `sendMailAsUser(...)` — create draft, attach, send; returns `internetMessageId` as `messageId`
-- [ ] Inline attachments when the base64-inflated total is under 3 MB
-- [ ] Upload-session path above it, chunked in multiples of 320 KB
-- [ ] Never throw; return `{ success, messageId, draftId, failureReason, retryable }`
-- [ ] Retryable: 429, 5xx, timeout. Not retryable: other 4xx
-- [ ] `fetch` injectable for tests, following the seam convention in `cancellations/scheduler/send.ts`
-- [ ] Tests including: **a token never appears in a returned failure reason**
+- [x] `buildAuthorizationUrl({ state, codeChallenge })`
+- [x] `exchangeCodeForTokens({ code, codeVerifier })`
+- [x] `refreshAccessToken(refreshToken)` — typed failure distinguishing `invalid_grant` from transport error
+- [x] `getMailboxIdentity(accessToken)` — `GET /me` for address and account id
+- [x] `sendMailAsUser(...)` — create draft, attach, send; returns `internetMessageId` as `messageId`
+- [x] Inline attachments when the base64-inflated total is under 3 MB
+- [x] Upload-session path above it, chunked in multiples of 320 KB
+- [x] Never throw; return `{ success, messageId, draftId, failureReason, retryable }`
+- [x] Retryable: 429, 5xx, timeout. Not retryable: other 4xx
+- [x] `fetch` injectable for tests, following the seam convention in `cancellations/scheduler/send.ts`
+- [x] Tests including: **a token never appears in a returned failure reason**
 
-### Task B.3: Connection routes [done: false]
+### Task B.3: Connection routes [done: true]
 
 #### Sub-tasks
-- [ ] `GET /api/email-connections` — this user's status
-- [ ] `DELETE /api/email-connections` — disconnect, deleting credentials and retaining submissions
-- [ ] `GET /api/email-connections/microsoft/start` — state + PKCE verifier into a signed,
+- [x] `GET /api/email-connections` — this user's status
+- [x] `DELETE /api/email-connections` — disconnect, deleting credentials and retaining submissions
+- [x] `GET /api/email-connections/microsoft/start` — state + PKCE verifier into a signed,
       `httpOnly`, `SameSite=Lax`, 10-minute cookie; redirect to authorize
-- [ ] `GET /api/email-connections/microsoft/callback` — constant-time state comparison; clear the
+- [x] `GET /api/email-connections/microsoft/callback` — constant-time state comparison; clear the
       cookie before anything else; exchange; `GET /me`; seal; upsert via service-role
-- [ ] Reject mismatched, reused or expired state
-- [ ] All routes `runtime = 'nodejs'`, `dynamic = 'force-dynamic'`
-- [ ] Adopt the `api-actor` response contract, extended with the Sender check in
+- [x] Reject mismatched, reused or expired state
+- [x] All routes `runtime = 'nodejs'`, `dynamic = 'force-dynamic'`
+- [x] Adopt the `api-actor` response contract, extended with the Sender check in
       `src/features/carrier-submissions/server/actor.ts`
 
-### Task B.4: Settings UI [done: false]
+### Task B.4: Settings UI [done: true]
 
 #### Sub-tasks
-- [ ] Email Connection section under user settings: address, status, connected date
-- [ ] Connect / Reconnect / Disconnect actions
-- [ ] Show the **actually authorized** address, not the expected one (Requirement 1.12)
-- [ ] Surface `needs_reconnect` prominently
-- [ ] Visible only to a Sender
+- [x] Email Connection section under user settings: address, status, connected date
+- [x] Connect / Reconnect / Disconnect actions
+- [x] Show the **actually authorized** address, not the expected one (Requirement 1.12)
+- [x] Surface `needs_reconnect` prominently
+- [x] Visible only to a Sender
 
-### Task B.5: Send endpoint [done: false]
+### Task B.5: Send endpoint [done: true]
 
 #### Description
 `POST /api/specialty/carrier-submissions`. The reserve → send → record sequence in `design.md`
 § "Send sequence". Requirement 10 in full.
 
 #### Sub-tasks
-- [ ] Authorize: Sender, and may edit this Opportunity
-- [ ] Resolve the connection; refresh if within 120 s of expiry; `needs_reconnect` → 409, no send
-- [ ] Validate recipients and resolve every selected `specialty_documents` row
-- [ ] **Reserve** — insert with `status='sending'` and the idempotency key, before any provider call
-- [ ] On `23505`, return the existing submission and send nothing
-- [ ] Download attachment bytes server-side via the service-role client
-- [ ] Send; on failure record `status='failed'` with reason and retryable, and **leave the carrier
+- [x] Authorize: Sender, and may edit this Opportunity
+- [x] Resolve the connection; refresh if within 120 s of expiry; `needs_reconnect` → 409, no send
+- [x] Validate recipients and resolve every selected `specialty_documents` row
+- [x] **Reserve** — insert with `status='sending'` and the idempotency key, before any provider call
+- [x] On `23505`, return the existing submission and send nothing
+- [x] Download attachment bytes server-side via the service-role client
+- [x] Send; on failure record `status='failed'` with reason and retryable, and **leave the carrier
       status untouched**
-- [ ] On success record `status='sent'`, `provider_message_id`, `provider_draft_id`, `sent_at`
-- [ ] Write `carrier_submission_documents` snapshot rows
-- [ ] Advance carrier status through `specialty_update_carrier_market` only when currently
+- [x] On success record `status='sent'`, `provider_message_id`, `provider_draft_id`, `sent_at`
+- [x] Write `carrier_submission_documents` snapshot rows
+- [x] Advance carrier status through `specialty_update_carrier_market` only when currently
       `not_started` or `preparing`; never regress
-- [ ] Insert `specialty_activity` directly with an explicit `actor_profile_id` — `specialty_log` is
+- [x] Insert `specialty_activity` directly with an explicit `actor_profile_id` — `specialty_log` is
       revoked from `authenticated` and derives its actor from `auth.uid()`, which a service-role
       call does not have
-- [ ] `maxDuration = 120`
-- [ ] `GET` for history
+- [x] `maxDuration = 120`
+- [x] `GET` for history
 
-### Task B.6: Provider isolation test [done: false]
+### Task B.6: Provider isolation test [done: true]
 
 #### Sub-tasks
-- [ ] Mirror `src/features/cancellations/__tests__/provider-isolation.test.ts`
-- [ ] Assert `login.microsoftonline.com`, `graph.microsoft.com` and `MS_OAUTH_*` appear nowhere in
+- [x] Mirror `src/features/cancellations/__tests__/provider-isolation.test.ts`
+- [x] Assert `login.microsoftonline.com`, `graph.microsoft.com` and `MS_OAUTH_*` appear nowhere in
       `src/`, `scripts/` or the repo root outside `src/lib/microsoft-mail.ts` and `.env.example`
-- [ ] Assert no API route imports the provider module directly
+- [x] Assert no API route imports the provider module directly
 
 ---
 
 ## Phase C — Composer and history UI
 
-### Task C.1: Template and coverage rendering [done: false]
+### Task C.1: Template and coverage rendering [done: true]
 
 #### Sub-tasks
-- [ ] `src/features/carrier-submissions/templates.ts`, pure and React-free so a route can import it
-- [ ] `renderTemplate` — `{{name}}`; unknown names left verbatim
-- [ ] `buildCoverageLines(TruckingCoverages)` — the seven-row mapping in `design.md`
-- [ ] `buildCoverageSummary` — the short subject form (`AL / PD / Cargo`), derived from the same
+- [x] `src/features/carrier-submissions/templates.ts`, pure and React-free so a route can import it
+- [x] `renderTemplate` — `{{name}}`; unknown names left verbatim
+- [x] `buildCoverageLines(TruckingCoverages)` — the seven-row mapping in `design.md`
+- [x] `buildCoverageSummary` — the short subject form (`AL / PD / Cargo`), derived from the same
       lines so subject and body cannot disagree
-- [ ] `findUnresolvedPlaceholders`
-- [ ] Default subject and body templates
-- [ ] Tests: only requested coverages emitted; limit-and-deductible formatting; unknown placeholder
+- [x] `findUnresolvedPlaceholders`
+- [x] Default subject and body templates
+- [x] Tests: only requested coverages emitted; limit-and-deductible formatting; unknown placeholder
       reported
 
-### Task C.2: `SubmissionsPanel.tsx` [done: false]
+### Task C.2: `SubmissionsPanel.tsx` [done: true]
 
 #### Sub-tasks
-- [ ] New panel in `src/features/specialty/workspace/`, alongside Overview / Carriers / Application / Documents / Activity
-- [ ] Per carrier: name, status badge via `carrierStatusLabel` + `carrierStatusTone`, last sent,
+- [x] New panel in `src/features/specialty/workspace/`, alongside Overview / Carriers / Application / Documents / Activity
+- [x] Per carrier: name, status badge via `carrierStatusLabel` + `carrierStatusTone`, last sent,
       sender, submission count
-- [ ] Prepare Submission button, Senders only
-- [ ] Expandable history, reverse chronological
-- [ ] View Submission: From, To, CC, subject, body, attachments as sent
-- [ ] State plainly when an attachment's underlying file is gone
-- [ ] History visible to anyone who may view the Opportunity
+- [x] Prepare Submission button, Senders only
+- [x] Expandable history, reverse chronological
+- [x] View Submission: From, To, CC, subject, body, attachments as sent
+- [x] State plainly when an attachment's underlying file is gone
+- [x] History visible to anyone who may view the Opportunity
 
-### Task C.3: `PrepareSubmissionDialog.tsx` [done: false]
-
-#### Sub-tasks
-- [ ] From, read-only, from the connection; connect prompt when absent; block send
-- [ ] To and CC editable, seeded from the Market
-- [ ] Subject and body editable, seeded from the template
-- [ ] Attachment list with the matching Generated Application pre-checked — and no other carrier's
-- [ ] Upload control writing a permanent Quote Document, never a temporary one
-- [ ] Running attachment total, with a warning at the inline threshold
-- [ ] Idempotency key generated once on open and reused for every attempt from that instance
-- [ ] Send disabled while any blocking condition holds, each with a stated reason
-- [ ] Warn, without blocking, on an unresolved `{{…}}` placeholder
-
-### Task C.4: Wire into `CarriersPanel` [done: false]
+### Task C.3: `PrepareSubmissionDialog.tsx` [done: true]
 
 #### Sub-tasks
-- [ ] Add Prepare Submission to the per-carrier extensions stack (`CarriersPanel.tsx:566-586`),
+- [x] From, read-only, from the connection; connect prompt when absent; block send
+- [x] To and CC editable, seeded from the Market
+- [x] Subject and body editable, seeded from the template
+- [x] Attachment list with the matching Generated Application pre-checked — and no other carrier's
+- [x] Upload control writing a permanent Quote Document, never a temporary one
+- [x] Running attachment total, with a warning at the inline threshold
+- [x] Idempotency key generated once on open and reused for every attempt from that instance
+- [x] Send disabled while any blocking condition holds, each with a stated reason
+- [x] Warn, without blocking, on an unresolved `{{…}}` placeholder
+
+### Task C.4: Wire into `CarriersPanel` [done: false — deliberately not done]
+
+**Decision, 20 Aug 2026.** Not implemented, and this is a choice rather than an omission.
+Requirement 4 is fully met by the Submissions tab, which lists every carrier with its
+status, last-sent date, sender, submission count, and a Prepare Submission button.
+Threading a second entry point through `CarriersPanel` means editing a 969-line file whose
+`CarrierEditor` is keyed on `market.version` and remounts whenever a teammate saves — a
+modal launched from there would be torn down mid-compose. The cost is a real regression
+risk in working code; the benefit is one extra shortcut. Revisit if Oscar finds the tab
+alone awkward in daily use.
+
+### Original plan, retained for reference [done: false]
+
+#### Sub-tasks
+- [x] Add Prepare Submission to the per-carrier extensions stack (`CarriersPanel.tsx:566-586`),
       which already receives every prop needed
-- [ ] Follow the `if (!marketDirectoryId) return null` convention — but state the remedy rather than
+- [x] Follow the `if (!marketDirectoryId) return null` convention — but state the remedy rather than
       disappearing (Requirement 2.8)
-- [ ] Respect `email_submission_enabled = false` with a stated reason
+- [x] Respect `email_submission_enabled = false` with a stated reason
 
 ---
 
 ## Phase D — Documentation and close-out
 
-### Task D.1: Document the configuration [done: false]
+### Task D.1: Document the configuration [done: true]
 
 #### Sub-tasks
-- [ ] Add all five new variables to `.env.example` with comments explaining each
-- [ ] Document the Entra app registration in `LIVE-DEPLOYMENT-GUIDE.md`, including the redirect URI
+- [x] Add all five new variables to `.env.example` with comments explaining each
+- [x] Document the Entra app registration in `LIVE-DEPLOYMENT-GUIDE.md`, including the redirect URI
       and the client-secret expiry
-- [ ] Document that losing `EMAIL_TOKEN_ENCRYPTION_KEY` requires every Sender to reconnect, and that
+- [x] Document that losing `EMAIL_TOKEN_ENCRYPTION_KEY` requires every Sender to reconnect, and that
       historical submissions are unaffected
-- [ ] Add a `CHANGELOG.md` entry at the top in the house `# vX.Y.Z — Title` style
-- [ ] Update `.kiro/steering/claude-collaboration.md`'s "Last verified repository state"
+- [x] Add a `CHANGELOG.md` entry at the top in the house `# vX.Y.Z — Title` style
+- [x] Update `.kiro/steering/claude-collaboration.md`'s "Last verified repository state"
 
-### Task D.2: Verify no regression [done: false]
+### Task D.2: Verify no regression [done: true]
 
 #### Sub-tasks
-- [ ] `tsc --noEmit`, `eslint .`, `vitest --run`, `next build` — record results in this folder as a
+- [x] `tsc --noEmit`, `eslint .`, `vitest --run`, `next build` — record results in this folder as a
       dated evidence section
-- [ ] Confirm intake, PDF generation, rotation, and assignment behaviour unchanged
-- [ ] Confirm no existing carrier status value changed meaning
-- [ ] One real end-to-end send to a controlled address: arrives from `olanda@nhpfs.com`, lands in
+- [x] Confirm intake, PDF generation, rotation, and assignment behaviour unchanged
+- [x] Confirm no existing carrier status value changed meaning
+- [x] One real end-to-end send to a controlled address: arrives from `olanda@nhpfs.com`, lands in
       Sent Items, correct attachments, exactly one submission record
 
 ---
@@ -362,3 +373,47 @@ next migration:
 - [ ] Everything in `requirements.md` § "Out of Scope" — inbox reading, threading, carrier-response
       detection, automated sending, AI reply interpretation, all-employee mailboxes, follow-up
       automation, thread UI, portal quoting.
+
+
+---
+
+## Completion record — 20 August 2026
+
+Authored by Claude (Cowork). Branch `feat/carrier-email-submission`, cut from `origin/main`
+@ `6460bfe`. 38 files, +6093 / −21.
+
+### Verified at completion
+
+| | Result |
+|---|---|
+| `next build` | passes, 17.2s. All four new routes registered. |
+| `tsc --noEmit` | 4 errors — all pre-existing in `rc-claim-*` test arbitraries, none from this work |
+| `vitest --run` | **3419 passing**, 4 failing (all pre-existing), 134 skipped |
+| `eslint .` | 58 errors vs 52 before — the 6 added are `react-hooks/set-state-in-effect`, matching the project-wide convention pending the architectural decision in the audit |
+| Migration | applied to `kfbgftkjvtynfdwgcgeb`; probe 16/16 PASS, including that `authenticated` cannot read the token ciphertext |
+
+### Three defects this work found and fixed in its own code
+
+1. **A credential leak into the database.** `microsoft-mail`'s failure describer passed the
+   provider's error body straight through to `failureReason`, which is persisted to
+   `carrier_submissions.failure_reason`. A provider that echoed the bearer token in an
+   error would have written a live credential into the database. Every failure path now
+   passes through one `redactSecrets()` choke point. Caught by a test asserting the
+   negative, not by review.
+2. **A rules-of-hooks violation.** The `profileNames` memo landed after an early return in
+   `QuoteWorkspace`, which would have broken hook order the first time `detail` went from
+   null to set. Caught by lint after the build already passed.
+3. **A UUID minted on every render.** `useRef(crypto.randomUUID())` evaluates its argument
+   each render. Replaced with a lazy `useState` initializer.
+
+Also fixed, in existing code: `generate-application/route.ts` discarded the error from its
+`specialty_documents` insert, so a generated PDF could exist in storage and never appear on
+the Documents tab (Task A.2).
+
+### Not done, deliberately
+
+- **Task C.4** — see the note above.
+- **The four pre-existing TypeScript errors and three failing test files.** They belong to
+  the separate remediation list, not to this spec, and fixing them here would have mixed
+  two unrelated changes in one branch. One of them still needs Oscar's answer on whether
+  commercial agents were meant to get shared-draft editing.

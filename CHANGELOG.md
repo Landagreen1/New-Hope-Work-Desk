@@ -16,6 +16,17 @@
 - Generated carrier applications now fail loudly if they cannot be recorded as a quote document. Previously that write discarded its error, so a PDF could exist in storage and never appear on the Documents tab.
 - Added Supabase migration v1.21.0 with its own post-conditions, a tested rollback, and a verification probe.
 
+# v1.20.1 — Personal Quotes CSV Export
+
+- Added `public.personal_quotes_export`, a flat one-row-per-quote view covering every personal-lines quote from the first one in the system (13 July 2026) to now: customer name, source, type, creation date, current status, not-sold reason, the date it was sold or not sold, the date pricing went out, and the assigned agent. Run it in the Supabase SQL editor and use Download CSV.
+- The export is built on the existing `reporting_quote_facts` rather than a second union of `work_items` / `pending_pricing_quotes` / `quote_outcomes`. A quote physically moves between those three tables and the previous row is deleted, so "a quote" has exactly one definition worth having, and the CSV now shares it with the Sales Reporting Center instead of drifting from it.
+- **Type** is read from `assignment_method`, the enum the claim functions actually write, not from the free-text `received_through`: WhatsApp, RingCentral, Additional Workload, Manual Workload, Manual Quote, Manager Assigned. **Source** follows the same precedence the Quote Center uses (dealer, then walk-in, then received-through, then intake channel), and a quote with no source reads "Not recorded" rather than blank.
+- The not-sold reason is split into a category and a detail. Merged into one column, the free text agents type under "Other" produced over a hundred distinct one-row reasons and the column could not be pivoted.
+- Voided, cancelled and duplicate-retry quotes stay in the view with `is_excluded = true` and a readable `exclusion_reason`, so an excluded quote is a decision the reader can see rather than a silent gap. The canonical export filters them; query 4 in the companion file lists them.
+- Timestamps are rendered in the business timezone from `attendance_policy.business_timezone`, so the dates in the CSV are the dates the desk saw. The raw UTC value is kept in its own column.
+- Added `supabase/verification/personal-quotes-export.sql`: the ready-to-download query, narrower cuts by date range, agent, open-only and strict personal lines, and reconciliation checks that count the view against the three raw tables. Verified live: the view's `active` / `pending_pricing` / `finalized` counts match `work_items`, `pending_pricing_quotes` and `quote_outcomes` exactly, and its row count matches `reporting_quote_facts`. The absolute totals move as the desk works, so the reconciliation is the assertion, not any particular number — at deploy time it was 2,306 quotes, 2,304 exportable and 2 excluded, from 13 July 2026 onward.
+- `commercial_auto` CS intakes are kept and labelled in `line_of_business`. They ride the personal Sales Queue, so dropping them would make the export disagree with the reporting totals; the companion file shows how to exclude them when a strict cut is wanted.
+
 # v1.20.0 — Specialty Quote Workspace
 
 - Opening a Specialty Quote is now a **navigation to its own full-screen page** at `/specialty-quotes/[quoteId]`, not a side panel. Browser Back returns to the list, refreshing keeps the quote open, and a manager can send a teammate a link straight to a quote — or to one carrier's request.

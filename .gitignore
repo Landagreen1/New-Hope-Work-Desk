@@ -42,3 +42,7 @@ scripts/*-import.sql
 scripts/apply-specialty-migrations.mjs
 scripts/apply-v1.13-direct.mjs
 scripts/apply-v1.13-migrations.mjs
+
+# Handover patch artifacts. These are a second copy of work that is reviewed and
+# merged through a branch, so committing them puts the same change in history twice.
+*.patch
