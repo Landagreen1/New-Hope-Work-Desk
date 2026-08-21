@@ -18,6 +18,8 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { REQUIRED_SCOPES } from '@/lib/microsoft-mail';
+
 const ROOT = process.cwd();
 
 /** The only files permitted to name the provider or its credentials. */
@@ -90,7 +92,17 @@ function stripComments(source: string): string {
     .join('\n');
 }
 
-const FILES = SCAN_DIRS.flatMap((dir) => collectFiles(path.join(ROOT, dir)));
+/**
+ * Everything scanned, minus this file.
+ *
+ * A test that forbids a set of literals must name those literals, so scanning itself is
+ * guaranteed self-indictment. Excluding it is not a loophole: this file contains no
+ * runtime code, and the allowlists above already state which real modules may name what.
+ */
+const SELF = path.join('src', 'features', 'carrier-submissions', '__tests__', 'provider-isolation.test.ts');
+const FILES = SCAN_DIRS.flatMap((dir) => collectFiles(path.join(ROOT, dir))).filter(
+  (file) => path.relative(ROOT, file) !== SELF,
+);
 
 describe('the Microsoft provider stays in one module', () => {
   it('scans a plausible number of files', () => {
@@ -137,14 +149,51 @@ describe('the Microsoft provider stays in one module', () => {
     expect(unexpected).toEqual([]);
   });
 
-  it('no mail-read scope is requested anywhere', () => {
-    // Requirement 1.4 and the Out of Scope list. The permission set is the enforcement of
-    // "this application cannot read your inbox"; a widened scope should fail a build.
+  it('requests exactly the four scopes it needs and no others', () => {
+    // This test replaces an earlier one that forbade every `Mail.Read*` scope outright.
+    // That assertion encoded a promise the product could not keep: `POST /me/messages`
+    // requires delegated `Mail.ReadWrite`, so the draft path — chosen because
+    // `/me/sendMail` returns no message identifier — cannot work without it. The original
+    // scope set produced 403 ErrorAccessDenied on every send.
+    //
+    // The boundary is therefore redrawn rather than deleted. `Mail.ReadWrite` is admitted
+    // because a specific call needs it; everything wider still fails the build, including
+    // the `.Shared` variants that would reach OTHER people's mailboxes, and the
+    // MailboxSettings scopes that have nothing to do with sending.
+    expect([...REQUIRED_SCOPES].sort()).toEqual(
+      ['Mail.ReadWrite', 'Mail.Send', 'User.Read', 'offline_access'].sort(),
+    );
+
+    const FORBIDDEN = [
+      'Mail.Read.Shared',
+      'Mail.ReadWrite.Shared',
+      'Mail.Send.Shared',
+      'Mail.ReadBasic.All',
+      'MailboxSettings.Read',
+      'MailboxSettings.ReadWrite',
+      'Mail.ReadWrite.All',
+      'Mail.Read.All',
+      'Directory.Read.All',
+      'User.ReadWrite',
+    ];
     for (const file of FILES) {
       const source = readFileSync(file, 'utf8');
-      expect(source, `${path.relative(ROOT, file)} requests a mail-read scope`).not.toMatch(
-        /Mail\.Read(Write|Basic)?\b/,
-      );
+      for (const scope of FORBIDDEN) {
+        expect(source, `${path.relative(ROOT, file)} names ${scope}`).not.toContain(scope);
+      }
+    }
+  });
+
+  it('never requests application permissions', () => {
+    // This is delegated OAuth: Oscar signs in and the Work Desk sends as Oscar. An
+    // application permission would let the server send as ANY mailbox in the tenant with
+    // no user present, which is a categorically different — and much larger — grant.
+    for (const file of FILES) {
+      const source = stripComments(readFileSync(file, 'utf8'));
+      expect(source, `${path.relative(ROOT, file)} uses the client_credentials grant`)
+        .not.toContain('client_credentials');
+      expect(source, `${path.relative(ROOT, file)} requests the .default scope`)
+        .not.toContain('/.default');
     }
   });
 });

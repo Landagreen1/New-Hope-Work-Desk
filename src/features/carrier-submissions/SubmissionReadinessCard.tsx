@@ -183,8 +183,11 @@ export default function SubmissionReadinessCard({
         ) : null}
 
         <p className="mt-4 text-xs font-semibold leading-5 text-slate-400">
-          The Work Desk asks only for permission to send mail as you and to read your name. It
-          cannot read your inbox, and your password is never stored.
+          The Work Desk asks Microsoft for permission to read and write your mail, to send mail as
+          you, and to read your name. The read-and-write permission is what lets it compose the
+          submission in your mailbox so the sent message and any carrier replies live in your own
+          Sent Items and inbox. It reads nothing on its own and stores no copy of your mail, and
+          your password is never stored.
         </p>
       </div>
     </div>

@@ -123,8 +123,15 @@ mailbox you actually connected, so the settings screen can show you the real add
 one we assumed. `offline_access` is what returns a refresh token — without it, the connection would
 die within an hour and you would have to re-authorize constantly.
 
-**Note that no mail-read scope appears on this list.** That is deliberate and permanent — the app
-cannot read your inbox, by design, and this permission list is the enforcement.
+**Amended 21 August 2026 — `Mail.ReadWrite` is also required.** The submission is composed as a
+draft in your own mailbox before it is sent, and Microsoft Graph requires `Mail.ReadWrite` for
+that call. `Mail.Send` on its own authorises only a fire-and-forget send that returns no message
+identifier, so a submission could never prove it went out. Add `Mail.ReadWrite` alongside the other
+three.
+
+What is still refused: the `.Shared` and `.All` variants, which would reach other people's
+mailboxes, and application permissions, which would let the server send as anyone with no user
+present. A test fails the build if either appears.
 
 ### Step 6: Admin consent — try it, but it is optional
 

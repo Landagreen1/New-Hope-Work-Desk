@@ -295,9 +295,21 @@ In the Microsoft Entra admin center (`https://entra.microsoft.com`), **Entra ID 
 registrations → New registration**:
 
 - **Supported account types:** single tenant only.
-- **Delegated** Microsoft Graph permissions: `Mail.Send`, `User.Read`, `offline_access`.
-  No mail-read scope, ever — that permission list is what enforces "the Work Desk cannot
-  read your inbox", and a test fails the build if one is added.
+- **Delegated** Microsoft Graph permissions: `Mail.ReadWrite`, `Mail.Send`, `User.Read`,
+  `offline_access`. All four are needed and none is optional.
+
+  `Mail.ReadWrite` is required because the submission is composed as a draft in the
+  sender's own mailbox (`POST /me/messages`) before it is sent. Microsoft Graph requires
+  that permission for that call; `Mail.Send` authorises only `POST /me/sendMail` and
+  nothing else. An earlier version of this guide asked for `Mail.Send` alone, which
+  produced `403 ErrorAccessDenied` on every submission.
+
+  It is genuinely broader than "send on my behalf", and that is the cost of being able to
+  prove a message was sent: `/me/sendMail` returns no message identifier at all.
+
+  Do NOT add the `.Shared` or `.All` variants — those reach other people's mailboxes. Do
+  NOT add any of these as **Application** permissions; a test fails the build if the
+  client-credentials grant or the `.default` scope appears anywhere.
 - Redirect URIs under the **Web** platform, one per environment:
 
 ```text

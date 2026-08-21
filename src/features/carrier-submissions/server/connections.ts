@@ -12,7 +12,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { open, seal } from '@/lib/crypto/secret-box';
 import {
+  INCOMPLETE_AUTHORIZATION_MESSAGE,
   getConfig,
+  missingSendScopes,
   refreshAccessToken,
   type MicrosoftConfig,
   type TokenSet,
@@ -85,6 +87,13 @@ export async function storeConnection(input: {
     return { ok: false, reason: err instanceof Error ? err.message : 'Could not encrypt the credentials.' };
   }
 
+  // Consent can succeed while granting less than was asked for — a tenant policy, or a
+  // user who declined one item on the consent screen. The connection would then look
+  // perfectly healthy and fail at the first send with a 403 nobody can interpret. So the
+  // granted scopes decide the stored status.
+  const missing = missingSendScopes(input.tokens.scopes);
+  const incomplete = missing.length > 0;
+
   const { error } = await input.service.from(TABLE).upsert(
     {
       profile_id: input.profileId,
@@ -95,14 +104,19 @@ export async function storeConnection(input: {
       encrypted_access_credentials: envelope,
       token_expires_at: input.tokens.expiresAt,
       scopes: input.tokens.scopes,
-      status: 'connected',
-      last_error: null,
+      status: incomplete ? 'needs_reconnect' : 'connected',
+      last_error: incomplete
+        ? `${INCOMPLETE_AUTHORIZATION_MESSAGE} Missing: ${missing.join(', ')}.`
+        : null,
       connected_at: new Date().toISOString(),
     },
     { onConflict: 'profile_id,provider' },
   );
 
   if (error) return { ok: false, reason: 'Could not save the mailbox connection.' };
+  if (incomplete) {
+    return { ok: false, reason: `${INCOMPLETE_AUTHORIZATION_MESSAGE} Missing: ${missing.join(', ')}.` };
+  }
   return { ok: true };
 }
 
@@ -157,6 +171,19 @@ export async function getSendableToken(input: {
 
   if (row.status === 'needs_reconnect') {
     return { ok: false, code: 'needs_reconnect', reason: row.last_error ?? 'The connection needs to be re-authorised.' };
+  }
+
+  // A mailbox connected before Mail.ReadWrite was requested still holds a token that
+  // cannot create a draft. Nothing about that row looks wrong, so without this check the
+  // first symptom is a 403 at send time — after the submission has been reserved.
+  //
+  // Checking the STORED scopes means the old connection reports itself the moment anyone
+  // looks, rather than depending on someone remembering to reconnect after a deploy.
+  const missingScopes = missingSendScopes(row.scopes ?? []);
+  if (missingScopes.length > 0) {
+    const reason = `${INCOMPLETE_AUTHORIZATION_MESSAGE} Missing: ${missingScopes.join(', ')}.`;
+    await markNeedsReconnect(input.service, row.id, reason);
+    return { ok: false, code: 'needs_reconnect', reason };
   }
 
   let credentials: StoredCredentials;

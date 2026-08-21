@@ -11,6 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ACCESS_DENIED_MESSAGE,
   REQUIRED_SCOPES,
   buildAuthorizationUrl,
   createPkcePair,
@@ -20,6 +21,7 @@ import {
   getConfig,
   getMailboxIdentity,
   isMicrosoftConfigured,
+  missingSendScopes,
   needsUploadSession,
   refreshAccessToken,
   sendMailAsUser,
@@ -96,13 +98,21 @@ describe('authorization URL', () => {
     expect(url.searchParams.get('scope')?.split(' ').sort()).toEqual([...REQUIRED_SCOPES].sort());
   });
 
-  it('requests NO mail-read scope', () => {
-    // The permission list is the enforcement of "this app cannot read your inbox".
+  it('requests Mail.ReadWrite but nothing wider', () => {
+    // This assertion used to forbid every Mail.Read* scope, which encoded a promise the
+    // implementation could not keep: POST /me/messages requires delegated Mail.ReadWrite,
+    // and without it every send failed with 403 ErrorAccessDenied.
+    //
+    // The line is redrawn, not erased. Mail.ReadWrite is admitted because one specific
+    // call needs it; the `.Shared` and `.All` variants — which reach other people's
+    // mailboxes rather than the signed-in user's own — are still refused.
     const scope = new URL(buildAuthorizationUrl({
       config: CONFIG, state: 's', codeChallenge: 'c',
     })).searchParams.get('scope') ?? '';
-    expect(scope).not.toMatch(/Mail\.Read/i);
-    expect(scope).not.toMatch(/Mail\.ReadWrite/i);
+    expect(scope).toContain('Mail.ReadWrite');
+    expect(scope).not.toContain('.Shared');
+    expect(scope).not.toContain('.All');
+    expect(scope).not.toContain('MailboxSettings');
   });
 
   it('never puts the client secret in the URL', () => {
@@ -363,7 +373,8 @@ describe('sendMailAsUser', () => {
     });
     expect(result.success).toBe(false);
     expect(result.retryable).toBe(false);
-    expect(result.failureReason).toContain('ErrorAccessDenied');
+    // A 403 is translated to its remedy rather than echoed — see the 403 handling suite.
+    expect(result.failureReason).toBe(ACCESS_DENIED_MESSAGE);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
@@ -439,5 +450,118 @@ describe('sendMailAsUser', () => {
     // The caller decides what to do; the database CHECK refuses a 'sent' row with no id.
     expect(result.success).toBe(true);
     expect(result.messageId).toBeNull();
+  });
+});
+
+describe('scope requirements', () => {
+  it('requests Mail.ReadWrite as well as Mail.Send', () => {
+    // The draft path needs both, and neither implies the other: Mail.ReadWrite cannot
+    // send, Mail.Send cannot create a draft. Omitting Mail.ReadWrite produced
+    // 403 ErrorAccessDenied on POST /me/messages for every submission.
+    expect([...REQUIRED_SCOPES]).toContain('Mail.ReadWrite');
+    expect([...REQUIRED_SCOPES]).toContain('Mail.Send');
+    expect([...REQUIRED_SCOPES]).toContain('offline_access');
+    expect([...REQUIRED_SCOPES]).toContain('User.Read');
+    expect(REQUIRED_SCOPES).toHaveLength(4);
+  });
+
+  it('uses the same scope set for authorization, exchange and refresh', () => {
+    // A scope requested at authorization but omitted on refresh silently narrows the
+    // token later, which fails long after anyone would connect the two.
+    const authorize = new URL(
+      buildAuthorizationUrl({ config: CONFIG, state: 's', codeChallenge: 'c' }),
+    ).searchParams.get('scope');
+
+    const exchangeFetch = vi.fn().mockResolvedValue(jsonResponse(200, { access_token: 'a', expires_in: 60 }));
+    const refreshFetch = vi.fn().mockResolvedValue(jsonResponse(200, { access_token: 'a', expires_in: 60 }));
+
+    return Promise.all([
+      exchangeCodeForTokens({ config: CONFIG, code: 'c', codeVerifier: 'v', fetchImpl: exchangeFetch }),
+      refreshAccessToken({ config: CONFIG, refreshToken: 'r', fetchImpl: refreshFetch }),
+    ]).then(() => {
+      const exchangeScope = new URLSearchParams(exchangeFetch.mock.calls[0][1].body as string).get('scope');
+      const refreshScope = new URLSearchParams(refreshFetch.mock.calls[0][1].body as string).get('scope');
+      expect(exchangeScope).toBe(authorize);
+      expect(refreshScope).toBe(authorize);
+    });
+  });
+
+  it('is delegated, never application permissions', () => {
+    const exchangeFetch = vi.fn().mockResolvedValue(jsonResponse(200, { access_token: 'a', expires_in: 60 }));
+    return exchangeCodeForTokens({
+      config: CONFIG, code: 'c', codeVerifier: 'v', fetchImpl: exchangeFetch,
+    }).then(() => {
+      const form = new URLSearchParams(exchangeFetch.mock.calls[0][1].body as string);
+      expect(form.get('grant_type')).toBe('authorization_code');
+      expect(form.get('scope')).not.toContain('.default');
+    });
+  });
+});
+
+describe('missingSendScopes', () => {
+  it('accepts a complete grant in any case or order', () => {
+    expect(missingSendScopes(['Mail.Send', 'Mail.ReadWrite', 'User.Read'])).toEqual([]);
+    expect(missingSendScopes(['mail.readwrite', 'MAIL.SEND'])).toEqual([]);
+  });
+
+  it('accepts the fully-qualified resource URI form Microsoft sometimes returns', () => {
+    expect(missingSendScopes([
+      'https://graph.microsoft.com/Mail.ReadWrite',
+      'https://graph.microsoft.com/Mail.Send',
+    ])).toEqual([]);
+  });
+
+  it('names exactly what is missing', () => {
+    // The pre-fix grant. This is what Oscar's stored connection looks like.
+    expect(missingSendScopes(['offline_access', 'User.Read', 'Mail.Send'])).toEqual(['Mail.ReadWrite']);
+    expect(missingSendScopes(['offline_access', 'User.Read', 'Mail.ReadWrite'])).toEqual(['Mail.Send']);
+    expect(missingSendScopes(['User.Read'])).toEqual(['Mail.ReadWrite', 'Mail.Send']);
+  });
+
+  it('does NOT block when the provider returned no scope metadata', () => {
+    // Some token responses omit `scope`. Refusing to send on absent metadata would be a
+    // worse failure than the one being prevented — it would break a working mailbox.
+    expect(missingSendScopes([])).toEqual([]);
+  });
+});
+
+describe('403 handling', () => {
+  it('explains an ErrorAccessDenied on draft creation instead of echoing Graph', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse(403, {
+      error: { code: 'ErrorAccessDenied', message: 'Access is denied. Check credentials and try again.' },
+    }));
+    const result = await sendMailAsUser({
+      accessToken: ACCESS_TOKEN, subject: 'S', body: 'B', to: ['a@b.com'], fetchImpl,
+    });
+    expect(result.success).toBe(false);
+    expect(result.failureReason).toBe(ACCESS_DENIED_MESSAGE);
+    // "Check credentials" sends the reader hunting for a password problem that does not
+    // exist. The remedy is the permission grant, so that is what is said.
+    expect(result.failureReason).not.toContain('Check credentials');
+    expect(result.retryable).toBe(false);
+  });
+
+  it('explains a 403 during a large-attachment upload session too', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(201, { id: 'd1', internetMessageId: '<m>' }))
+      .mockResolvedValueOnce(jsonResponse(403, { error: { code: 'ErrorAccessDenied', message: 'nope' } }));
+    const result = await sendMailAsUser({
+      accessToken: ACCESS_TOKEN, subject: 'S', body: 'B', to: ['a@b.com'],
+      attachments: [attachment('big.pdf', 4 * 1024 * 1024)], fetchImpl,
+    });
+    expect(result.success).toBe(false);
+    expect(result.failureReason).toContain('Reconnect your mailbox');
+  });
+
+  it('still reports other Graph errors verbatim', async () => {
+    // Only 403 has a specific known remedy. Replacing every error with one friendly
+    // sentence would hide the ones that need reading.
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse(400, {
+      error: { code: 'ErrorInvalidRecipients', message: 'The recipient is invalid.' },
+    }));
+    const result = await sendMailAsUser({
+      accessToken: ACCESS_TOKEN, subject: 'S', body: 'B', to: ['a@b.com'], fetchImpl,
+    });
+    expect(result.failureReason).toContain('ErrorInvalidRecipients');
   });
 });
