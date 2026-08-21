@@ -68,7 +68,15 @@ on my behalf, so carriers receive submissions from me and their replies come bac
 3. WHEN a user begins Connect, THE system SHALL redirect to Microsoft Entra ID using OAuth 2.0
    authorization-code flow with PKCE and a cryptographically random, single-use `state` value.
 4. THE system SHALL request only the scopes it needs: `Mail.Send`, `User.Read`, and
-   `offline_access`. THE system SHALL NOT request any mail-read scope.
+   `Mail.ReadWrite`, and `offline_access`. THE system SHALL NOT request any scope that
+   reaches another user's mailbox (`.Shared`, `.All`) and SHALL NOT use application
+   permissions.
+
+   **Amended 21 August 2026.** This requirement originally forbade every mail-read scope.
+   That was wrong, and it shipped: `POST /me/messages` — the draft creation the design
+   depends on for a message identifier — requires delegated `Mail.ReadWrite`, so the
+   original scope set produced `403 ErrorAccessDenied` on every send. The boundary is now
+   drawn at "the sender's own mailbox" rather than at "no reading at all".
 5. WHEN the OAuth callback returns, THE system SHALL verify the `state` value against the one it
    issued and SHALL reject a mismatched, reused, or expired `state`.
 6. THE system SHALL store the refresh token and access token encrypted at rest, and SHALL store the
@@ -345,7 +353,7 @@ setting rather than something welded into the code.
 Explicitly excluded from Phase 1. The schema is designed to accommodate them later; no code for
 them is written now.
 
-- Reading Oscar's inbox, or any mail-read OAuth scope
+- Reading Oscar's inbox in the product. `Mail.ReadWrite` is granted because draft creation requires it, but no code path reads mail: there is no inbox query, no message list, and no stored copy of any received message.
 - Inbox synchronisation and message threading
 - Automatic detection of carrier responses
 - Sending without human review

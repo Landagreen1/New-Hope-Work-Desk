@@ -358,7 +358,7 @@ the isolation the repo already enforces for Resend and RingCentral.
 A single-tenant app registration is required, with:
 
 - Redirect URI `https://<host>/api/email-connections/microsoft/callback` (plus a localhost entry)
-- Delegated permissions `Mail.Send`, `User.Read`, `offline_access` — **no mail-read scope**
+- Delegated permissions `Mail.ReadWrite`, `Mail.Send`, `User.Read`, `offline_access`. `Mail.ReadWrite` is required by `POST /me/messages`; `Mail.Send` authorises only `/me/sendMail`. Neither implies the other. No `.Shared` or `.All` variants, and no application permissions.
 - A client secret
 
 Environment variables: `MS_OAUTH_CLIENT_ID`, `MS_OAUTH_CLIENT_SECRET`, `MS_OAUTH_TENANT_ID`,

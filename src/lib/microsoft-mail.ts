@@ -28,8 +28,66 @@ import { createHash, randomBytes } from 'node:crypto';
 const AUTH_HOST = 'https://login.microsoftonline.com';
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 
-/** Send mail as the signed-in user. Read their name. Get a refresh token. Nothing more. */
-export const REQUIRED_SCOPES = ['offline_access', 'User.Read', 'Mail.Send'] as const;
+/**
+ * The delegated permissions this application requests. Nothing wider.
+ *
+ * `Mail.ReadWrite` is here because of the draft path, and it was missing at first — which
+ * is what produced `403 ErrorAccessDenied` on every send. `POST /me/messages` creates a
+ * draft in the user's mailbox, and Microsoft Graph requires `Mail.ReadWrite` for that
+ * specific call. `Mail.Send` alone authorises `POST /me/sendMail` and nothing else, so the
+ * original scope set could never have worked with a draft-first implementation.
+ *
+ * BOTH are needed and neither implies the other: `Mail.ReadWrite` cannot send, and
+ * `Mail.Send` cannot create a draft.
+ *
+ * HONEST NOTE ON WHAT THIS GRANTS. `Mail.ReadWrite` is read AND write across the user's
+ * mail folders — it is genuinely broader than "send on my behalf", and it is the price of
+ * the draft path. The draft path is what yields `internetMessageId` (the RFC-822
+ * Message-ID a carrier's reply will reference) and what handles attachments above the
+ * inline limit. `/me/sendMail` would need only `Mail.Send`, but it returns 202 with an
+ * empty body and no identifier at all, so a submission could never prove it was sent.
+ * That trade is deliberate and was made with the mailbox owner. If the read access ever
+ * becomes unacceptable, the alternative is `/me/sendMail` plus a schema change allowing a
+ * sent submission to carry no provider message id.
+ */
+export const REQUIRED_SCOPES = [
+  'offline_access',
+  'User.Read',
+  'Mail.ReadWrite',
+  'Mail.Send',
+] as const;
+
+/**
+ * The two that must be present on a token before a submission may be sent.
+ *
+ * `offline_access` and `User.Read` matter at connection time; these two are what the send
+ * itself depends on, one per Graph call it makes.
+ */
+export const SCOPES_REQUIRED_TO_SEND = ['Mail.ReadWrite', 'Mail.Send'] as const;
+
+/**
+ * Which required send scopes are absent from what the provider actually granted.
+ *
+ * Microsoft returns scopes in whatever case and order it likes, and may grant fewer than
+ * were asked for — a tenant policy or an interrupted consent both do that silently. The
+ * connection then looks healthy right up until the send fails with a 403 nobody can read.
+ * So the granted set is checked rather than assumed.
+ *
+ * An EMPTY granted list is treated as "cannot tell, do not block": some token responses
+ * omit `scope` entirely, and refusing to send on missing metadata would be a worse failure
+ * than the one being prevented.
+ */
+export function missingSendScopes(granted: readonly string[]): string[] {
+  if (granted.length === 0) return [];
+  const held = new Set(
+    granted.map((scope) => scope.trim().toLowerCase().replace(/^https:\/\/graph\.microsoft\.com\//, '')),
+  );
+  return SCOPES_REQUIRED_TO_SEND.filter((needed) => !held.has(needed.toLowerCase()));
+}
+
+/** The message shown when consent did not cover what sending needs. */
+export const INCOMPLETE_AUTHORIZATION_MESSAGE =
+  'Microsoft mailbox authorization is incomplete. Reconnect your mailbox to grant the required email permissions.';
 
 const REQUEST_TIMEOUT_MS = 30_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
@@ -369,17 +427,34 @@ function isRetryableStatus(status: number): boolean {
  * stringifying the whole request, which is how tokens end up in logs.
  */
 async function describeFailure(response: Response): Promise<string> {
+  let code = '';
   let detail = '';
   try {
     const body = (await response.json()) as { error?: { code?: string; message?: string } };
-    const code = body?.error?.code ?? '';
+    code = body?.error?.code ?? '';
     const message = body?.error?.message ?? '';
     detail = [code, message].filter(Boolean).join(': ').slice(0, 400);
   } catch {
     detail = '';
   }
+
+  // The one Graph failure that has a specific, actionable cause worth naming.
+  //
+  // `403 ErrorAccessDenied` on a mail call means the token does not carry the permission
+  // the call needs — almost always a mailbox connected before Mail.ReadWrite was
+  // requested, whose stored consent predates the fix. Raw Graph text ("Access is denied.
+  // Check credentials and try again.") sends the reader looking for a password problem
+  // that does not exist, so the remedy is stated instead.
+  if (response.status === 403 && (code === 'ErrorAccessDenied' || code === 'AccessDenied' || code === '')) {
+    return ACCESS_DENIED_MESSAGE;
+  }
+
   return detail ? `HTTP ${response.status} — ${detail}` : `HTTP ${response.status}`;
 }
+
+/** Shown for a 403 on any mail call. Names the remedy, not just the refusal. */
+export const ACCESS_DENIED_MESSAGE =
+  'Microsoft denied access to create the email draft. Reconnect your mailbox and confirm Mail.ReadWrite and Mail.Send permissions are granted.';
 
 function recipientList(addresses: readonly string[]) {
   return addresses.map((address) => ({ emailAddress: { address } }));
