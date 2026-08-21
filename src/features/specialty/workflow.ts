@@ -36,7 +36,14 @@ import type {
  * Overview and inside each carrier's own workstream. The Activity tab is where the
  * complete narrative lives.
  */
-export const WORKSPACE_TABS = ['overview', 'carriers', 'application', 'documents', 'activity'] as const;
+export const WORKSPACE_TABS = [
+  'overview',
+  'carriers',
+  'application',
+  'documents',
+  'submissions',
+  'activity',
+] as const;
 
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
 
@@ -45,6 +52,7 @@ const TAB_LABELS: Record<WorkspaceTab, string> = {
   carriers: 'Carriers',
   application: 'Application',
   documents: 'Documents',
+  submissions: 'Submissions',
   activity: 'Activity',
 };
 

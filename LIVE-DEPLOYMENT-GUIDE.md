@@ -283,3 +283,97 @@ node --env-file=.env.local scripts/bootstrap-users.mjs --reset-passwords
 This also requires those users to change the temporary password again on next login.
 
 Do not use the reset command as part of normal deployment.
+
+# Part 12 — Carrier email submission (v1.21.0)
+
+Optional. Skip it and the rest of the Work Desk is unaffected; the Submissions tab simply
+reports that email submission is not configured.
+
+## 15. Register the Entra application
+
+In the Microsoft Entra admin center (`https://entra.microsoft.com`), **Entra ID → App
+registrations → New registration**:
+
+- **Supported account types:** single tenant only.
+- **Delegated** Microsoft Graph permissions: `Mail.Send`, `User.Read`, `offline_access`.
+  No mail-read scope, ever — that permission list is what enforces "the Work Desk cannot
+  read your inbox", and a test fails the build if one is added.
+- Redirect URIs under the **Web** platform, one per environment:
+
+```text
+https://YOUR-PRODUCTION-HOST/api/email-connections/microsoft/callback
+http://localhost:3000/api/email-connections/microsoft/callback
+```
+
+These must match character for character. Entra compares the string and never follows
+redirects, so a domain that only works through a 301 or 308 cannot be used as a callback.
+A mismatch reports `AADSTS50011`.
+
+**Admin consent is optional.** All three permissions are ones a user may consent to for
+themselves, and Phase 1 has a single sender. Grant it if the button is available; if it is
+greyed out, the account is not a directory administrator and the sender consents for
+themselves at connection time. The one exception is a tenant with user consent disabled by
+policy, which surfaces as `AADSTS90094` and does require an administrator.
+
+Create a client secret and record its **Value** — not its Secret ID — along with the expiry
+date. Portal secrets last at most 24 months, and an expired one stops submissions with an
+error that does not obviously name its cause.
+
+## 16. Generate the token encryption key
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+This key encrypts the OAuth tokens in `user_email_connections`. It is never written to the
+database — that is what makes a stolen backup inert. **Losing it means every sender must
+reconnect**; submission history is unaffected. Keep a copy in a password manager.
+
+## 17. Environment variables
+
+Add all five to `.env.local` and to Vercel (Production and Preview). None takes a
+`NEXT_PUBLIC_` prefix; that would inline the client secret into the browser bundle.
+
+```text
+MS_OAUTH_CLIENT_ID
+MS_OAUTH_CLIENT_SECRET
+MS_OAUTH_TENANT_ID
+MS_OAUTH_REDIRECT_URI          <-- differs per environment
+EMAIL_TOKEN_ENCRYPTION_KEY
+```
+
+Redeploy afterwards. Vercel applies environment variables to new deployments only.
+
+## 18. Apply the migration
+
+Run `supabase/migrations/v1.21.0-carrier-email-submission.sql` in the Supabase SQL editor.
+It ends with a status row confirming the schema, the sender seed, and that the token
+ciphertext is hidden from browser sessions. Then run
+`supabase/verification/v1.21.0-carrier-submission-probe.sql`; all sixteen checks should
+read PASS.
+
+The migration seeds `can_send_carrier_submissions` for the profile with username `oscar`.
+For a different sender:
+
+```sql
+update public.profiles set can_send_carrier_submissions = true where username = '<username>';
+```
+
+`supabase/migrations/v1.21.0-rollback.sql` reverses it. It destroys submission history and
+stored connections, so it is only safe before the feature is used in earnest.
+
+## 19. Turn carriers on
+
+Every carrier starts with email submission **off**, so nothing becomes submittable by
+accident. In **User Administration → Market Directory**, open a market's **Submission** tab,
+set the submission address, optionally a CC list and templates, and enable it.
+
+Templates support `{{company_name}}`, `{{carrier_name}}`, `{{coverage_summary}}`,
+`{{coverage_lines}}` and `{{sender_name}}`. A market with no template uses a built-in
+default, so a carrier is never un-submittable for lack of one.
+
+## 20. Connect a mailbox
+
+The sender opens a Specialty Quote → **Submissions** → **Connect mailbox**, signs in, and
+accepts. The screen then shows the address that was actually authorised, which is the
+address carriers will see in the From line.
