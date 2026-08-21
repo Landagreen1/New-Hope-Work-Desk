@@ -14,8 +14,17 @@ import type {
   SubmissionKind,
 } from './types';
 
+export interface SubmissionReadinessFlags {
+  /** The Microsoft application settings are present in this environment. */
+  provider: boolean;
+  /** A usable token encryption key is present. */
+  encryption: boolean;
+  ready: boolean;
+}
+
 export interface ConnectionStatus {
-  /** False when the server is missing OAuth configuration or the encryption key. */
+  readiness: SubmissionReadinessFlags;
+  /** Retained for older cached clients; equals `readiness.ready`. */
   configured: boolean;
   can_send: boolean;
   connection: EmailConnection | null;

@@ -20,10 +20,20 @@ export async function GET() {
 
   const connection = await readConnection(resolved.client, resolved.actor.id);
 
+  const readiness = submissionReadiness();
+
   return ok({
-    // Reported so the settings screen can say "ask an administrator to finish setup"
-    // rather than offering a Connect button that cannot possibly work.
-    configured: submissionReadiness().ready,
+    // Granular on purpose. A single `configured` boolean cannot distinguish "an
+    // administrator has not set the OAuth application up" from "the encryption key is
+    // missing", and those have different owners and different remedies. The screen shows
+    // whichever is actually false rather than a generic "not configured".
+    readiness: {
+      provider: readiness.provider,
+      encryption: readiness.encryption,
+      ready: readiness.ready,
+    },
+    /** Retained so an older cached client keeps working. */
+    configured: readiness.ready,
     can_send: resolved.actor.canSend,
     connection,
   });

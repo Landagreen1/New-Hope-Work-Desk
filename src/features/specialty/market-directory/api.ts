@@ -126,16 +126,52 @@ export async function createMarket(
 }
 
 /** Update a Market Directory entry. */
+/**
+ * Updates a market and RETURNS THE STORED ROW.
+ *
+ * Spec: carrier email submission production fix, item 3.
+ *
+ * The previous version issued the update, checked only for a transport error, and
+ * returned void. Under row level security that is a false-success generator: when a
+ * policy denies the write, PostgREST reports **no error and zero affected rows**, so the
+ * screen said "saved", closed the editor, and the value reappeared unchanged on the next
+ * refresh — the single most confusing failure a form can have.
+ *
+ * `.select().single()` closes it. Zero rows becomes PGRST116, which is raised as a real
+ * error naming the likely cause. It is safe for the callers that exist: the write policy
+ * is `specialty_is_manager()` and the read policy is `specialty_can_access()`, which
+ * delegates to the same function — so anyone permitted to make the change is permitted to
+ * read the result back.
+ *
+ * The returned row is the caller's source of truth for what is now stored. Trusting the
+ * locally-built patch instead is how a screen shows a value the database rejected.
+ */
 export async function updateMarket(
   id: string,
   patch: MarketDirectoryPatch,
-): Promise<void> {
-  const { error } = await getSupabase()
+): Promise<MarketDirectoryEntry> {
+  const { data, error } = await getSupabase()
     .from('market_directory')
     .update(patch)
-    .eq('id', id);
+    .eq('id', id)
+    .select('*, market_directory_aliases(*), market_directory_contacts(*)')
+    .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    // PGRST116 is "no rows returned". After an update that means the row was not changed
+    // — almost always a permission problem, occasionally a stale id.
+    if (error.code === 'PGRST116') {
+      throw new Error(
+        'The carrier was not updated. You may not have permission to change Market Directory records, or this carrier no longer exists.',
+      );
+    }
+    throw new Error(error.message);
+  }
+  if (!data) {
+    throw new Error('The carrier was not updated.');
+  }
+
+  return data as MarketDirectoryEntry;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

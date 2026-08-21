@@ -366,12 +366,34 @@ function MarketDetailDrawer({
 }) {
   const [tab, setTab] = useState<'info' | 'submission' | 'aliases' | 'contacts' | 'requirements' | 'questions'>('info');
 
+  /**
+   * The row as the database now holds it, seeded from the list and replaced by whatever a
+   * save returns.
+   *
+   * Spec: production fix, item 5. Rendering from the list row alone meant a saved value
+   * did not appear until the parent had refetched, which looked exactly like the save
+   * having failed. Reading the returned row makes the screen correct immediately, and the
+   * `onUpdated()` refetch behind it keeps the list in step.
+   */
+  const [current, setCurrent] = useState<MarketDirectoryEntry>(market);
+  useEffect(() => {
+    setCurrent(market);
+  }, [market]);
+
+  const onSaved = useCallback(
+    (updated: MarketDirectoryEntry) => {
+      setCurrent(updated);
+      onUpdated();
+    },
+    [onUpdated],
+  );
+
   return (
     <div className="fixed inset-y-0 right-0 z-40 w-full max-w-2xl overflow-y-auto bg-zinc-900 shadow-2xl">
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-6 py-4">
         <div>
-          <h3 className="text-lg font-semibold text-zinc-100">{market.name}</h3>
-          <span className="text-sm text-zinc-500">{MARKET_TYPE_LABELS[market.market_type]}</span>
+          <h3 className="text-lg font-semibold text-zinc-100">{current.name}</h3>
+          <span className="text-sm text-zinc-500">{MARKET_TYPE_LABELS[current.market_type]}</span>
         </div>
         <button onClick={onClose} className="text-zinc-400 hover:text-zinc-200" aria-label="Close">
           ✕
@@ -397,10 +419,10 @@ function MarketDetailDrawer({
 
       <div className="p-6">
         {tab === 'info' && (
-          <MarketInfoTab market={market} onUpdated={onUpdated} />
+          <MarketInfoTab key={current.updated_at} market={current} onSaved={onSaved} />
         )}
         {tab === 'submission' && (
-          <SubmissionTab market={market} onUpdated={onUpdated} />
+          <SubmissionTab key={current.updated_at} market={current} onSaved={onSaved} />
         )}
         {tab === 'aliases' && (
           <AliasesTab market={market} onUpdated={onUpdated} />
@@ -421,10 +443,18 @@ function MarketDetailDrawer({
 
 // ── Info Tab ─────────────────────────────────────────────────────────────────
 
-function MarketInfoTab({ market, onUpdated }: { market: MarketDirectoryEntry; onUpdated: () => void }) {
+function MarketInfoTab({
+  market,
+  onSaved,
+}: {
+  market: MarketDirectoryEntry;
+  onSaved: (updated: MarketDirectoryEntry) => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [patch, setPatch] = useState<MarketDirectoryPatch>({});
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const startEdit = () => {
     setPatch({
@@ -446,14 +476,32 @@ function MarketInfoTab({ market, onUpdated }: { market: MarketDirectoryEntry; on
     setEditing(true);
   };
 
+  /**
+   * Save, and tell the truth about what happened.
+   *
+   * Spec: production fix, item 5. The previous version sent the patch, swallowed any
+   * failure to `console.error`, and left the user looking at a form that had silently
+   * done nothing. Combined with `updateMarket` returning void whether or not a row
+   * changed, a permission failure was completely invisible: the editor closed, the screen
+   * showed the old value, and the only explanation lived in a console nobody had open.
+   *
+   * On failure the editor stays open with every typed value intact, because making
+   * someone retype a thirteen-field form is a second insult after the first.
+   */
   const handleSave = async () => {
     setSaving(true);
+    setError(null);
+    setSaved(false);
     try {
-      await updateMarket(market.id, patch);
-      onUpdated();
+      // The returned row is what is actually stored. Trusting the local patch instead is
+      // how a screen displays a value the database rejected.
+      const updated = await updateMarket(market.id, patch);
+      onSaved(updated);
+      setSaved(true);
       setEditing(false);
     } catch (err) {
-      console.error('Failed to update market:', err);
+      setError(err instanceof Error ? err.message : 'Could not save the carrier.');
+      // Deliberately NOT closing the editor and NOT clearing `patch`.
     } finally {
       setSaving(false);
     }
@@ -462,7 +510,8 @@ function MarketInfoTab({ market, onUpdated }: { market: MarketDirectoryEntry; on
   if (!editing) {
     return (
       <div className="space-y-4">
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-3">
+          {saved && <span className="text-sm font-medium text-emerald-400">Carrier saved</span>}
           <button onClick={startEdit} className="rounded bg-zinc-700 px-3 py-1 text-sm text-zinc-200 hover:bg-zinc-600">
             Edit
           </button>
@@ -519,8 +568,20 @@ function MarketInfoTab({ market, onUpdated }: { market: MarketDirectoryEntry; on
       <EditTextArea label="Coverage Appetite" value={patch.coverage_appetite ?? ''} onChange={(v) => setPatch({ ...patch, coverage_appetite: v || null })} />
       <EditTextArea label="Underwriting Notes" value={patch.underwriting_notes ?? ''} onChange={(v) => setPatch({ ...patch, underwriting_notes: v || null })} />
 
-      <div className="flex justify-end gap-2 pt-2">
-        <button onClick={() => setEditing(false)} className="rounded px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-200">
+      {error && (
+        // Visible, and beside the button that caused it. The previous version sent this to
+        // console.error, where a user will never look.
+        <p className="rounded border border-red-800 bg-red-950/60 px-3 py-2 text-sm text-red-300">
+          {error}
+        </p>
+      )}
+
+      <div className="flex items-center justify-end gap-2 pt-2">
+        <button
+          onClick={() => { setEditing(false); setError(null); }}
+          disabled={saving}
+          className="rounded px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
+        >
           Cancel
         </button>
         <button
@@ -548,8 +609,15 @@ function MarketInfoTab({ market, onUpdated }: { market: MarketDirectoryEntry; on
 // manager who mistypes a template and sees nothing happen has no way to tell a failed
 // save from a successful one.
 
-function SubmissionTab({ market, onUpdated }: { market: MarketDirectoryEntry; onUpdated: () => void }) {
+function SubmissionTab({
+  market,
+  onSaved,
+}: {
+  market: MarketDirectoryEntry;
+  onSaved: (updated: MarketDirectoryEntry) => void;
+}) {
   const [enabled, setEnabled] = useState(market.email_submission_enabled);
+  const [emailText, setEmailText] = useState(market.submission_email ?? '');
   const [ccText, setCcText] = useState(formatRecipientList(market.submission_cc));
   const [subject, setSubject] = useState(market.submission_subject_template ?? '');
   const [body, setBody] = useState(market.submission_body_template ?? '');
@@ -558,16 +626,21 @@ function SubmissionTab({ market, onUpdated }: { market: MarketDirectoryEntry; on
   const [saved, setSaved] = useState(false);
 
   const cc = parseRecipientList(ccText);
-  const hasAddress = (market.submission_email ?? '').trim().length > 0;
+  const to = parseRecipientList(emailText);
+  const hasAddress = to.valid.length > 0;
 
-  // Requirement 2.7: enabling a market with nowhere to send is a configuration error
-  // that would only surface as a failed send, in front of a customer.
+  // Requirement 2.7: enabling a market with nowhere to send is a configuration error that
+  // would otherwise surface only as a failed send, in front of a customer.
   const blocking =
-    enabled && !hasAddress
-      ? 'Set a Submission Email on the Info tab before enabling email submission.'
-      : cc.invalid.length > 0
-        ? `Not a valid address: ${cc.invalid.join(', ')}`
-        : null;
+    to.invalid.length > 0
+      ? `Not a valid submission email: ${to.invalid.join(', ')}`
+      : to.valid.length > 1
+        ? 'Only one submission email. Put the others in CC.'
+        : enabled && !hasAddress
+          ? 'Set a submission email before enabling email submission.'
+          : cc.invalid.length > 0
+            ? `Not a valid CC address: ${cc.invalid.join(', ')}`
+            : null;
 
   const handleSave = async () => {
     if (blocking) return;
@@ -575,13 +648,15 @@ function SubmissionTab({ market, onUpdated }: { market: MarketDirectoryEntry; on
     setError(null);
     setSaved(false);
     try {
-      await updateMarket(market.id, {
+      const updated = await updateMarket(market.id, {
+        // One field, one surface of truth. The Info tab edits the same column.
+        submission_email: to.valid[0] ?? null,
         email_submission_enabled: enabled,
         submission_cc: cc.valid,
         submission_subject_template: subject.trim() || null,
         submission_body_template: body.trim() || null,
       });
-      onUpdated();
+      onSaved(updated);
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the submission settings.');
@@ -607,12 +682,19 @@ function SubmissionTab({ market, onUpdated }: { market: MarketDirectoryEntry; on
         </span>
       </label>
 
-      <InfoRow label="Submission Email" value={market.submission_email} />
-      {!hasAddress && (
-        <p className="text-xs text-amber-400">
-          No submission address is set. Add one on the Info tab.
-        </p>
-      )}
+      <label className="block">
+        <span className="text-sm text-zinc-400">Submission email (To)</span>
+        <input
+          value={emailText}
+          onChange={(e) => { setEmailText(e.target.value); setSaved(false); }}
+          placeholder="submissions@carrier.com"
+          className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100"
+        />
+        <span className="mt-1 block text-xs text-zinc-500">
+          The same field shown on the Info tab — there is one submission address per market,
+          not two. Editing it here or there changes the same value.
+        </span>
+      </label>
 
       <label className="block">
         <span className="text-sm text-zinc-400">CC</span>

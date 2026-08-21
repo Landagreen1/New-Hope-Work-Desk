@@ -3,26 +3,59 @@
 /**
  * The Submissions tab.
  *
- * Spec: .kiro/specs/carrier-email-submission, Requirements 4, 8, 11.
+ * Spec: .kiro/specs/carrier-email-submission, Requirements 4, 8, 11, and the production
+ * fix items 1, 2 and 7.
  *
- * Submission state is history, not a tick. A carrier may receive an initial submission,
- * then loss runs two days later, then a revised application after an underwriter asks a
- * question — three separate emails, all of which someone may need to produce months later.
- * So every send is a row, and this tab reads them back in the order they happened.
+ * THE RULE THIS TAB NOW FOLLOWS: NEVER HIDE, ALWAYS EXPLAIN.
+ *
+ * The first version gated the readiness panel on `can_send` and the Prepare Submission
+ * button on `connected`, and rendered nothing when either was false. Every distinct cause
+ * — an un-backfilled profile flag, a missing environment variable in the deployment, an
+ * unconnected mailbox, an un-linked carrier, a carrier with email submission switched off
+ * — produced one identical output: a blank panel. From inside the product there was no way
+ * to tell "you are not permitted" from "this is broken".
+ *
+ * So every carrier on the quote is rendered whatever its state, the action is always
+ * present and disabled with its reasons beside it, and the readiness card reports the four
+ * account-level facts unconditionally. A user who cannot send should be able to read why
+ * and know who to ask.
+ *
+ * Submission state remains history rather than a tick: a carrier may receive an initial
+ * submission, loss runs two days later, and a revised application after an underwriter
+ * asks a question. All three are rows.
  */
 
-import { ChevronDown, ChevronRight, Mail, Paperclip, Send, TriangleAlert } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Mail,
+  Paperclip,
+  Send,
+  Settings2,
+  TriangleAlert,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ui } from '../../nhwd-shared/ui';
-import EmailConnectionPanel from '../../carrier-submissions/EmailConnectionPanel';
-import { getConnectionStatus, getSubmissionHistory, type ConnectionStatus } from '../../carrier-submissions/api';
+import SubmissionReadinessCard from '../../carrier-submissions/SubmissionReadinessCard';
+import {
+  disconnectMailbox,
+  getConnectionStatus,
+  getSubmissionHistory,
+  type ConnectionStatus,
+} from '../../carrier-submissions/api';
+import { accountBlockers, carrierBlockers, readinessSummary } from '../../carrier-submissions/readiness';
 import type { CarrierSubmission, SubmissionDocument } from '../../carrier-submissions/types';
+import { listMarkets } from '../market-directory/api';
+import type { MarketDirectoryEntry } from '../market-directory/types';
 import { carrierStatusLabel, carrierStatusTone, formatFileSize, formatRelative } from '../status';
 import type { CarrierMarket, OpportunityDetail } from '../types';
 
 import PrepareSubmissionDialog from './PrepareSubmissionDialog';
-import { Badge, SectionCard } from './shared';
+import { Badge } from './shared';
+
+/** Deep link into Market Directory. `src/app/page.tsx` already reads these parameters. */
+const MARKET_DIRECTORY_HREF = '/?module=user_admin&sub=ua_market_directory';
 
 const KIND_LABELS: Record<string, string> = {
   initial: 'Initial submission',
@@ -44,34 +77,71 @@ export default function SubmissionsPanel({
   profileNames,
 }: {
   detail: OpportunityDetail;
-  /** profile id → display name, so history can name a sender without another query. */
   profileNames?: Record<string, string>;
 }) {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<CarrierSubmission[]>([]);
   const [documents, setDocuments] = useState<SubmissionDocument[]>([]);
+  const [markets, setMarkets] = useState<Map<string, MarketDirectoryEntry> | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [composing, setComposing] = useState<CarrierMarket | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
-    try {
-      const [connection, history] = await Promise.all([
-        getConnectionStatus(),
-        getSubmissionHistory({ opportunityId: detail.opportunity.id }),
-      ]);
-      setStatus(connection);
-      setSubmissions(history.submissions);
-      setDocuments(history.documents);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not read the submission history.');
+    // Three independent reads, settled independently. One failing must not blank the
+    // other two — that coupling is how a single 500 used to erase the whole screen.
+    const [connection, history, marketList] = await Promise.allSettled([
+      getConnectionStatus(),
+      getSubmissionHistory({ opportunityId: detail.opportunity.id }),
+      listMarkets({ activeOnly: false }),
+    ]);
+
+    if (connection.status === 'fulfilled') {
+      setStatus(connection.value);
+      setStatusError(null);
+    } else {
+      setStatus(null);
+      setStatusError(
+        connection.reason instanceof Error ? connection.reason.message : 'Unknown error.',
+      );
     }
+
+    if (history.status === 'fulfilled') {
+      setSubmissions(history.value.submissions);
+      setDocuments(history.value.documents);
+      setHistoryError(null);
+    } else {
+      setHistoryError(
+        history.reason instanceof Error ? history.reason.message : 'Could not read the history.',
+      );
+    }
+
+    // Markets are configuration, not permission. Failing to read them means "unknown",
+    // which `carrierBlockers` deliberately treats as "do not accuse".
+    setMarkets(
+      marketList.status === 'fulfilled'
+        ? new Map(marketList.value.map((entry) => [entry.id, entry]))
+        : null,
+    );
   }, [detail.opportunity.id]);
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  const disconnect = useCallback(async () => {
+    setBusy(true);
+    try {
+      await disconnectMailbox();
+      await refresh();
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : 'Could not disconnect the mailbox.');
+    } finally {
+      setBusy(false);
+    }
   }, [refresh]);
 
   const byCarrier = useMemo(() => {
@@ -94,9 +164,20 @@ export default function SubmissionsPanel({
     return grouped;
   }, [documents]);
 
-  const canSend = status?.can_send === true;
   const connection = status?.connection ?? null;
-  const connected = connection !== null && connection.status === 'connected';
+  const account = useMemo(
+    () =>
+      accountBlockers({
+        canSend: status?.can_send === true,
+        providerConfigured: status?.readiness?.provider ?? status?.configured ?? false,
+        encryptionConfigured: status?.readiness?.encryption ?? status?.configured ?? false,
+        connectionStatus: connection?.status ?? null,
+      }),
+    [status, connection],
+  );
+
+  const quoteClosed = detail.opportunity.result !== null;
+  const isManager = detail.is_manager;
 
   const toggle = useCallback((id: string) => {
     setExpanded((previous) => {
@@ -114,70 +195,170 @@ export default function SubmissionsPanel({
 
   return (
     <div className="space-y-4">
-      {canSend ? <EmailConnectionPanel /> : null}
+      {/* Unconditional. This is the whole point of the fix. */}
+      <SubmissionReadinessCard
+        status={status}
+        loadError={statusError}
+        busy={busy}
+        onDisconnect={() => void disconnect()}
+      />
 
       {notice ? (
         <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{notice}</p>
       ) : null}
-      {error ? (
-        <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-800">{error}</p>
+      {historyError ? (
+        <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-800">
+          Could not read the submission history. {historyError}
+        </p>
       ) : null}
 
       {detail.carrier_markets.length === 0 ? (
-        <SectionCard title="Carrier submissions">
-          <p className="text-sm font-semibold text-slate-500">
-            Add a carrier on the Carriers tab before preparing a submission.
-          </p>
-        </SectionCard>
+        <div className={ui.card}>
+          <div className={ui.cardPad}>
+            <p className="text-sm font-semibold text-slate-500">
+              No carriers on this quote yet. Add one on the Carriers tab, then come back here to
+              submit to it.
+            </p>
+          </div>
+        </div>
       ) : (
         <div className="space-y-3">
           {detail.carrier_markets.map((market) => {
+            const config = market.market_directory_id
+              ? markets?.get(market.market_directory_id) ?? null
+              : null;
+            const marketLoaded = markets !== null && (config !== null || !market.market_directory_id);
+
+            const carrier = carrierBlockers({
+              marketLinked: market.market_directory_id !== null,
+              emailSubmissionEnabled: config?.email_submission_enabled === true,
+              submissionEmail: config?.submission_email ?? null,
+              marketLoaded,
+              quoteClosed,
+            });
+
+            const blockers = [...account, ...carrier];
+            const ready = blockers.length === 0;
             const history = byCarrier.get(market.id) ?? [];
             const sent = history.filter((entry) => entry.status === 'sent');
             const latest = sent[0] ?? null;
             const isOpen = expanded.has(market.id);
 
+            const application = detail.documents
+              .filter((d) => d.category === 'generated_application' && d.carrier_market_id === market.id)
+              .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+
             return (
               <div key={market.id} className={ui.card}>
-                <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                    onClick={() => toggle(market.id)}
-                    aria-expanded={isOpen}
-                  >
-                    {isOpen ? (
-                      <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-900">{market.carrier_name}</p>
-                      <p className="mt-0.5 text-xs font-bold text-slate-500">
-                        {sent.length === 0
-                          ? 'Not submitted'
-                          : `${sent.length} submission${sent.length === 1 ? '' : 's'} · last ${formatRelative(latest?.sent_at ?? null)} by ${senderName(latest?.submitted_by ?? '')}`}
-                      </p>
-                    </div>
-                  </button>
+                <div className="px-5 py-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                      onClick={() => toggle(market.id)}
+                      aria-expanded={isOpen}
+                    >
+                      {isOpen ? (
+                        <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-slate-900">
+                          {market.carrier_name}
+                        </p>
+                        <p
+                          className={`mt-0.5 text-xs font-black ${
+                            ready ? 'text-emerald-700' : 'text-amber-700'
+                          }`}
+                        >
+                          {readinessSummary(blockers)}
+                        </p>
 
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Badge tone={carrierStatusTone(market.status)}>
-                      {carrierStatusLabel(market.status)}
-                    </Badge>
-                    {canSend ? (
-                      <button
-                        type="button"
-                        className={ui.btnSecondary}
-                        onClick={() => setComposing(market)}
-                        disabled={!connected}
-                        title={connected ? undefined : 'Connect your mailbox first'}
-                      >
-                        <Send className="h-4 w-4" />
-                        Prepare submission
-                      </button>
-                    ) : null}
+                        {/* The three facts a user needs before they can trust the button. */}
+                        <dl className="mt-2 space-y-0.5 text-xs font-semibold text-slate-500">
+                          <div className="flex gap-2">
+                            <dt className="w-28 shrink-0 text-slate-400">To</dt>
+                            <dd className="min-w-0 break-all">
+                              {config?.submission_email || (
+                                <span className="text-rose-600">not set</span>
+                              )}
+                            </dd>
+                          </div>
+                          <div className="flex gap-2">
+                            <dt className="w-28 shrink-0 text-slate-400">Email submission</dt>
+                            <dd>
+                              {!market.market_directory_id ? (
+                                <span className="text-rose-600">carrier not linked</span>
+                              ) : config?.email_submission_enabled ? (
+                                'Enabled'
+                              ) : marketLoaded ? (
+                                <span className="text-rose-600">Disabled</span>
+                              ) : (
+                                '…'
+                              )}
+                            </dd>
+                          </div>
+                          <div className="flex gap-2">
+                            <dt className="w-28 shrink-0 text-slate-400">Application</dt>
+                            <dd>
+                              {application ? (
+                                'Ready'
+                              ) : (
+                                <span className="text-slate-500">
+                                  not generated — you can still send without one
+                                </span>
+                              )}
+                            </dd>
+                          </div>
+                          <div className="flex gap-2">
+                            <dt className="w-28 shrink-0 text-slate-400">Submissions</dt>
+                            <dd>
+                              {sent.length === 0
+                                ? 'None yet'
+                                : `${sent.length} · last ${formatRelative(latest?.sent_at ?? null)} by ${senderName(latest?.submitted_by ?? '')}`}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+                    </button>
+
+                    <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+                      <Badge tone={carrierStatusTone(market.status)}>
+                        {carrierStatusLabel(market.status)}
+                      </Badge>
+                      <div className="flex flex-wrap gap-2">
+                        {/* Always rendered. Disabled with its reasons below, never absent. */}
+                        <button
+                          type="button"
+                          className={ui.btnSecondary}
+                          onClick={() => setComposing(market)}
+                          disabled={!ready}
+                          title={ready ? undefined : blockers.map((b) => b.message).join(' ')}
+                        >
+                          <Send className="h-4 w-4" />
+                          Prepare submission
+                        </button>
+                        {isManager && carrier.some((b) => b.managerFixable) ? (
+                          <a className={ui.btnGhost} href={MARKET_DIRECTORY_HREF}>
+                            <Settings2 className="h-4 w-4" />
+                            Configure carrier
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
+
+                  {blockers.length > 0 ? (
+                    <ul className="mt-3 space-y-1.5 rounded-2xl bg-amber-50 px-4 py-3">
+                      {blockers.map((blocker) => (
+                        <li key={blocker.code} className="text-xs font-bold text-amber-900">
+                          {blocker.message}{' '}
+                          <span className="font-semibold text-amber-700">{blocker.remedy}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
 
                 {isOpen ? (
@@ -266,8 +447,6 @@ export default function SubmissionsPanel({
                                         {formatFileSize(doc.file_size ?? 0)}
                                       </span>
                                       {doc.quote_document_id === null ? (
-                                        // The snapshot outlives the file. Say so rather than
-                                        // offering a link that goes nowhere.
                                         <span className="shrink-0 text-slate-400">
                                           — no longer on the quote
                                         </span>
@@ -289,7 +468,7 @@ export default function SubmissionsPanel({
         </div>
       )}
 
-      {canSend && !connected ? (
+      {status?.can_send && connection === null ? (
         <p className="flex items-center gap-2 text-sm font-bold text-slate-500">
           <Mail className="h-4 w-4" />
           Connect your mailbox above to start sending submissions.
